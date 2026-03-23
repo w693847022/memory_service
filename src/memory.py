@@ -1180,7 +1180,8 @@ class ProjectMemory:
                 prefix_to_list = {
                     "feat": "features",
                     "note": "notes",
-                    "fix": "fixes"
+                    "fix": "fixes",
+                    "std": "standards"
                 }
                 items_list = prefix_to_list.get(prefix, "features")
 
