@@ -5,8 +5,9 @@ services:
       dockerfile: docker/Dockerfile
     container_name: mcp-memory-server
     restart: unless-stopped
-    # 使用宿主机用户运行，避免文件权限问题
-    user: "${UID:-1002}:${GID:-1002}"
+    # Linux: 使用宿主机用户运行，避免文件权限问题
+    # Windows: 不支持此配置，在 .env 中将 USER_ID 留空
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "${MCP_PORT:-8000}:8000"
     environment:
@@ -16,8 +17,8 @@ services:
       - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
       - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
     volumes:
-      # 挂载项目记忆数据目录（持久化）- 使用绝对路径避免 snap Docker 路径重定向
-      - /home/wrs/.project_memory_ai:/app/.project_memory_ai
+      # 挂载项目记忆数据目录（持久化）- 支持环境变量配置
+      - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai
       # 挂载源代码（开发模式热更新）
       - ../src:/app/src:ro
       - ../run.py:/app/run.py:ro
