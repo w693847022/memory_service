@@ -1,5 +1,7 @@
 # 多项目本地记忆 MCP 服务器
 
+**[English Version](README_EN.md)**
+
 ## 项目简介
 
 **AI Memory MCP** 是一个为 Claude Code 提供持久化项目记忆的 MCP 服务器。它让 AI 能够跨会话记住你的项目开发历程，包括功能规划、Bug 修复、开发笔记等关键信息，成为你开发过程中的"第二大脑"。
