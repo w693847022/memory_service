@@ -25,7 +25,7 @@ def test_json_storage_persistence():
         result = memory1.register_project("持久化测试", "/tmp/test")
         project_id = result["project_id"]
 
-        memory1.add_feature(project_id, "测试功能", status="pending")
+        memory1.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
 
         # 创建新实例，验证数据持久化
         memory2 = ProjectMemory(storage_dir=temp_dir)
@@ -89,9 +89,9 @@ def test_project_directory_structure():
         project_id = result["project_id"]
 
         # 添加各种类型的数据
-        memory.add_feature(project_id, "测试功能", status="pending")
+        memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
         memory.add_note(project_id, note="笔记内容", description="笔记")
-        memory.add_fix(project_id, description="测试修复", status="pending")
+        memory.add_fix(project_id, "测试修复内容", "测试修复", status="pending")
         memory.add_standard(project_id, content="规范内容", description="规范")
 
         # 验证目录结构
@@ -140,7 +140,7 @@ def test_concurrent_access():
         def add_features():
             try:
                 for i in range(10):
-                    memory.add_feature(project_id, f"功能{i}", status="pending")
+                    memory.add_feature(project_id, f"功能{i}内容", f"功能{i}", status="pending")
             except Exception as e:
                 errors.append(e)
 

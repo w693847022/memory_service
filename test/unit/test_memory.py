@@ -75,7 +75,8 @@ def test_add_feature():
         # 添加功能（不使用标签）
         result = memory.add_feature(
             project_id,
-            feature="实现用户登录功能",
+            content="实现用户登录功能",
+            description="用户登录",
             status="pending"
         )
 
@@ -86,7 +87,8 @@ def test_add_feature():
         project_data = memory.get_project(project_id)
         features = project_data["data"]["features"]
         assert len(features) == 1, "功能数量不正确"
-        assert features[0]["description"] == "实现用户登录功能", "功能描述不正确"
+        assert features[0]["content"] == "实现用户登录功能", "功能内容不正确"
+        assert features[0]["description"] == "用户登录", "功能描述不正确"
 
         print(f"  ✓ 添加功能测试通过 (ID: {result['feature_id']})")
         return True
@@ -139,6 +141,7 @@ def test_add_fix():
         # 添加修复（不使用标签）
         result = memory.add_fix(
             project_id,
+            content="修复登录bug的详细描述",
             description="修复登录bug",
             status="completed",
             severity="high"
@@ -150,6 +153,8 @@ def test_add_fix():
         project_data = memory.get_project(project_id)
         fixes = project_data["data"]["fixes"]
         assert len(fixes) == 1, "修复数量不正确"
+        assert fixes[0]["content"] == "修复登录bug的详细描述", "修复内容不正确"
+        assert fixes[0]["description"] == "修复登录bug", "修复描述不正确"
 
         print(f"  ✓ 添加修复测试通过 (ID: {result['fix_id']})")
         return True
@@ -200,7 +205,7 @@ def test_update_item():
         project_id = result["project_id"]
 
         # 添加功能
-        result = memory.add_feature(project_id, "测试功能", status="pending")
+        result = memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
         feature_id = result["feature_id"]
 
         # 更新功能
@@ -235,7 +240,7 @@ def test_delete_item():
         project_id = result["project_id"]
 
         # 添加功能
-        result = memory.add_feature(project_id, "测试功能", status="pending")
+        result = memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
         feature_id = result["feature_id"]
 
         # 删除功能

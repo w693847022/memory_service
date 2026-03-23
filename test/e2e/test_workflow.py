@@ -44,7 +44,8 @@ def test_complete_workflow():
         print("  步骤3: 添加功能...")
         result = memory.add_feature(
             project_id,
-            feature="实现用户认证功能",
+            content="实现用户认证功能的详细描述",
+            description="实现用户认证功能",
             status="pending"
         )
         assert result["success"], f"添加功能失败: {result}"
@@ -91,6 +92,7 @@ def test_complete_workflow():
         print("  步骤8: 添加修复记录...")
         result = memory.add_fix(
             project_id,
+            content="修复 token 刷新逻辑的详细描述",
             description="修复 token 刷新逻辑",
             status="completed",
             severity="medium"
@@ -154,9 +156,9 @@ def test_multi_project_workflow():
         project_c = memory.register_project("项目C", "/path/c", tags=["mobile"])
 
         # 为每个项目添加内容
-        memory.add_feature(project_a["project_id"], "Web前端功能", status="pending")
-        memory.add_feature(project_b["project_id"], "API接口功能", status="pending")
-        memory.add_feature(project_c["project_id"], "移动端功能", status="pending")
+        memory.add_feature(project_a["project_id"], "Web前端功能内容", "Web前端功能", status="pending")
+        memory.add_feature(project_b["project_id"], "API接口功能内容", "API接口功能", status="pending")
+        memory.add_feature(project_c["project_id"], "移动端功能内容", "移动端功能", status="pending")
 
         # 获取项目列表
         result = memory.list_projects()

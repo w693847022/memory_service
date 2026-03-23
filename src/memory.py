@@ -1359,13 +1359,14 @@ class ProjectMemory:
 
     # ==================== 功能记录 ====================
 
-    def add_feature(self, project_id: str, feature: str, status: str = "pending",
-                    tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
+    def add_feature(self, project_id: str, content: str, description: str,
+                    status: str = "pending", tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
         """添加功能记录.
 
         Args:
             project_id: 项目ID
-            feature: 功能描述
+            content: 功能详细内容
+            description: 功能描述（概述）
             status: 功能状态（pending, in_progress, completed）
             tags: 功能标签列表（可选）
             note_id: 关联的笔记ID（可选）
@@ -1403,7 +1404,8 @@ class ProjectMemory:
         timestamps = self._generate_timestamps()
         project_data["features"].append({
             "id": feature_id,
-            "description": feature,
+            "content": content,
+            "description": description,
             "status": status,
             "note_id": note_id or "",
             "tags": tags or [],
@@ -1422,14 +1424,15 @@ class ProjectMemory:
 
     # ==================== Bug修复记录 ====================
 
-    def add_fix(self, project_id: str, description: str, status: str = "pending",
+    def add_fix(self, project_id: str, content: str, description: str, status: str = "pending",
                 severity: str = "medium", related_feature: str = None,
                 note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
         """添加bug修复记录.
 
         Args:
             project_id: 项目ID
-            description: 修复描述
+            content: 修复详细内容
+            description: 修复描述（概述）
             status: 修复状态（pending/in_progress/completed）
             severity: 严重程度（critical/high/medium/low）
             related_feature: 关联的功能ID（可选）
@@ -1480,6 +1483,7 @@ class ProjectMemory:
         timestamps = self._generate_timestamps()
         project_data["fixes"].append({
             "id": fix_id,
+            "content": content,
             "description": description,
             "status": status,
             "severity": severity,
@@ -1499,7 +1503,7 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_fix(self, project_id: str, fix_id: str, description: str = None,
+    def update_fix(self, project_id: str, fix_id: str, content: str = None, description: str = None,
                    status: str = None, severity: str = None, related_feature: str = None,
                    note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
         """更新bug修复记录.
@@ -1507,7 +1511,8 @@ class ProjectMemory:
         Args:
             project_id: 项目ID
             fix_id: 修复ID
-            description: 新的描述（可选）
+            content: 新的修复详细内容（可选）
+            description: 新的描述（概述，可选）
             status: 新的状态（可选）
             severity: 新的严重程度（可选）
             related_feature: 新的关联功能ID（可选）
@@ -1542,6 +1547,8 @@ class ProjectMemory:
                 return {"success": False, "error": f"功能 '{related_feature}' 不存在"}
 
         # 更新字段
+        if content is not None:
+            fix_item["content"] = content
         if description is not None:
             fix_item["description"] = description
         if status is not None:
@@ -2467,14 +2474,15 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_feature(self, project_id: str, feature_id: str, description: str = None,
-                       status: str = None, tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
-        """更新功能条目（描述、状态、标签、note_id）.
+    def update_feature(self, project_id: str, feature_id: str, content: str = None,
+                       description: str = None, status: str = None, tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
+        """更新功能条目（内容、描述、状态、标签、note_id）.
 
         Args:
             project_id: 项目ID
             feature_id: 功能ID
-            description: 新的功能描述（可选）
+            content: 新的功能详细内容（可选）
+            description: 新的功能描述（概述，可选）
             status: 新的状态（可选）
             tags: 新的标签列表（可选）
             note_id: 新的关联笔记ID（可选）
@@ -2502,6 +2510,8 @@ class ProjectMemory:
                 return {"success": False, "error": f"笔记 '{note_id}' 不存在"}
 
         # 更新提供的字段
+        if content is not None:
+            project_data["features"][feature_index]["content"] = content
         if description is not None:
             project_data["features"][feature_index]["description"] = description
         if status is not None:

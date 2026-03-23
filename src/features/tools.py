@@ -421,10 +421,10 @@ def project_add(
     # 根据 group 类型设置不同的 max_tokens
     # features/fixes/standards: 30 tokens, notes: 500 tokens (允许详细的技术笔记)
     max_tokens_map = {
-        "features": 30,
-        "fixes": 30,
+        "features": 80,
+        "fixes": 80,
         "notes": 500,
-        "standards": 30
+        "standards": 80
     }
     max_tokens = max_tokens_map.get(group_normalized, 30)
 
@@ -468,7 +468,8 @@ def project_add(
     if group_normalized == "features":
         result = memory.add_feature(
             project_id,
-            content,  # feature description
+            content,  # feature content
+            description,  # feature description (overview)
             status,
             tag_list,
             note_id or None
@@ -480,7 +481,8 @@ def project_add(
                 "item_id": result["feature_id"],
                 "item": {
                     "id": result["feature_id"],
-                    "description": content,
+                    "content": content,
+                    "description": description,
                     "status": status,
                     "tags": tag_list,
                     "note_id": note_id or None
@@ -494,7 +496,8 @@ def project_add(
     elif group_normalized == "fixes":
         result = memory.add_fix(
             project_id,
-            content,  # fix description
+            content,  # fix content
+            description,  # fix description (overview)
             status,
             severity,
             related_feature or None,
@@ -508,7 +511,8 @@ def project_add(
                 "item_id": result["fix_id"],
                 "item": {
                     "id": result["fix_id"],
-                    "description": content,
+                    "content": content,
+                    "description": description,
                     "status": status,
                     "severity": severity,
                     "tags": tag_list,
@@ -638,7 +642,9 @@ def project_update(
     if group_normalized == "features":
         update_params = {}
         if content is not None:
-            update_params["description"] = content
+            update_params["content"] = content
+        if description is not None:
+            update_params["description"] = description
         if status is not None:
             update_params["status"] = status
         if tags is not None:
@@ -664,7 +670,9 @@ def project_update(
     elif group_normalized == "fixes":
         update_params = {}
         if content is not None:
-            update_params["description"] = content
+            update_params["content"] = content
+        if description is not None:
+            update_params["description"] = description
         if status is not None:
             update_params["status"] = status
         if severity is not None:
