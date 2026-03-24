@@ -887,8 +887,8 @@ class ProjectMemory:
 
                 # 向后兼容：为没有description字段的笔记添加空description
                 for note in data.get("notes", []):
-                    if "description" not in note:
-                        note["description"] = ""
+                    if "summary" not in note:
+                        note["summary"] = ""
                     # 新格式不包含 content 字段，确保不存在
                     if "content" in note:
                         del note["content"]
@@ -1219,7 +1219,7 @@ class ProjectMemory:
         self,
         name: str,
         path: str = None,
-        description: str = "",
+        summary: str = "",
         tags: List[str] = None,
         git_remote: str = None,
         git_remote_url: str = None
@@ -1229,7 +1229,7 @@ class ProjectMemory:
         Args:
             name: 项目名称
             path: 项目路径（可选）
-            description: 项目描述（可选）
+            summary: 项目摘要（可选）
             tags: 项目标签列表（可选）
             git_remote: Git remote URL（完整，带 .git）（可选）
             git_remote_url: Git remote URL（不带 .git）（可选）
@@ -1246,7 +1246,7 @@ class ProjectMemory:
                 "path": path or "",
                 "git_remote": git_remote or "",
                 "git_remote_url": git_remote_url or "",
-                "description": description,
+                "summary": summary,
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat(),
                 "tags": tags or []
@@ -1265,7 +1265,7 @@ class ProjectMemory:
             for tag in tags:
                 if self._validate_tag_name(tag):
                     tag_registry[tag] = {
-                        "description": f"项目标签: {tag}",
+                        "summary": f"项目标签: {tag}",
                         "created_at": datetime.now().isoformat(),
                         "usage_count": 0,
                         "aliases": []
@@ -1274,7 +1274,7 @@ class ProjectMemory:
             # 注册默认标签
             for tag in DEFAULT_TAGS:
                 tag_registry[tag] = {
-                    "description": f"默认标签: {tag}",
+                    "summary": f"默认标签: {tag}",
                     "created_at": datetime.now().isoformat(),
                     "usage_count": 0,
                     "aliases": []
@@ -1381,14 +1381,14 @@ class ProjectMemory:
 
     # ==================== 功能记录 ====================
 
-    def add_feature(self, project_id: str, content: str, description: str,
+    def add_feature(self, project_id: str, content: str, summary: str,
                     status: str = "pending", tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
         """添加功能记录.
 
         Args:
             project_id: 项目ID
             content: 功能详细内容
-            description: 功能描述（概述）
+            summary: 功能摘要（概述）
             status: 功能状态（pending, in_progress, completed）
             tags: 功能标签列表（可选）
             note_id: 关联的笔记ID（可选）
@@ -1427,7 +1427,7 @@ class ProjectMemory:
         project_data["features"].append({
             "id": feature_id,
             "content": content,
-            "description": description,
+            "summary": summary,
             "status": status,
             "note_id": note_id or "",
             "tags": tags or [],
@@ -1446,7 +1446,7 @@ class ProjectMemory:
 
     # ==================== Bug修复记录 ====================
 
-    def add_fix(self, project_id: str, content: str, description: str, status: str = "pending",
+    def add_fix(self, project_id: str, content: str, summary: str, status: str = "pending",
                 severity: str = "medium", related_feature: str = None,
                 note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
         """添加bug修复记录.
@@ -1454,7 +1454,7 @@ class ProjectMemory:
         Args:
             project_id: 项目ID
             content: 修复详细内容
-            description: 修复描述（概述）
+            summary: 修复摘要（概述）
             status: 修复状态（pending/in_progress/completed）
             severity: 严重程度（critical/high/medium/low）
             related_feature: 关联的功能ID（可选）
@@ -1506,7 +1506,7 @@ class ProjectMemory:
         project_data["fixes"].append({
             "id": fix_id,
             "content": content,
-            "description": description,
+            "summary": summary,
             "status": status,
             "severity": severity,
             "related_feature": related_feature or "",
@@ -1525,7 +1525,7 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_fix(self, project_id: str, fix_id: str, content: str = None, description: str = None,
+    def update_fix(self, project_id: str, fix_id: str, content: str = None, summary: str = None,
                    status: str = None, severity: str = None, related_feature: str = None,
                    note_id: str = None, tags: List[str] = None) -> Dict[str, Any]:
         """更新bug修复记录.
@@ -1534,7 +1534,7 @@ class ProjectMemory:
             project_id: 项目ID
             fix_id: 修复ID
             content: 新的修复详细内容（可选）
-            description: 新的描述（概述，可选）
+            summary: 新的摘要（概述，可选）
             status: 新的状态（可选）
             severity: 新的严重程度（可选）
             related_feature: 新的关联功能ID（可选）
@@ -1571,8 +1571,8 @@ class ProjectMemory:
         # 更新字段
         if content is not None:
             fix_item["content"] = content
-        if description is not None:
-            fix_item["description"] = description
+        if summary is not None:
+            fix_item["summary"] = summary
         if status is not None:
             if status not in ["pending", "in_progress", "completed"]:
                 return {"success": False, "error": "无效的状态值"}
@@ -1661,14 +1661,14 @@ class ProjectMemory:
 
     # ==================== 开发笔记 ====================
 
-    def add_note(self, project_id: str, note: str, tags: List[str] = None, description: str = "") -> Dict[str, Any]:
+    def add_note(self, project_id: str, note: str, tags: List[str] = None, summary: str = "") -> Dict[str, Any]:
         """添加开发笔记.
 
         Args:
             project_id: 项目ID
             note: 笔记内容（详细内容）
             tags: 笔记标签列表（可选）
-            description: 笔记描述（简短描述，可选）
+            summary: 笔记摘要（简短描述，可选）
 
         Returns:
             操作结果，包含笔记ID
@@ -1700,7 +1700,7 @@ class ProjectMemory:
         # 添加 note 到列表（不包含 content，content 单独保存）
         note_entry = {
             "id": note_id,
-            "description": description,
+            "summary": summary,
             "tags": tags or [],
             **timestamps
         }
@@ -1720,14 +1720,14 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def add_standard(self, project_id: str, content: str, tags: List[str] = None, description: str = "") -> Dict[str, Any]:
+    def add_standard(self, project_id: str, content: str, tags: List[str] = None, summary: str = "") -> Dict[str, Any]:
         """添加项目规范.
 
         Args:
             project_id: 项目ID
             content: 规范内容（详细内容）
             tags: 规范标签列表（可选，用于细分规范类型）
-            description: 规范描述（简短描述，可选）
+            summary: 规范摘要（简短描述，可选）
 
         Returns:
             操作结果，包含规范ID
@@ -1761,7 +1761,7 @@ class ProjectMemory:
         timestamps = self._generate_timestamps()
         project_data["standards"].append({
             "id": standard_id,
-            "description": description,
+            "summary": summary,
             "content": content,
             "tags": tags or [],
             **timestamps
@@ -1813,7 +1813,7 @@ class ProjectMemory:
                 projects.append({
                     "id": project_id,
                     "name": project_data["info"]["name"],
-                    "description": project_data["info"]["description"],
+                    "summary": project_data["info"].get("summary", ""),
                     "tags": project_data["info"]["tags"],
                     "created_at": project_data["info"]["created_at"]
                 })
@@ -1855,14 +1855,15 @@ class ProjectMemory:
                 keyword_lower = keyword.lower()
                 match = False
 
-                # 搜索名称和描述
+                # 搜索名称和摘要
+                project_summary = project_data["info"].get("summary", "")
                 if (keyword_lower in project_data["info"]["name"].lower() or
-                    keyword_lower in project_data["info"]["description"].lower()):
+                    keyword_lower in project_summary.lower()):
                     match = True
 
                 # 搜索功能
                 for feature in project_data["features"]:
-                    if keyword_lower in feature["description"].lower():
+                    if keyword_lower in feature.get("summary", "").lower():
                         match = True
                         break
 
@@ -1878,7 +1879,7 @@ class ProjectMemory:
             results.append({
                 "id": project_id,
                 "name": project_data["info"]["name"],
-                "description": project_data["info"]["description"],
+                "summary": project_data["info"].get("summary", ""),
                 "tags": project_data["info"]["tags"]
             })
 
@@ -1907,22 +1908,22 @@ class ProjectMemory:
             {
                 "name": "features",
                 "count": len(project_data["features"]),
-                "description": "功能列表"
+                "summary": "功能列表"
             },
             {
                 "name": "notes",
                 "count": len(project_data["notes"]),
-                "description": "开发笔记"
+                "summary": "开发笔记"
             },
             {
                 "name": "fixes",  # NEW
                 "count": len(project_data.get("fixes", [])),  # 向后兼容
-                "description": "Bug修复记录"
+                "summary": "Bug修复记录"
             },
             {
                 "name": "standards",  # NEW
                 "count": len(project_data.get("standards", [])),  # 向后兼容
-                "description": "项目规范"
+                "summary": "项目规范"
             }
         ]
 
@@ -1963,7 +1964,7 @@ class ProjectMemory:
 
             tags_list.append({
                 "tag": tag_name,
-                "description": tag_info.get("description", ""),
+                "summary": tag_info.get("summary", ""),
                 "usage_count": tag_info.get("usage_count", 0),
                 "created_at": tag_info.get("created_at", ""),
                 "aliases": tag_info.get("aliases", []),
@@ -2018,7 +2019,7 @@ class ProjectMemory:
             tags_list.append({
                 "tag": tag,
                 "count": count,
-                "description": tag_info.get("description", "未注册"),
+                "summary": tag_info.get("summary", "未注册"),
                 "usage_count": tag_info.get("usage_count", 0),
                 "created_at": tag_info.get("created_at", ""),
                 "is_registered": tag in tag_registry
@@ -2127,7 +2128,7 @@ class ProjectMemory:
             "total": len(matched_items),
             "items": matched_items,
             "tag_info": {
-                "description": tag_info.get("description", "未注册"),
+                "summary": tag_info.get("summary", "未注册"),
                 "usage_count": tag_info.get("usage_count", 0),
                 "created_at": tag_info.get("created_at", ""),
                 "is_registered": is_registered
@@ -2184,13 +2185,13 @@ class ProjectMemory:
         return {"success": True}
 
     def register_tag(self, project_id: str, tag_name: str,
-                     description: str, aliases: List[str] = None) -> Dict[str, Any]:
+                     summary: str, aliases: List[str] = None) -> Dict[str, Any]:
         """注册新标签到项目标签库.
 
         Args:
             project_id: 项目ID
             tag_name: 标签名称
-            description: 标签语义描述（10-200字符）
+            summary: 标签语义摘要（10-200字符）
             aliases: 别名列表（可选）
 
         Returns:
@@ -2203,11 +2204,11 @@ class ProjectMemory:
                 "error": f"标签名称格式无效：'{tag_name}'。只允许英文字母、数字、下划线、连字符，长度1-30字符"
             }
 
-        # 验证描述长度
-        if not self._validate_description(description):
+        # 验证摘要长度
+        if not self._validate_description(summary):
             return {
                 "success": False,
-                "error": f"描述长度无效：需要10-200字符，当前为 {len(description)} 字符"
+                "error": f"摘要长度无效：需要10-200字符，当前为 {len(summary)} 字符"
             }
 
         project_data = self._load_project(project_id)
@@ -2226,7 +2227,7 @@ class ProjectMemory:
 
         # 注册新标签
         tag_registry[tag_name] = {
-            "description": description,
+            "summary": summary,
             "created_at": datetime.now().isoformat(),
             "usage_count": 0,
             "aliases": aliases or []
@@ -2246,21 +2247,21 @@ class ProjectMemory:
         return {"success": False, "error": "保存数据失败"}
 
     def update_tag(self, project_id: str, tag_name: str,
-                   description: str = None) -> Dict[str, Any]:
+                   summary: str = None) -> Dict[str, Any]:
         """更新已注册标签的语义信息.
 
         Args:
             project_id: 项目ID
             tag_name: 标签名称
-            description: 新的描述（可选）
+            summary: 新的摘要（可选）
 
         Returns:
             操作结果
         """
-        if description is not None and not self._validate_description(description):
+        if summary is not None and not self._validate_description(summary):
             return {
                 "success": False,
-                "error": f"描述长度无效：需要10-200字符，当前为 {len(description)} 字符"
+                "error": f"摘要长度无效：需要10-200字符，当前为 {len(summary)} 字符"
             }
 
         project_data = self._load_project(project_id)
@@ -2275,9 +2276,9 @@ class ProjectMemory:
                 "error": f"标签 '{tag_name}' 未注册"
             }
 
-        # 更新描述
-        if description is not None:
-            tag_registry[tag_name]["description"] = description
+        # 更新摘要
+        if summary is not None:
+            tag_registry[tag_name]["summary"] = summary
 
         project_data["tag_registry"] = tag_registry
         project_data["info"]["updated_at"] = datetime.now().isoformat()
@@ -2497,14 +2498,14 @@ class ProjectMemory:
         return {"success": False, "error": "保存数据失败"}
 
     def update_feature(self, project_id: str, feature_id: str, content: str = None,
-                       description: str = None, status: str = None, tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
-        """更新功能条目（内容、描述、状态、标签、note_id）.
+                       summary: str = None, status: str = None, tags: List[str] = None, note_id: str = None) -> Dict[str, Any]:
+        """更新功能条目（内容、摘要、状态、标签、note_id）.
 
         Args:
             project_id: 项目ID
             feature_id: 功能ID
             content: 新的功能详细内容（可选）
-            description: 新的功能描述（概述，可选）
+            summary: 新的功能摘要（概述，可选）
             status: 新的状态（可选）
             tags: 新的标签列表（可选）
             note_id: 新的关联笔记ID（可选）
@@ -2534,8 +2535,8 @@ class ProjectMemory:
         # 更新提供的字段
         if content is not None:
             project_data["features"][feature_index]["content"] = content
-        if description is not None:
-            project_data["features"][feature_index]["description"] = description
+        if summary is not None:
+            project_data["features"][feature_index]["summary"] = summary
         if status is not None:
             project_data["features"][feature_index]["status"] = status
         if tags is not None:
@@ -2578,7 +2579,7 @@ class ProjectMemory:
                 if self._save_project(project_id, project_data):
                     return {
                         "success": True,
-                        "message": f"功能 '{deleted_feature.get('description', feature_id)}' 已删除"
+                        "message": f"功能 '{deleted_feature.get('summary', feature_id)}' 已删除"
                     }
                 return {"success": False, "error": "保存数据失败"}
 
@@ -2642,13 +2643,13 @@ class ProjectMemory:
             }
         return {"success": False, "error": "保存数据失败"}
 
-    def update_note(self, project_id: str, note_id: str, content: str = None, tags: List[str] = None, description: str = None) -> Dict[str, Any]:
-        """更新笔记条目（描述、内容、标签）.
+    def update_note(self, project_id: str, note_id: str, content: str = None, tags: List[str] = None, summary: str = None) -> Dict[str, Any]:
+        """更新笔记条目（摘要、内容、标签）.
 
         Args:
             project_id: 项目ID
             note_id: 笔记ID
-            description: 新的描述（可选）
+            summary: 新的摘要（可选）
             content: 新的笔记内容（可选）
             tags: 新的标签列表（可选）
 
@@ -2670,8 +2671,8 @@ class ProjectMemory:
             return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
 
         # 更新提供的字段
-        if description is not None:
-            project_data["notes"][note_index]["description"] = description
+        if summary is not None:
+            project_data["notes"][note_index]["summary"] = summary
         if content is not None:
             # 保存 content 到独立 .md 文件
             if not self._save_note_content(project_id, note_id, content):
@@ -2729,13 +2730,13 @@ class ProjectMemory:
 
         return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
 
-    def update_standard(self, project_id: str, standard_id: str, content: str = None, tags: List[str] = None, description: str = None) -> Dict[str, Any]:
-        """更新规范条目（描述、内容、标签）.
+    def update_standard(self, project_id: str, standard_id: str, content: str = None, tags: List[str] = None, summary: str = None) -> Dict[str, Any]:
+        """更新规范条目（摘要、内容、标签）.
 
         Args:
             project_id: 项目ID
             standard_id: 规范ID
-            description: 新的描述（可选）
+            summary: 新的摘要（可选）
             content: 新的规范内容（可选）
             tags: 新的标签列表（可选）
 
@@ -2761,8 +2762,8 @@ class ProjectMemory:
             return {"success": False, "error": f"规范ID '{standard_id}' 不存在"}
 
         # 更新提供的字段
-        if description is not None:
-            project_data["standards"][standard_index]["description"] = description
+        if summary is not None:
+            project_data["standards"][standard_index]["summary"] = summary
         if content is not None:
             project_data["standards"][standard_index]["content"] = content
         if tags is not None:

@@ -65,7 +65,7 @@ def test_project_get_with_tags():
         memory.add_feature(
             project_id,
             content="修复登录bug的详细描述",
-            description="修复登录bug",
+            summary="修复登录bug",
             status="pending",
             tags=["urgent", "bug"]
         )
@@ -73,7 +73,7 @@ def test_project_get_with_tags():
         memory.add_feature(
             project_id,
             content="优化API性能的详细描述",
-            description="优化API性能",
+            summary="优化API性能",
             status="pending",
             tags=["api"]
         )
@@ -134,9 +134,9 @@ def test_groups_list_integration():
 
         # 添加各分组内容
         memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
-        memory.add_note(project_id, note="测试笔记", description="笔记")
+        memory.add_note(project_id, note="测试笔记", summary="笔记")
         memory.add_fix(project_id, "测试修复内容", "测试修复", status="pending")
-        memory.add_standard(project_id, content="测试规范", description="规范")
+        memory.add_standard(project_id, content="测试规范", summary="规范")
 
         # 获取项目数据（包含所有分组）
         result = memory.get_project(project_id)

@@ -40,7 +40,7 @@ def test_register_project():
         result = memory.register_project(
             name="测试项目",
             path="/tmp/test",
-            description="测试描述",
+            summary="测试摘要",
             tags=["test", "demo"]
         )
 
@@ -76,7 +76,7 @@ def test_add_feature():
         result = memory.add_feature(
             project_id,
             content="实现用户登录功能",
-            description="用户登录",
+            summary="用户登录",
             status="pending"
         )
 
@@ -88,7 +88,7 @@ def test_add_feature():
         features = project_data["data"]["features"]
         assert len(features) == 1, "功能数量不正确"
         assert features[0]["content"] == "实现用户登录功能", "功能内容不正确"
-        assert features[0]["description"] == "用户登录", "功能描述不正确"
+        assert features[0]["summary"] == "用户登录", "功能摘要不正确"
 
         print(f"  ✓ 添加功能测试通过 (ID: {result['feature_id']})")
         return True
@@ -111,7 +111,7 @@ def test_add_note():
         result = memory.add_note(
             project_id,
             note="这是测试笔记内容",
-            description="测试笔记"
+            summary="测试笔记"
         )
 
         assert result["success"], f"添加笔记失败: {result}"
@@ -142,7 +142,7 @@ def test_add_fix():
         result = memory.add_fix(
             project_id,
             content="修复登录bug的详细描述",
-            description="修复登录bug",
+            summary="修复登录bug",
             status="completed",
             severity="high"
         )
@@ -154,7 +154,7 @@ def test_add_fix():
         fixes = project_data["data"]["fixes"]
         assert len(fixes) == 1, "修复数量不正确"
         assert fixes[0]["content"] == "修复登录bug的详细描述", "修复内容不正确"
-        assert fixes[0]["description"] == "修复登录bug", "修复描述不正确"
+        assert fixes[0]["summary"] == "修复登录bug", "修复摘要不正确"
 
         print(f"  ✓ 添加修复测试通过 (ID: {result['fix_id']})")
         return True
@@ -177,7 +177,7 @@ def test_add_standard():
         result = memory.add_standard(
             project_id,
             content="代码风格规范",
-            description="命名和格式规范"
+            summary="命名和格式规范"
         )
 
         assert result["success"], f"添加规范失败: {result}"
@@ -205,7 +205,7 @@ def test_update_item():
         project_id = result["project_id"]
 
         # 添加功能
-        result = memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
+        result = memory.add_feature(project_id, "测试功能内容", "测试功能摘要", status="pending")
         feature_id = result["feature_id"]
 
         # 更新功能
@@ -240,7 +240,7 @@ def test_delete_item():
         project_id = result["project_id"]
 
         # 添加功能
-        result = memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
+        result = memory.add_feature(project_id, "测试功能内容", "测试功能摘要", status="pending")
         feature_id = result["feature_id"]
 
         # 删除功能
