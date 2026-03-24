@@ -106,18 +106,18 @@ def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
 # Project Memory Tools
 # ===================
 
-def project_register(name: str, path: str = "", description: str = "", tags: str = "") -> str:
+def project_register(name: str, path: str = "", summary: str = "", tags: str = "") -> str:
     """注册一个新项目.
     Args:
         name: 项目名称
         path: 项目路径（可选）
-        description: 项目描述（可选）
+        summary: 项目摘要（可选）
         tags: 项目标签，逗号分隔（可选）
     Returns:
         JSON 格式的注册结果
     """
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
-    result = memory.register_project(name, path, description, tag_list)
+    result = memory.register_project(name, path, summary, tag_list)
     response = ApiResponse.from_result(result)
     return response.to_json()
 
@@ -366,7 +366,7 @@ def project_add(
     project_id: str,
     group: str,
     content: str = "",
-    description: str = "",
+    summary: str = "",
     status: str = None,  # 哨兵值，用于检测是否显式传入
     severity: str = "medium",
     related_feature: str = "",
@@ -378,12 +378,12 @@ def project_add(
     Args:
         project_id: 项目ID
         group: 分组类型 - "features"/"fixes"/"notes"/"standards"（支持中文："功能"/"修复"/"笔记"/"规范"）
-        content: 条目内容
-            - features: 功能描述
-            - fixes: 修复描述
-            - notes: 笔记内容
-            - standards: 规范内容
-        description: 描述（所有分组必填，标准摘要描述）
+        content: 补充描述
+            - features: 功能详细内容
+            - fixes: 修复详细内容
+            - notes: 笔记详细内容
+            - standards: 规范详细内容
+        summary: 摘要（所有分组必填，标准摘要描述）
         status: 状态（仅 features/fixes 使用，必填，有效值: pending/in_progress/completed）
         severity: 严重程度（仅 fixes 使用，默认 "medium"）
         related_feature: 关联功能ID（仅 fixes 使用）
@@ -436,15 +436,15 @@ def project_add(
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
-    # 验证 description 必填（所有分组）
-    if not description or not description.strip():
-        response = ApiResponse(success=False, error="description 参数不能为空，请提供标准摘要描述")
+    # 验证 summary 必填（所有分组）
+    if not summary or not summary.strip():
+        response = ApiResponse(success=False, error="summary 参数不能为空，请提供标准摘要描述")
         return response.to_json()
 
-    # 验证 description 长度
+    # 验证 summary 长度
     # notes 分组 50 tokens，其他分组 30 tokens
     desc_max_tokens = 50 if group_normalized == "notes" else 30
-    is_valid, error_msg = _validate_content_length(description, max_tokens=desc_max_tokens)
+    is_valid, error_msg = _validate_content_length(summary, max_tokens=desc_max_tokens)
     if not is_valid:
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
@@ -469,7 +469,7 @@ def project_add(
         result = memory.add_feature(
             project_id,
             content,  # feature content
-            description,  # feature description (overview)
+            summary,  # feature summary (overview)
             status,
             tag_list,
             note_id or None
@@ -482,7 +482,7 @@ def project_add(
                 "item": {
                     "id": result["feature_id"],
                     "content": content,
-                    "description": description,
+                    "summary": summary,
                     "status": status,
                     "tags": tag_list,
                     "note_id": note_id or None
@@ -497,7 +497,7 @@ def project_add(
         result = memory.add_fix(
             project_id,
             content,  # fix content
-            description,  # fix description (overview)
+            summary,  # fix summary (overview)
             status,
             severity,
             related_feature or None,
@@ -512,7 +512,7 @@ def project_add(
                 "item": {
                     "id": result["fix_id"],
                     "content": content,
-                    "description": description,
+                    "summary": summary,
                     "status": status,
                     "severity": severity,
                     "tags": tag_list,
@@ -530,7 +530,7 @@ def project_add(
             project_id,
             content,  # note content
             tag_list,
-            description
+            summary
         )
         if result["success"]:
             data = {
@@ -540,7 +540,7 @@ def project_add(
                 "item": {
                     "id": result["note_id"],
                     "content": content,
-                    "description": description,
+                    "summary": summary,
                     "tags": tag_list
                 }
             }
@@ -554,7 +554,7 @@ def project_add(
             project_id,
             content,  # standard content
             tag_list,
-            description
+            summary
         )
         if result["success"]:
             data = {
@@ -564,7 +564,7 @@ def project_add(
                 "item": {
                     "id": result["standard_id"],
                     "content": content,
-                    "description": description,
+                    "summary": summary,
                     "tags": tag_list
                 }
             }
@@ -579,7 +579,7 @@ def project_update(
     group: str,
     item_id: str,
     content: str = None,
-    description: str = None,
+    summary: str = None,
     status: str = None,
     severity: str = None,
     related_feature: str = None,
@@ -593,7 +593,7 @@ def project_update(
         group: 分组类型 - "features"/"fixes"/"notes"/"standards"
         item_id: 条目ID
         content: 内容更新（可选）
-        description: 描述更新（可选）
+        summary: 摘要更新（可选）
         status: 状态更新（可选）
         severity: 严重程度更新（仅 fixes）
         related_feature: 关联功能更新（仅 fixes）
@@ -629,11 +629,11 @@ def project_update(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 验证 description 长度
-    if description is not None:
+    # 验证 summary 长度
+    if summary is not None:
         # notes 分组 50 tokens，其他分组 30 tokens
         desc_max_tokens = 50 if group_normalized == "notes" else 30
-        is_valid, error_msg = _validate_content_length(description, max_tokens=desc_max_tokens)
+        is_valid, error_msg = _validate_content_length(summary, max_tokens=desc_max_tokens)
         if not is_valid:
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
@@ -643,8 +643,8 @@ def project_update(
         update_params = {}
         if content is not None:
             update_params["content"] = content
-        if description is not None:
-            update_params["description"] = description
+        if summary is not None:
+            update_params["summary"] = summary
         if status is not None:
             update_params["status"] = status
         if tags is not None:
@@ -671,8 +671,8 @@ def project_update(
         update_params = {}
         if content is not None:
             update_params["content"] = content
-        if description is not None:
-            update_params["description"] = description
+        if summary is not None:
+            update_params["summary"] = summary
         if status is not None:
             update_params["status"] = status
         if severity is not None:
@@ -703,8 +703,8 @@ def project_update(
         update_params = {}
         if content is not None:
             update_params["content"] = content
-        if description is not None:
-            update_params["description"] = description
+        if summary is not None:
+            update_params["summary"] = summary
         if tags is not None:
             update_params["tags"] = _parse_tags(tags)
 
@@ -727,8 +727,8 @@ def project_update(
         update_params = {}
         if content is not None:
             update_params["content"] = content
-        if description is not None:
-            update_params["description"] = description
+        if summary is not None:
+            update_params["summary"] = summary
         if tags is not None:
             update_params["tags"] = _parse_tags(tags)
 
@@ -900,7 +900,7 @@ def project_item_tag_manage(
 def tag_register(
     project_id: str,
     tag_name: str,
-    description: str,
+    summary: str,
     aliases: str = ""
 ) -> str:
     """注册项目标签.
@@ -910,7 +910,7 @@ def tag_register(
     Args:
         project_id: 项目ID
         tag_name: 标签名称（英文，无空格）
-        description: 标签语义描述（10-50字）
+        summary: 标签语义摘要（10-50字）
         aliases: 别名列表，逗号分隔（可选）
 
     Returns:
@@ -921,7 +921,7 @@ def tag_register(
     result = memory.register_tag(
         project_id=project_id,
         tag_name=tag_name,
-        description=description,
+        summary=summary,
         aliases=alias_list
     )
 
@@ -940,24 +940,24 @@ def tag_register(
 def tag_update(
     project_id: str,
     tag_name: str,
-    description: str = ""
+    summary: str = ""
 ) -> str:
     """更新已注册标签的语义信息.
 
     Args:
         project_id: 项目ID
         tag_name: 标签名称
-        description: 新的描述（可选）
+        summary: 新的摘要（可选）
 
     Returns:
         JSON 格式的更新结果
     """
-    desc_param = description if description else None
+    summary_param = summary if summary else None
 
     result = memory.update_tag(
         project_id=project_id,
         tag_name=tag_name,
-        description=desc_param
+        summary=summary_param
     )
 
     if result.get("success"):

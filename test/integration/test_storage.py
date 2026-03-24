@@ -54,7 +54,7 @@ def test_note_content_separate_storage():
 
         # 添加笔记
         note_content = "这是详细的笔记内容" * 100  # 较长内容
-        result = memory.add_note(project_id, note=note_content, description="测试笔记")
+        result = memory.add_note(project_id, note=note_content, summary="测试笔记")
         note_id = result["note_id"]
 
         # 验证笔记内容在单独的文件中
@@ -90,9 +90,9 @@ def test_project_directory_structure():
 
         # 添加各种类型的数据
         memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
-        memory.add_note(project_id, note="笔记内容", description="笔记")
+        memory.add_note(project_id, note="笔记内容", summary="笔记")
         memory.add_fix(project_id, "测试修复内容", "测试修复", status="pending")
-        memory.add_standard(project_id, content="规范内容", description="规范")
+        memory.add_standard(project_id, content="规范内容", summary="规范")
 
         # 验证目录结构
         # ProjectMemory 使用 UUID 作为项目目录名，需要通过 list_projects 获取

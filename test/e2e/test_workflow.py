@@ -26,7 +26,7 @@ def test_complete_workflow():
         result = memory.register_project(
             name="电商项目",
             path="/home/user/ecommerce",
-            description="在线购物平台",
+            summary="在线购物平台",
             tags=["web", "ecommerce"]
         )
         assert result["success"], f"注册项目失败: {result}"
@@ -45,7 +45,7 @@ def test_complete_workflow():
         result = memory.add_feature(
             project_id,
             content="实现用户认证功能的详细描述",
-            description="实现用户认证功能",
+            summary="实现用户认证功能",
             status="pending"
         )
         assert result["success"], f"添加功能失败: {result}"
@@ -57,7 +57,7 @@ def test_complete_workflow():
         result = memory.add_note(
             project_id,
             note="技术选型: 使用 PyJWT 库实现 token 验证，过期时间设置为 24 小时。",
-            description="JWT 实现方案",
+            summary="JWT 实现方案",
             tags=["backend"]
         )
         assert result["success"], f"添加笔记失败: {result}"
@@ -93,7 +93,7 @@ def test_complete_workflow():
         result = memory.add_fix(
             project_id,
             content="修复 token 刷新逻辑的详细描述",
-            description="修复 token 刷新逻辑",
+            summary="修复 token 刷新逻辑",
             status="completed",
             severity="medium"
         )
@@ -105,7 +105,7 @@ def test_complete_workflow():
         result = memory.add_standard(
             project_id,
             content="后端 API 统一使用 RESTful 风格，返回 JSON 格式数据。",
-            description="API 设计规范"
+            summary="API 设计规范"
         )
         assert result["success"], f"添加规范失败: {result}"
         print("    ✓ 规范已添加")
