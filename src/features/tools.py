@@ -77,7 +77,7 @@ def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int
 
     # 最大长度验证
     if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
+        return False, f"超出长度限制,当前 {int(estimated_tokens)} tokens,限制为 {max_tokens} tokens.请拆分文档内容或精简."
     return True, ""
 
 
@@ -336,7 +336,7 @@ def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int
 
     # 最大长度验证
     if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
+        return False, f"超出长度限制,当前 {int(estimated_tokens)} tokens,限制为 {max_tokens} tokens.请拆分文档内容或精简."
     return True, ""
 
 
