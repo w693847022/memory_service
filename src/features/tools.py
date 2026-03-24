@@ -619,8 +619,8 @@ def project_update(
     # 验证 content 长度
     if content is not None:
         # 根据 group 类型设置不同的 max_tokens
-        # features/fixes/standards: 30 tokens, notes: 500 tokens (允许详细的技术笔记)
-        max_tokens_map = {"features": 30, "fixes": 30, "notes": 500, "standards": 30}
+        # features/fixes/standards: 80 tokens, notes: 500 tokens (允许详细的技术笔记)
+        max_tokens_map = {"features": 80, "fixes": 80, "notes": 500, "standards": 80}
         max_tokens = max_tokens_map.get(group_normalized, 30)
         # notes 分组添加最小长度验证（1 token）
         min_tokens = 1 if group_normalized == "notes" else None
