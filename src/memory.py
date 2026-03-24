@@ -24,6 +24,18 @@ ENABLE_AUTO_CLEANUP = True         # 是否启用自动清理
 CACHE_TTL_SECONDS = 300            # 缓存过期时间（秒）
 CACHE_MAX_SIZE = 50                # 最大缓存条目数
 
+# 默认标签配置
+DEFAULT_TAGS = [
+    "implementation",   # 功能实现
+    "enhancement",     # 功能增强
+    "bug",             # Bug修复
+    "docs",            # 文档
+    "refactor",        # 重构
+    "test",            # 测试
+    "ops",             # 运维/部署
+    "security"         # 安全相关
+]
+
 
 class CallStats:
     """接口调用统计类."""
@@ -1246,9 +1258,10 @@ class ProjectMemory:
             "tag_registry": {}  # NEW: 标签注册表
         }
 
-        # 自动注册项目标签（如果提供）
+        # 自动注册项目标签
+        tag_registry = {}
         if tags:
-            tag_registry = {}
+            # 注册用户提供的标签
             for tag in tags:
                 if self._validate_tag_name(tag):
                     tag_registry[tag] = {
@@ -1257,7 +1270,16 @@ class ProjectMemory:
                         "usage_count": 0,
                         "aliases": []
                     }
-            project_data["tag_registry"] = tag_registry
+        else:
+            # 注册默认标签
+            for tag in DEFAULT_TAGS:
+                tag_registry[tag] = {
+                    "description": f"默认标签: {tag}",
+                    "created_at": datetime.now().isoformat(),
+                    "usage_count": 0,
+                    "aliases": []
+                }
+        project_data["tag_registry"] = tag_registry
 
         # 保存项目：使用 name 作为目录名，project_id 作为 UUID
         try:
