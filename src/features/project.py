@@ -95,23 +95,24 @@ class ProjectMemory(ProjectStorage):
         }
 
         tag_registry = {}
+        # 首先注册默认标签
+        for tag in DEFAULT_TAGS:
+            tag_registry[tag] = {
+                "summary": f"默认标签: {tag}",
+                "created_at": datetime.now().isoformat(),
+                "usage_count": 0,
+                "aliases": []
+            }
+        # 合并用户传入的额外标签
         if tags:
             for tag in tags:
-                if self._validate_tag_name(tag):
+                if self._validate_tag_name(tag) and tag not in tag_registry:
                     tag_registry[tag] = {
                         "summary": f"项目标签: {tag}",
                         "created_at": datetime.now().isoformat(),
                         "usage_count": 0,
                         "aliases": []
                     }
-        else:
-            for tag in DEFAULT_TAGS:
-                tag_registry[tag] = {
-                    "summary": f"默认标签: {tag}",
-                    "created_at": datetime.now().isoformat(),
-                    "usage_count": 0,
-                    "aliases": []
-                }
         project_data["tag_registry"] = tag_registry
 
         try:
