@@ -1085,13 +1085,16 @@ def project_get(
         response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目")
         return response.to_json()
 
-    # 默认行为：返回整个项目信息
+    # 默认行为：返回精简的项目概览（仅统计信息，不返回各分组摘要列表）
     response_data = {
         "project_id": project_id,
         "info": data['info'],
-        "features": data["features"],
-        "notes": data["notes"],
-        "fixes": data.get("fixes", [])
+        "groups": {
+            "features": {"count": len(data["features"])},
+            "notes": {"count": len(data["notes"])},
+            "fixes": {"count": len(data.get("fixes", []))},
+            "standards": {"count": len(data.get("standards", []))}
+        }
     }
     response = ApiResponse(success=True, data=response_data, message="获取项目信息成功")
     return response.to_json()
