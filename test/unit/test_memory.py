@@ -72,16 +72,18 @@ def test_add_feature():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加功能（不使用标签）
-        result = memory.add_feature(
-            project_id,
+        # 添加功能（使用 add_item 统一接口）
+        result = memory.add_item(
+            project_id=project_id,
+            group="features",
             content="实现用户登录功能",
             summary="用户登录",
-            status="pending"
+            status="pending",
+            tags=[]
         )
 
         assert result["success"], f"添加功能失败: {result}"
-        assert "feature_id" in result, "返回结果缺少 feature_id"
+        assert "item_id" in result, "返回结果缺少 item_id"
 
         # 验证功能已添加
         project_data = memory.get_project(project_id)
@@ -90,7 +92,7 @@ def test_add_feature():
         assert features[0]["content"] == "实现用户登录功能", "功能内容不正确"
         assert features[0]["summary"] == "用户登录", "功能摘要不正确"
 
-        print(f"  ✓ 添加功能测试通过 (ID: {result['feature_id']})")
+        print(f"  ✓ 添加功能测试通过 (ID: {result['item_id']})")
         return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -107,11 +109,13 @@ def test_add_note():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加笔记（不使用标签，避免未注册错误）
-        result = memory.add_note(
-            project_id,
-            note="这是测试笔记内容",
-            summary="测试笔记"
+        # 添加笔记（使用 add_item 统一接口）
+        result = memory.add_item(
+            project_id=project_id,
+            group="notes",
+            content="这是测试笔记内容",
+            summary="测试笔记",
+            tags=[]
         )
 
         assert result["success"], f"添加笔记失败: {result}"
@@ -121,7 +125,7 @@ def test_add_note():
         notes = project_data["data"]["notes"]
         assert len(notes) == 1, "笔记数量不正确"
 
-        print(f"  ✓ 添加笔记测试通过 (ID: {result['note_id']})")
+        print(f"  ✓ 添加笔记测试通过 (ID: {result['item_id']})")
         return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -138,13 +142,15 @@ def test_add_fix():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加修复（不使用标签）
-        result = memory.add_fix(
-            project_id,
+        # 添加修复（使用 add_item 统一接口）
+        result = memory.add_item(
+            project_id=project_id,
+            group="fixes",
             content="修复登录bug的详细描述",
             summary="修复登录bug",
             status="completed",
-            severity="high"
+            severity="high",
+            tags=[]
         )
 
         assert result["success"], f"添加修复失败: {result}"
@@ -156,7 +162,7 @@ def test_add_fix():
         assert fixes[0]["content"] == "修复登录bug的详细描述", "修复内容不正确"
         assert fixes[0]["summary"] == "修复登录bug", "修复摘要不正确"
 
-        print(f"  ✓ 添加修复测试通过 (ID: {result['fix_id']})")
+        print(f"  ✓ 添加修复测试通过 (ID: {result['item_id']})")
         return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -173,11 +179,13 @@ def test_add_standard():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加规范（不使用标签）
-        result = memory.add_standard(
-            project_id,
+        # 添加规范（使用 add_item 统一接口）
+        result = memory.add_item(
+            project_id=project_id,
+            group="standards",
             content="代码风格规范",
-            summary="命名和格式规范"
+            summary="命名和格式规范",
+            tags=[]
         )
 
         assert result["success"], f"添加规范失败: {result}"
@@ -187,7 +195,7 @@ def test_add_standard():
         standards = project_data["data"]["standards"]
         assert len(standards) == 1, "规范数量不正确"
 
-        print(f"  ✓ 添加规范测试通过 (ID: {result['standard_id']})")
+        print(f"  ✓ 添加规范测试通过 (ID: {result['item_id']})")
         return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
@@ -204,13 +212,14 @@ def test_update_item():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加功能
-        result = memory.add_feature(project_id, "测试功能内容", "测试功能摘要", status="pending")
-        feature_id = result["feature_id"]
+        # 添加功能（使用 add_item 统一接口）
+        result = memory.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能摘要", status="pending", tags=[])
+        feature_id = result["item_id"]
 
         # 更新功能
-        result = memory.update_feature(
+        result = memory.update_item(
             project_id,
+            "features",
             feature_id,
             status="completed"
         )
@@ -239,12 +248,12 @@ def test_delete_item():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加功能
-        result = memory.add_feature(project_id, "测试功能内容", "测试功能摘要", status="pending")
-        feature_id = result["feature_id"]
+        # 添加功能（使用 add_item 统一接口）
+        result = memory.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能摘要", status="pending", tags=[])
+        feature_id = result["item_id"]
 
         # 删除功能
-        result = memory.delete_feature(project_id, feature_id)
+        result = memory.delete_item(project_id, "features", feature_id)
 
         assert result["success"], f"删除功能失败: {result}"
 

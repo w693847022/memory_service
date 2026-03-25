@@ -16,14 +16,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 
 def test_features_tools_imports():
-    """测试 features.tools 能够正确导入全局实例.
+    """测试 api.tools 能够正确导入全局实例.
 
     这个测试验证导入链路:
-    features/tools.py → features/instances.py → features/project.py, features/stats.py
+    api/tools.py → features/instances.py → features/project.py, features/stats.py
 
     如果 memory 和 call_stats 的导入路径配置错误，测试将失败。
     """
-    print("测试: features.tools 导入链路...")
+    print("测试: api.tools 导入链路...")
 
     temp_dir = tempfile.mkdtemp()
     try:
@@ -31,8 +31,8 @@ def test_features_tools_imports():
         original_storage = os.environ.get("MCP_STORAGE_DIR")
         os.environ["MCP_STORAGE_DIR"] = temp_dir
 
-        # 导入 features.tools 中的关键函数（这会触发对 memory 和 call_stats 的导入）
-        from features.tools import (
+        # 导入 api.tools 中的关键函数（这会触发对 memory 和 call_stats 的导入）
+        from api.tools import (
             project_list,
             project_register,
             project_get,
@@ -69,7 +69,7 @@ def test_features_tools_imports():
         assert callable(stats_summary), "stats_summary 应该可调用"
         assert callable(stats_cleanup), "stats_cleanup 应该可调用"
 
-        print("  ✓ features.tools 导入链路测试通过")
+        print("  ✓ api.tools 导入链路测试通过")
         return True
     finally:
         if original_storage is not None:

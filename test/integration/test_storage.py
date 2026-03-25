@@ -25,7 +25,7 @@ def test_json_storage_persistence():
         result = memory1.register_project("持久化测试", "/tmp/test")
         project_id = result["project_id"]
 
-        memory1.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
+        memory1.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
 
         # 创建新实例，验证数据持久化
         memory2 = ProjectMemory(storage_dir=temp_dir)
@@ -52,10 +52,10 @@ def test_note_content_separate_storage():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加笔记
+        # 添加笔记（使用 add_item 统一接口）
         note_content = "这是详细的笔记内容" * 100  # 较长内容
-        result = memory.add_note(project_id, note=note_content, summary="测试笔记")
-        note_id = result["note_id"]
+        result = memory.add_item(project_id=project_id, group="notes", content=note_content, summary="测试笔记", tags=[])
+        note_id = result["item_id"]
 
         # 验证笔记内容在单独的文件中
         note_file = memory._get_note_content_path(project_id, note_id)
@@ -88,11 +88,11 @@ def test_project_directory_structure():
         result = memory.register_project("测试项目", "/tmp/test")
         project_id = result["project_id"]
 
-        # 添加各种类型的数据
-        memory.add_feature(project_id, "测试功能内容", "测试功能", status="pending")
-        memory.add_note(project_id, note="笔记内容", summary="笔记")
-        memory.add_fix(project_id, "测试修复内容", "测试修复", status="pending")
-        memory.add_standard(project_id, content="规范内容", summary="规范")
+        # 添加各种类型的数据（使用 add_item 统一接口）
+        memory.add_item(project_id=project_id, group="features", content="测试功能内容", summary="测试功能", status="pending", tags=[])
+        memory.add_item(project_id=project_id, group="notes", content="笔记内容", summary="笔记", tags=[])
+        memory.add_item(project_id=project_id, group="fixes", content="测试修复内容", summary="测试修复", status="pending", tags=[])
+        memory.add_item(project_id=project_id, group="standards", content="规范内容", summary="规范", tags=[])
 
         # 验证目录结构
         # ProjectMemory 使用 UUID 作为项目目录名，需要通过 list_projects 获取
@@ -140,7 +140,7 @@ def test_concurrent_access():
         def add_features():
             try:
                 for i in range(10):
-                    memory.add_feature(project_id, f"功能{i}内容", f"功能{i}", status="pending")
+                    memory.add_item(project_id=project_id, group="features", content=f"功能{i}内容", summary=f"功能{i}", status="pending", tags=[])
             except Exception as e:
                 errors.append(e)
 

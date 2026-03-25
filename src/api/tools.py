@@ -4,7 +4,7 @@
 """
 
 import json
-from typing import Optional
+from typing import Optional, Dict, List
 
 # 从 features.instances 导入全局实例
 from features.instances import memory, call_stats
@@ -317,119 +317,55 @@ def project_add(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 根据 group 分发
-    if group == "features":
-        result = memory.add_feature(
-            project_id,
-            content,  # feature content
-            summary,  # feature summary (overview)
-            status or "pending",
-            tag_list,
-            note_id if note_id else None
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "features",
-                "item_id": result["feature_id"],
-                "item": {
-                    "id": result["feature_id"],
-                    "content": content,
-                    "summary": summary,
-                    "status": status,
-                    "tags": tag_list,
-                    "note_id": note_id or None
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
+    related: Dict[str, List[str]] = {}
+    if note_id:
+        related["notes"] = [note_id]
+    if related_feature:
+        if "features" not in related:
+            related["features"] = []
+        related["features"].append(related_feature)
 
-    elif group == "fixes":
-        result = memory.add_fix(
-            project_id,
-            content,  # fix content
-            summary,  # fix summary (overview)
-            status or "pending",
-            severity,
-            related_feature if related_feature else None,
-            note_id if note_id else None,
-            tag_list
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "fixes",
-                "item_id": result["fix_id"],
-                "item": {
-                    "id": result["fix_id"],
-                    "content": content,
-                    "summary": summary,
-                    "status": status,
-                    "severity": severity,
-                    "tags": tag_list,
-                    "related_feature": related_feature or None,
-                    "note_id": note_id or None
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+    # 统一调用 add_item
+    result = memory.add_item(
+        project_id=project_id,
+        group=group,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related if related else None,
+        tags=tag_list
+    )
 
-    elif group == "notes":
-        result = memory.add_note(
-            project_id,
-            content,  # note content
-            tag_list,
-            summary
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "notes",
-                "item_id": result["note_id"],
-                "item": {
-                    "id": result["note_id"],
-                    "content": content,
-                    "summary": summary,
-                    "tags": tag_list
-                }
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": result["item_id"],
+            "item": {
+                "id": result["item_id"],
+                "summary": summary,
+                "content": content,
+                "tags": tag_list,
             }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        }
+        # 可选字段
+        if status:
+            data["item"]["status"] = status
+        if severity and severity != "medium":
+            data["item"]["severity"] = severity
+        if related:
+            data["item"]["related"] = related
+        if note_id:
+            data["item"]["note_id"] = note_id
+        if related_feature:
+            data["item"]["related_feature"] = related_feature
 
-    elif group == "standards":
-        result = memory.add_standard(
-            project_id,
-            content,  # standard content
-            tag_list,
-            summary
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "standards",
-                "item_id": result["standard_id"],
-                "item": {
-                    "id": result["standard_id"],
-                    "content": content,
-                    "summary": summary,
-                    "tags": tag_list
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+        response = ApiResponse(success=True, data=data, message=result['message'])
         return response.to_json()
-
-    else:
-        # 无效的 group 类型（理论上不会走到这里，因为前面已验证）
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group}")
-        return response.to_json()
+    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    return response.to_json()
 
 
 def project_update(
@@ -454,8 +390,8 @@ def project_update(
         summary: 摘要更新（可选）
         status: 状态更新（可选）
         severity: 严重程度更新（仅 fixes）
-        related_feature: 关联功能更新（仅 fixes）
-        note_id: 关联笔记更新（仅 features/fixes）
+        related_feature: 关联功能更新（仅 fixes） - 已废弃，使用 related
+        note_id: 关联笔记更新（仅 features/fixes） - 已废弃，使用 related
         tags: 标签更新（可选）
 
     Returns:
@@ -486,119 +422,41 @@ def project_update(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 根据 group 分发
-    if group == "features":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if status is not None:
-            update_params["status"] = status
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-        if note_id is not None:
-            update_params["note_id"] = note_id
+    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
+    related: Optional[Dict[str, List[str]]] = None
+    if note_id or related_feature:
+        related = {}
+        if note_id:
+            related["notes"] = [note_id]
+        if related_feature:
+            if "features" not in related:
+                related["features"] = []
+            related["features"].append(related_feature)
 
-        result = memory.update_feature(project_id, item_id, **update_params)
+    # 统一调用 update_item
+    result = memory.update_item(
+        project_id=project_id,
+        group=group,
+        item_id=item_id,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related,
+        tags=_parse_tags(tags) if tags else None
+    )
 
-        if result["success"]:
-            feature = result["feature"]
-            data = {
-                "project_id": project_id,
-                "group": "features",
-                "item_id": item_id,
-                "item": feature
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": item_id,
+            "item": result["item"]
+        }
+        response = ApiResponse(success=True, data=data, message=result['message'])
         return response.to_json()
-
-    elif group == "fixes":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if status is not None:
-            update_params["status"] = status
-        if severity is not None:
-            update_params["severity"] = severity
-        if related_feature is not None:
-            update_params["related_feature"] = related_feature
-        if note_id is not None:
-            update_params["note_id"] = note_id
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_fix(project_id, item_id, **update_params)
-
-        if result["success"]:
-            fix = result["fix"]
-            data = {
-                "project_id": project_id,
-                "group": "fixes",
-                "item_id": item_id,
-                "item": fix
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
-
-    elif group == "notes":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_note(project_id, item_id, **update_params)
-
-        if result["success"]:
-            note = result["note"]
-            data = {
-                "project_id": project_id,
-                "group": "notes",
-                "item_id": item_id,
-                "item": note
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
-
-    elif group == "standards":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_standard(project_id, item_id, **update_params)
-
-        if result["success"]:
-            standard = result["standard"]
-            data = {
-                "project_id": project_id,
-                "group": "standards",
-                "item_id": item_id,
-                "item": standard
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
-
-    else:
-        # 无效的 group 类型（理论上不会走到这里，因为前面已验证）
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group}")
-        return response.to_json()
+    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    return response.to_json()
 
 
 def project_delete(
@@ -627,19 +485,8 @@ def project_delete(
         response = ApiResponse(success=False, error="item_id 参数不能为空")
         return response.to_json()
 
-    # 根据 group 分发
-    if group == "features":
-        result = memory.delete_feature(project_id, item_id)
-    elif group == "fixes":
-        result = memory.delete_fix(project_id, item_id)
-    elif group == "notes":
-        result = memory.delete_note(project_id, item_id)
-    elif group == "standards":
-        result = memory.delete_standard(project_id, item_id)
-    else:
-        # 不可能走到这里，因为 group 已通过 validate_group_name 验证
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group}")
-        return response.to_json()
+    # 统一调用 delete_item
+    result = memory.delete_item(project_id=project_id, group=group, item_id=item_id)
 
     if result["success"]:
         data = {
@@ -686,14 +533,7 @@ def project_item_tag_manage(
             return response.to_json()
         tag_list = [t.strip() for t in tags.split(",")]
 
-        if group_name == "features":
-            result = memory.update_feature_tags(project_id, item_id, tag_list)
-        elif group_name == "notes":
-            result = memory.update_note_tags(project_id, item_id, tag_list)
-        elif group_name == "standards":
-            result = memory.update_standard(project_id, item_id, tags=tag_list)
-        else:  # fixes - need to use update_fix
-            result = memory.update_fix(project_id, item_id, tags=tag_list)
+        result = memory.update_item(project_id, group_name, item_id, tags=tag_list)
 
         if result["success"]:
             data = {

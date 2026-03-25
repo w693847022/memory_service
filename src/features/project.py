@@ -15,6 +15,7 @@ if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 from core.storage_base import ProjectStorage
+from models.item import Item, ItemRelated
 
 # Constants
 DEFAULT_TAGS = [
@@ -231,265 +232,122 @@ class ProjectMemory(ProjectStorage):
             }
         return {"success": False, "error": "保存数据失败"}
 
-    # ==================== 功能记录 ====================
+    # ==================== 统一添加接口 ====================
 
-    def add_feature(self, project_id: str, content: str, summary: str,
-                    status: str = "pending", tags: Optional[List[str]] = None, note_id: Optional[str] = None) -> Dict[str, Any]:
-        """添加功能记录.
+    def add_item(
+        self,
+        project_id: str,
+        group: str,
+        content: str = "",
+        summary: str = "",
+        status: Optional[str] = None,
+        severity: str = "medium",
+        related: Optional[Dict[str, List[str]]] = None,
+        tags: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """统一添加项目条目.
 
         Args:
             project_id: 项目ID
-            content: 功能详细内容
-            summary: 功能摘要（概述）
-            status: 功能状态（pending, in_progress, completed）
-            tags: 功能标签列表（可选）
-            note_id: 关联的笔记ID（可选）
+            group: 分组类型 - "features"/"fixes"/"notes"/"standards"
+            content: 条目内容（notes 分组会存为独立文件）
+            summary: 条目摘要（必须）
+            status: 状态（仅 features/fixes 分组有效）
+            severity: 严重程度（仅 fixes 分组有效）
+            related: 关联ID字典，格式: {"features": [], "fixes": [], "notes": [], "standards": []}
+            tags: 标签列表
 
         Returns:
-            操作结果，包含功能ID
+            操作结果，包含 item_id
         """
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
+        # 验证 summary 必填
+        if not summary or not summary.strip():
+            return {"success": False, "error": "summary 参数不能为空"}
+
+        # 解析标签
+        tag_list = tags or []
+
         # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
+        if tag_list:
+            check_result = self._check_tags_registered(project_data, tag_list)
             if not check_result["success"]:
                 return check_result
 
-        # 验证note_id存在（如果提供）
-        if note_id:
-            if not any(n.get("id") == note_id for n in project_data.get("notes", [])):
-                return {"success": False, "error": f"笔记 '{note_id}' 不存在"}
+        # 验证 related 中的 ID 存在性
+        if related:
+            for rel_group, rel_ids in related.items():
+                if not rel_ids:
+                    continue
+                # 验证关联分组存在
+                if rel_group not in project_data:
+                    return {"success": False, "error": f"related 中指定的分组 '{rel_group}' 不存在"}
+                # 验证每个 ID 存在
+                existing_ids = [item.get("id") for item in project_data.get(rel_group, [])]
+                for rel_id in rel_ids:
+                    if rel_id not in existing_ids:
+                        return {"success": False, "error": f"related 中引用的 ID '{rel_id}' 在分组 '{rel_group}' 中不存在"}
 
-        # 生成唯一ID（传入已加载的project_data避免重复加载）
-        feature_id = self._generate_item_id("feat", project_id, project_data)
+        # 生成时间戳
+        timestamps = self._generate_timestamps()
+
+        # 生成唯一ID
+        id_prefix = {"features": "feat", "fixes": "fix", "notes": "note", "standards": "std"}[group]
+        item_id = self._generate_item_id(id_prefix, project_id, project_data)
+
+        # 构建 Item 对象
+        item_related = ItemRelated.from_dict(related) if related else None
+        item = Item(
+            id=item_id,
+            summary=summary,
+            content=content,
+            tags=tag_list,
+            status=status,
+            severity=severity if severity != "medium" else None,
+            related=item_related,
+            created_at=timestamps["created_at"],
+            updated_at=timestamps["updated_at"]
+        )
 
         # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        if tags:
-            for tag in tags:
+        if tag_list:
+            tag_registry = project_data.get("tag_registry", {})
+            for tag in tag_list:
                 if tag in tag_registry:
                     tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
             project_data["tag_registry"] = tag_registry
 
-        # 生成时间戳
-        timestamps = self._generate_timestamps()
-        project_data["features"].append({
-            "id": feature_id,
-            "content": content,
-            "summary": summary,
-            "status": status,
-            "note_id": note_id or "",
-            "tags": tags or [],
-            **timestamps
-        })
-
+        # 保存到对应分组
+        if group == "notes":
+            # notes 的 content 存为独立文件，不存入 project.json
+            if content and not self._save_note_content(project_id, item_id, content):
+                return {"success": False, "error": "保存笔记内容失败"}
+            # 从 item dict 中移除 content（已单独存储）
+            item_dict = item.to_dict()
+            item_dict.pop("content", None)
+            project_data[group].append(item_dict)
+        else:
+            project_data[group].append(item.to_dict())
         project_data["info"]["updated_at"] = datetime.now().isoformat()
 
         if self._save_project(project_id, project_data):
             return {
                 "success": True,
-                "feature_id": feature_id,
-                "message": f"已添加功能记录到项目 '{project_id}'"
+                "item_id": item_id,
+                "message": f"已添加 {group} 记录到项目 '{project_id}'"
             }
         return {"success": False, "error": "保存数据失败"}
 
-    # ==================== Bug修复记录 ====================
-
-    def add_fix(self, project_id: str, content: str, summary: str, status: str = "pending",
-                severity: str = "medium", related_feature: Optional[str] = None,
-                note_id: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
-        """添加bug修复记录.
+    def delete_item(self, project_id: str, group: str, item_id: str) -> Dict[str, Any]:
+        """统一删除项目条目.
 
         Args:
             project_id: 项目ID
-            content: 修复详细内容
-            summary: 修复摘要（概述）
-            status: 修复状态（pending/in_progress/completed）
-            severity: 严重程度（critical/high/medium/low）
-            related_feature: 关联的功能ID（可选）
-            note_id: 关联的笔记ID（可选）
-            tags: 修复标签列表（可选）
-
-        Returns:
-            操作结果，包含修复ID
-        """
-        # 验证参数
-        if status not in ["pending", "in_progress", "completed"]:
-            return {"success": False, "error": "无效的状态值"}
-        if severity not in ["critical", "high", "medium", "low"]:
-            return {"success": False, "error": "无效的严重程度值"}
-
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
-            if not check_result["success"]:
-                return check_result
-
-        # 验证note_id存在（如果提供）
-        if note_id:
-            if not any(n.get("id") == note_id for n in project_data.get("notes", [])):
-                return {"success": False, "error": f"笔记 '{note_id}' 不存在"}
-
-        # 验证related_feature存在（如果提供）
-        if related_feature:
-            if not any(f.get("id") == related_feature for f in project_data.get("features", [])):
-                return {"success": False, "error": f"功能 '{related_feature}' 不存在"}
-
-        # 生成唯一ID（传入已加载的project_data避免重复加载）
-        fix_id = self._generate_item_id("fix", project_id, project_data)
-
-        # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        if tags:
-            for tag in tags:
-                if tag in tag_registry:
-                    tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
-            project_data["tag_registry"] = tag_registry
-
-        # 生成时间戳
-        timestamps = self._generate_timestamps()
-        project_data["fixes"].append({
-            "id": fix_id,
-            "content": content,
-            "summary": summary,
-            "status": status,
-            "severity": severity,
-            "related_feature": related_feature or "",
-            "note_id": note_id or "",
-            "tags": tags or [],
-            **timestamps
-        })
-
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "fix_id": fix_id,
-                "message": f"已添加修复记录到项目 '{project_id}'"
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def update_fix(self, project_id: str, fix_id: str, content: Optional[str] = None, summary: Optional[str] = None,
-                   status: Optional[str] = None, severity: Optional[str] = None, related_feature: Optional[str] = None,
-                   note_id: Optional[str] = None, tags: Optional[List[str]] = None) -> Dict[str, Any]:
-        """更新bug修复记录.
-
-        Args:
-            project_id: 项目ID
-            fix_id: 修复ID
-            content: 新的修复详细内容（可选）
-            summary: 新的摘要（概述，可选）
-            status: 新的状态（可选）
-            severity: 新的严重程度（可选）
-            related_feature: 新的关联功能ID（可选）
-            note_id: 新的关联笔记ID（可选）
-            tags: 新的标签列表（可选）
-
-        Returns:
-            更新结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找修复记录
-        fix_item = None
-        for fix in project_data.get("fixes", []):
-            if fix.get("id") == fix_id:
-                fix_item = fix
-                break
-
-        if fix_item is None:
-            return {"success": False, "error": f"修复记录 '{fix_id}' 不存在"}
-
-        # 验证note_id存在（如果提供）
-        if note_id is not None:
-            if not any(n.get("id") == note_id for n in project_data.get("notes", [])):
-                return {"success": False, "error": f"笔记 '{note_id}' 不存在"}
-
-        # 验证related_feature存在（如果提供）
-        if related_feature is not None:
-            if not any(f.get("id") == related_feature for f in project_data.get("features", [])):
-                return {"success": False, "error": f"功能 '{related_feature}' 不存在"}
-
-        # 更新字段
-        if content is not None:
-            fix_item["content"] = content
-        if summary is not None:
-            fix_item["summary"] = summary
-        if status is not None:
-            if status not in ["pending", "in_progress", "completed"]:
-                return {"success": False, "error": "无效的状态值"}
-            fix_item["status"] = status
-        if severity is not None:
-            if severity not in ["critical", "high", "medium", "low"]:
-                return {"success": False, "error": "无效的严重程度值"}
-            fix_item["severity"] = severity
-        if related_feature is not None:
-            fix_item["related_feature"] = related_feature
-        if note_id is not None:
-            fix_item["note_id"] = note_id
-        if tags is not None:
-            fix_item["tags"] = tags
-
-        # 更新条目的 updated_at 字段
-        self._update_timestamp(fix_item)
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"已更新修复记录 '{fix_id}'",
-                "fix": fix_item
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def delete_fix(self, project_id: str, fix_id: str) -> Dict[str, Any]:
-        """删除bug修复记录.
-
-        Args:
-            project_id: 项目ID
-            fix_id: 修复ID
-
-        Returns:
-            删除结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找并删除修复记录
-        original_count = len(project_data.get("fixes", []))
-        project_data["fixes"] = [f for f in project_data.get("fixes", [])
-                                if f.get("id") != fix_id]
-
-        if len(project_data["fixes"]) == original_count:
-            return {"success": False, "error": f"修复记录 '{fix_id}' 不存在"}
-
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"已删除修复记录 '{fix_id}'"
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def update_feature_status(self, project_id: str, feature_index: int, status: str) -> Dict[str, Any]:
-        """更新功能状态.
-
-        Args:
-            project_id: 项目ID
-            feature_index: 功能索引
-            status: 新状态
+            group: 分组类型 - "features"/"fixes"/"notes"/"standards"
+            item_id: 条目ID
 
         Returns:
             操作结果
@@ -498,132 +356,144 @@ class ProjectMemory(ProjectStorage):
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if feature_index < 0 or feature_index >= len(project_data["features"]):
-            return {"success": False, "error": "功能索引无效"}
+        # 验证分组存在
+        if group not in project_data:
+            return {"success": False, "error": f"分组 '{group}' 不存在"}
 
-        project_data["features"][feature_index]["status"] = status
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
+        # 查找并删除条目
+        items = project_data[group]
+        for i, item in enumerate(items):
+            if item.get("id") == item_id:
+                # 如果是 notes 类型，同时删除 content 文件
+                if group == "notes":
+                    content_path = self._get_note_content_path(project_id, item_id)
+                    if content_path.exists():
+                        try:
+                            content_path.unlink()
+                        except IOError:
+                            pass
 
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"功能状态已更新"
-            }
-        return {"success": False, "error": "保存数据失败"}
+                # 删除条目
+                items.pop(i)
+                project_data["info"]["updated_at"] = datetime.now().isoformat()
 
-    def add_note(self, project_id: str, note: str, tags: Optional[List[str]] = None, summary: str = "") -> Dict[str, Any]:
-        """添加开发笔记.
+                if self._save_project(project_id, project_data):
+                    return {
+                        "success": True,
+                        "message": f"已删除 {group} 条目 '{item_id}'"
+                    }
+                return {"success": False, "error": "保存数据失败"}
+
+        return {"success": False, "error": f"条目 '{item_id}' 不存在"}
+
+    def update_item(
+        self,
+        project_id: str,
+        group: str,
+        item_id: str,
+        content: Optional[str] = None,
+        summary: Optional[str] = None,
+        status: Optional[str] = None,
+        severity: Optional[str] = None,
+        related: Optional[Dict[str, List[str]]] = None,
+        tags: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """统一更新项目条目.
 
         Args:
             project_id: 项目ID
-            note: 笔记内容（详细内容）
-            tags: 笔记标签列表（可选）
-            summary: 笔记摘要（简短描述，可选）
+            group: 分组类型 - "features"/"fixes"/"notes"/"standards"
+            item_id: 条目ID
+            content: 新的内容（可选）
+            summary: 新的摘要（可选）
+            status: 新的状态（可选，仅 features/fixes）
+            severity: 新的严重程度（可选，仅 fixes）
+            related: 新的关联ID字典（可选）
+            tags: 新的标签列表（可选）
 
         Returns:
-            操作结果，包含笔记ID
+            操作结果
         """
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
-            if not check_result["success"]:
-                return check_result
+        # 验证分组存在
+        if group not in project_data:
+            return {"success": False, "error": f"分组 '{group}' 不存在"}
 
-        # 生成唯一ID（传入已加载的project_data避免重复加载）
-        note_id = self._generate_item_id("note", project_id, project_data)
+        # 查找条目
+        item_index = None
+        for i, item in enumerate(project_data[group]):
+            if item.get("id") == item_id:
+                item_index = i
+                break
 
-        # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        if tags:
-            for tag in tags:
-                if tag in tag_registry:
-                    tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
+        if item_index is None:
+            return {"success": False, "error": f"条目 '{item_id}' 不存在"}
+
+        item = project_data[group][item_index]
+
+        # 验证 related 中的 ID 存在性
+        if related:
+            for rel_group, rel_ids in related.items():
+                if not rel_ids:
+                    continue
+                if rel_group not in project_data:
+                    return {"success": False, "error": f"related 中指定的分组 '{rel_group}' 不存在"}
+                existing_ids = [it.get("id") for it in project_data.get(rel_group, [])]
+                for rel_id in rel_ids:
+                    if rel_id not in existing_ids:
+                        return {"success": False, "error": f"related 中引用的 ID '{rel_id}' 在分组 '{rel_group}' 中不存在"}
+
+        # 处理标签更新
+        if tags is not None:
+            old_tags = item.get("tags", [])
+            tag_registry = project_data.get("tag_registry", {})
+
+            # 递减旧标签的使用计数
+            for old_tag in old_tags:
+                if old_tag in tag_registry:
+                    current_count = tag_registry[old_tag].get("usage_count", 0)
+                    tag_registry[old_tag]["usage_count"] = max(0, current_count - 1)
+
+            # 递增新标签的使用计数
+            for new_tag in tags:
+                if new_tag in tag_registry:
+                    tag_registry[new_tag]["usage_count"] = tag_registry[new_tag].get("usage_count", 0) + 1
+
             project_data["tag_registry"] = tag_registry
+            item["tags"] = tags
 
-        # 生成时间戳
-        timestamps = self._generate_timestamps()
+        # 更新提供的字段
+        if content is not None:
+            if group == "notes":
+                # notes 的 content 存为独立文件
+                if not self._save_note_content(project_id, item_id, content):
+                    return {"success": False, "error": "保存笔记内容失败"}
+            else:
+                item["content"] = content
 
-        # 添加 note 到列表（不包含 content，content 单独保存）
-        note_entry = {
-            "id": note_id,
-            "summary": summary,
-            "tags": tags or [],
-            **timestamps
-        }
-        project_data["notes"].append(note_entry)
+        if summary is not None:
+            item["summary"] = summary
 
-        # 保存 content 到独立 .md 文件
-        if not self._save_note_content(project_id, note_id, note):
-            return {"success": False, "error": "保存笔记内容失败"}
+        if status is not None and group in ["features", "fixes"]:
+            item["status"] = status
 
+        if severity is not None and group == "fixes":
+            item["severity"] = severity
+
+        if related is not None:
+            item["related"] = related
+
+        project_data[group][item_index] = item
         project_data["info"]["updated_at"] = datetime.now().isoformat()
 
         if self._save_project(project_id, project_data):
             return {
                 "success": True,
-                "note_id": note_id,
-                "message": f"已添加笔记到项目 '{project_id}'"
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def add_standard(self, project_id: str, content: str, tags: Optional[List[str]] = None, summary: str = "") -> Dict[str, Any]:
-        """添加项目规范.
-
-        Args:
-            project_id: 项目ID
-            content: 规范内容（详细内容）
-            tags: 规范标签列表（可选，用于细分规范类型）
-            summary: 规范摘要（简短描述，可选）
-
-        Returns:
-            操作结果，包含规范ID
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
-            if not check_result["success"]:
-                return check_result
-
-        # 生成唯一ID（传入已加载的project_data避免重复加载）
-        standard_id = self._generate_item_id("std", project_id, project_data)
-
-        # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        if tags:
-            for tag in tags:
-                if tag in tag_registry:
-                    tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
-            project_data["tag_registry"] = tag_registry
-
-        # 确保 standards 列表存在（向后兼容）
-        if "standards" not in project_data:
-            project_data["standards"] = []
-
-        # 生成时间戳
-        timestamps = self._generate_timestamps()
-        project_data["standards"].append({
-            "id": standard_id,
-            "summary": summary,
-            "content": content,
-            "tags": tags or [],
-            **timestamps
-        })
-
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "standard_id": standard_id,
-                "message": f"已添加规范到项目 '{project_id}'"
+                "item": item,
+                "message": f"已更新 {group} 条目 '{item_id}'"
             }
         return {"success": False, "error": "保存数据失败"}
 
@@ -1242,384 +1112,6 @@ class ProjectMemory(ProjectStorage):
 
         return {"success": False, "error": "保存数据失败"}
 
-    def update_feature_tags(self, project_id: str, feature_id: str, tags: List[str]) -> Dict[str, Any]:
-        """更新功能条目的标签.
-
-        Args:
-            project_id: 项目ID
-            feature_id: 功能ID
-            tags: 新的标签列表
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
-            if not check_result["success"]:
-                return check_result
-
-        # 查找指定ID的功能
-        feature_index = None
-        for i, feature in enumerate(project_data["features"]):
-            if feature.get("id") == feature_id:
-                feature_index = i
-                break
-
-        if feature_index is None:
-            return {"success": False, "error": f"功能ID '{feature_id}' 不存在"}
-
-        # 计算标签使用计数的变化
-        old_tags = project_data["features"][feature_index].get("tags", [])
-        tag_registry = project_data.get("tag_registry", {})
-
-        # 递减旧标签的使用计数
-        for old_tag in old_tags:
-            if old_tag in tag_registry:
-                current_count = tag_registry[old_tag].get("usage_count", 0)
-                tag_registry[old_tag]["usage_count"] = max(0, current_count - 1)
-
-        # 递增新标签的使用计数
-        for new_tag in tags:
-            if new_tag in tag_registry:
-                tag_registry[new_tag]["usage_count"] = tag_registry[new_tag].get("usage_count", 0) + 1
-
-        project_data["features"][feature_index]["tags"] = tags
-        project_data["tag_registry"] = tag_registry
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"功能 '{feature_id}' 标签已更新",
-                "tags": tags
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def update_feature(self, project_id: str, feature_id: str, content: Optional[str] = None,
-                       summary: Optional[str] = None, status: Optional[str] = None, tags: Optional[List[str]] = None, note_id: Optional[str] = None) -> Dict[str, Any]:
-        """更新功能条目（内容、摘要、状态、标签、note_id）.
-
-        Args:
-            project_id: 项目ID
-            feature_id: 功能ID
-            content: 新的功能详细内容（可选）
-            summary: 新的功能摘要（概述，可选）
-            status: 新的状态（可选）
-            tags: 新的标签列表（可选）
-            note_id: 新的关联笔记ID（可选）
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找指定ID的功能
-        feature_index = None
-        for i, feature in enumerate(project_data["features"]):
-            if feature.get("id") == feature_id:
-                feature_index = i
-                break
-
-        if feature_index is None:
-            return {"success": False, "error": f"功能ID '{feature_id}' 不存在"}
-
-        # 验证note_id存在（如果提供）
-        if note_id is not None:
-            if not any(n.get("id") == note_id for n in project_data.get("notes", [])):
-                return {"success": False, "error": f"笔记 '{note_id}' 不存在"}
-
-        # 更新提供的字段
-        if content is not None:
-            project_data["features"][feature_index]["content"] = content
-        if summary is not None:
-            project_data["features"][feature_index]["summary"] = summary
-        if status is not None:
-            project_data["features"][feature_index]["status"] = status
-        if tags is not None:
-            project_data["features"][feature_index]["tags"] = tags
-        if note_id is not None:
-            project_data["features"][feature_index]["note_id"] = note_id
-
-        # 更新条目的 updated_at 字段
-        self._update_timestamp(project_data["features"][feature_index])
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"功能 '{feature_id}' 已更新",
-                "feature": project_data["features"][feature_index]
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def delete_feature(self, project_id: str, feature_id: str) -> Dict[str, Any]:
-        """删除功能条目.
-
-        Args:
-            project_id: 项目ID
-            feature_id: 功能ID
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找并删除指定ID的功能
-        for i, feature in enumerate(project_data["features"]):
-            if feature.get("id") == feature_id:
-                deleted_feature = project_data["features"].pop(i)
-                project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-                if self._save_project(project_id, project_data):
-                    return {
-                        "success": True,
-                        "message": f"功能 '{deleted_feature.get('summary', feature_id)}' 已删除"
-                    }
-                return {"success": False, "error": "保存数据失败"}
-
-        return {"success": False, "error": f"功能ID '{feature_id}' 不存在"}
-
-    def update_note_tags(self, project_id: str, note_id: str, tags: List[str]) -> Dict[str, Any]:
-        """更新笔记条目的标签.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-            tags: 新的标签列表
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 强制注册检查：所有标签必须已注册
-        if tags:
-            check_result = self._check_tags_registered(project_data, tags)
-            if not check_result["success"]:
-                return check_result
-
-        # 查找指定ID的笔记
-        note_index = None
-        for i, note in enumerate(project_data["notes"]):
-            if note.get("id") == note_id:
-                note_index = i
-                break
-
-        if note_index is None:
-            return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
-
-        # 计算标签使用计数的变化
-        old_tags = project_data["notes"][note_index].get("tags", [])
-        tag_registry = project_data.get("tag_registry", {})
-
-        # 递减旧标签的使用计数
-        for old_tag in old_tags:
-            if old_tag in tag_registry:
-                current_count = tag_registry[old_tag].get("usage_count", 0)
-                tag_registry[old_tag]["usage_count"] = max(0, current_count - 1)
-
-        # 递增新标签的使用计数
-        for new_tag in tags:
-            if new_tag in tag_registry:
-                tag_registry[new_tag]["usage_count"] = tag_registry[new_tag].get("usage_count", 0) + 1
-
-        project_data["notes"][note_index]["tags"] = tags
-        project_data["tag_registry"] = tag_registry
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"笔记 '{note_id}' 标签已更新",
-                "tags": tags
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def update_note(self, project_id: str, note_id: str, content: Optional[str] = None, tags: Optional[List[str]] = None, summary: Optional[str] = None) -> Dict[str, Any]:
-        """更新笔记条目（摘要、内容、标签）.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-            summary: 新的摘要（可选）
-            content: 新的笔记内容（可选）
-            tags: 新的标签列表（可选）
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找指定ID的笔记
-        note_index = None
-        for i, note in enumerate(project_data["notes"]):
-            if note.get("id") == note_id:
-                note_index = i
-                break
-
-        if note_index is None:
-            return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
-
-        # 更新提供的字段
-        if summary is not None:
-            project_data["notes"][note_index]["summary"] = summary
-        if content is not None:
-            # 保存 content 到独立 .md 文件
-            if not self._save_note_content(project_id, note_id, content):
-                return {"success": False, "error": "保存笔记内容失败"}
-        if tags is not None:
-            project_data["notes"][note_index]["tags"] = tags
-
-        # 更新条目的 updated_at 字段
-        self._update_timestamp(project_data["notes"][note_index])
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"笔记 '{note_id}' 已更新",
-                "note": project_data["notes"][note_index]
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def delete_note(self, project_id: str, note_id: str) -> Dict[str, Any]:
-        """删除笔记条目.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 查找并删除指定ID的笔记
-        for i, note in enumerate(project_data["notes"]):
-            if note.get("id") == note_id:
-                deleted_note = project_data["notes"].pop(i)
-
-                # 删除对应的 .md 文件
-                content_path = self._get_note_content_path(project_id, note_id)
-                if content_path.exists():
-                    try:
-                        content_path.unlink()
-                    except IOError:
-                        pass  # 忽略删除文件失败
-
-                project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-                if self._save_project(project_id, project_data):
-                    return {
-                        "success": True,
-                        "message": f"笔记 '{note_id}' 已删除"
-                    }
-                return {"success": False, "error": "保存数据失败"}
-
-        return {"success": False, "error": f"笔记ID '{note_id}' 不存在"}
-
-    def update_standard(self, project_id: str, standard_id: str, content: Optional[str] = None, tags: Optional[List[str]] = None, summary: Optional[str] = None) -> Dict[str, Any]:
-        """更新规范条目（摘要、内容、标签）.
-
-        Args:
-            project_id: 项目ID
-            standard_id: 规范ID
-            summary: 新的摘要（可选）
-            content: 新的规范内容（可选）
-            tags: 新的标签列表（可选）
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 确保 standards 列表存在（向后兼容）
-        if "standards" not in project_data:
-            project_data["standards"] = []
-
-        # 查找指定ID的规范
-        standard_index = None
-        for i, standard in enumerate(project_data["standards"]):
-            if standard.get("id") == standard_id:
-                standard_index = i
-                break
-
-        if standard_index is None:
-            return {"success": False, "error": f"规范ID '{standard_id}' 不存在"}
-
-        # 更新提供的字段
-        if summary is not None:
-            project_data["standards"][standard_index]["summary"] = summary
-        if content is not None:
-            project_data["standards"][standard_index]["content"] = content
-        if tags is not None:
-            project_data["standards"][standard_index]["tags"] = tags
-
-        # 更新条目的 updated_at 字段
-        self._update_timestamp(project_data["standards"][standard_index])
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        if self._save_project(project_id, project_data):
-            return {
-                "success": True,
-                "message": f"规范 '{standard_id}' 已更新",
-                "standard": project_data["standards"][standard_index]
-            }
-        return {"success": False, "error": "保存数据失败"}
-
-    def delete_standard(self, project_id: str, standard_id: str) -> Dict[str, Any]:
-        """删除规范条目.
-
-        Args:
-            project_id: 项目ID
-            standard_id: 规范ID
-
-        Returns:
-            操作结果
-        """
-        project_data = self._load_project(project_id)
-        if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
-
-        # 确保 standards 列表存在（向后兼容）
-        if "standards" not in project_data:
-            project_data["standards"] = []
-
-        # 查找并删除指定ID的规范
-        for i, standard in enumerate(project_data["standards"]):
-            if standard.get("id") == standard_id:
-                deleted_standard = project_data["standards"].pop(i)
-                project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-                if self._save_project(project_id, project_data):
-                    # 获取规范摘要用于消息
-                    content_preview = deleted_standard.get("content", "")[:50]
-                    if len(deleted_standard.get("content", "")) > 50:
-                        content_preview += "..."
-                    return {
-                        "success": True,
-                        "message": f"规范 '{content_preview}' 已删除"
-                    }
-                return {"success": False, "error": "保存数据失败"}
-
-        return {"success": False, "error": f"规范ID '{standard_id}' 不存在"}
 
     def add_item_tag(self, project_id: str, group_name: str, item_id: str, tag: str) -> Dict[str, Any]:
         """为条目添加单个标签.
@@ -2025,411 +1517,3 @@ class ProjectMemory(ProjectStorage):
                 "top_note_tags": sorted(note_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
             }
         }
-
-
-# ==================== CRUD Functions ====================
-
-def register_project(
-    memory: ProjectMemory,
-    name: str,
-    path: Optional[str] = None,
-    summary: str = "",
-    tags: Optional[List[str]] = None,
-    git_remote: Optional[str] = None,
-    git_remote_url: Optional[str] = None
-) -> Dict[str, Any]:
-    """注册新项目."""
-    return memory.register_project(
-        name=name,
-        path=path,
-        summary=summary,
-        tags=tags,
-        git_remote=git_remote,
-        git_remote_url=git_remote_url
-    )
-
-
-def find_project_by_git_remote(memory: ProjectMemory, git_remote: str) -> Optional[str]:
-    """通过 Git remote URL 查找项目ID."""
-    return memory.find_project_by_git_remote(git_remote)
-
-
-def set_project_info(memory: ProjectMemory, project_id: str, **kwargs) -> Dict[str, Any]:
-    """设置项目基本信息."""
-    return memory.set_info(project_id, **kwargs)
-
-
-def rename_project(memory: ProjectMemory, project_id: str, new_name: str) -> Dict[str, Any]:
-    """重命名项目."""
-    return memory.project_rename(project_id, new_name)
-
-
-def delete_project(memory: ProjectMemory, project_id: str) -> Dict[str, Any]:
-    """删除项目."""
-    return memory.delete_project(project_id)
-
-
-def export_data(memory: ProjectMemory, output_path: Union[str, Path, None] = None) -> Dict[str, Any]:
-    """导出所有项目数据."""
-    return memory.export_data(output_path)
-
-
-def import_data(memory: ProjectMemory, input_path: Union[str, Path], merge: bool = False) -> Dict[str, Any]:
-    """导入项目数据."""
-    return memory.import_data(input_path, merge)
-
-
-# ==================== Feature CRUD ====================
-
-def add_feature(
-    memory: ProjectMemory,
-    project_id: str,
-    content: str,
-    summary: str,
-    status: str = "pending",
-    tags: Optional[List[str]] = None,
-    note_id: Optional[str] = None
-) -> Dict[str, Any]:
-    """添加功能记录."""
-    return memory.add_feature(
-        project_id=project_id,
-        content=content,
-        summary=summary,
-        status=status,
-        tags=tags,
-        note_id=note_id
-    )
-
-
-def update_feature(
-    memory: ProjectMemory,
-    project_id: str,
-    feature_id: str,
-    content: Optional[str] = None,
-    summary: Optional[str] = None,
-    status: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    note_id: Optional[str] = None
-) -> Dict[str, Any]:
-    """更新功能条目."""
-    return memory.update_feature(
-        project_id=project_id,
-        feature_id=feature_id,
-        content=content,
-        summary=summary,
-        status=status,
-        tags=tags,
-        note_id=note_id
-    )
-
-
-def delete_feature(memory: ProjectMemory, project_id: str, feature_id: str) -> Dict[str, Any]:
-    """删除功能条目."""
-    return memory.delete_feature(project_id=project_id, feature_id=feature_id)
-
-
-def update_feature_status(
-    memory: ProjectMemory,
-    project_id: str,
-    feature_index: int,
-    status: str
-) -> Dict[str, Any]:
-    """更新功能状态."""
-    return memory.update_feature_status(
-        project_id=project_id,
-        feature_index=feature_index,
-        status=status
-    )
-
-
-# ==================== Fix CRUD ====================
-
-def add_fix(
-    memory: ProjectMemory,
-    project_id: str,
-    content: str,
-    summary: str,
-    status: str = "pending",
-    severity: str = "medium",
-    related_feature: Optional[str] = None,
-    note_id: Optional[str] = None,
-    tags: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """添加 bug 修复记录."""
-    return memory.add_fix(
-        project_id=project_id,
-        content=content,
-        summary=summary,
-        status=status,
-        severity=severity,
-        related_feature=related_feature,
-        note_id=note_id,
-        tags=tags
-    )
-
-
-def update_fix(
-    memory: ProjectMemory,
-    project_id: str,
-    fix_id: str,
-    content: Optional[str] = None,
-    summary: Optional[str] = None,
-    status: Optional[str] = None,
-    severity: Optional[str] = None,
-    related_feature: Optional[str] = None,
-    note_id: Optional[str] = None,
-    tags: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """更新 bug 修复记录."""
-    return memory.update_fix(
-        project_id=project_id,
-        fix_id=fix_id,
-        content=content,
-        summary=summary,
-        status=status,
-        severity=severity,
-        related_feature=related_feature,
-        note_id=note_id,
-        tags=tags
-    )
-
-
-def delete_fix(memory: ProjectMemory, project_id: str, fix_id: str) -> Dict[str, Any]:
-    """删除 bug 修复记录."""
-    return memory.delete_fix(project_id=project_id, fix_id=fix_id)
-
-
-# ==================== Note CRUD ====================
-
-def add_note(
-    memory: ProjectMemory,
-    project_id: str,
-    note: str,
-    tags: Optional[List[str]] = None,
-    summary: str = ""
-) -> Dict[str, Any]:
-    """添加开发笔记."""
-    return memory.add_note(
-        project_id=project_id,
-        note=note,
-        tags=tags,
-        summary=summary
-    )
-
-
-def update_note(
-    memory: ProjectMemory,
-    project_id: str,
-    note_id: str,
-    content: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    summary: Optional[str] = None
-) -> Dict[str, Any]:
-    """更新笔记条目."""
-    return memory.update_note(
-        project_id=project_id,
-        note_id=note_id,
-        content=content,
-        tags=tags,
-        summary=summary
-    )
-
-
-def delete_note(memory: ProjectMemory, project_id: str, note_id: str) -> Dict[str, Any]:
-    """删除笔记条目."""
-    return memory.delete_note(project_id=project_id, note_id=note_id)
-
-
-# ==================== Standard CRUD ====================
-
-def add_standard(
-    memory: ProjectMemory,
-    project_id: str,
-    content: str,
-    tags: Optional[List[str]] = None,
-    summary: str = ""
-) -> Dict[str, Any]:
-    """添加项目规范."""
-    return memory.add_standard(
-        project_id=project_id,
-        content=content,
-        tags=tags,
-        summary=summary
-    )
-
-
-def update_standard(
-    memory: ProjectMemory,
-    project_id: str,
-    standard_id: str,
-    content: Optional[str] = None,
-    tags: Optional[List[str]] = None,
-    summary: Optional[str] = None
-) -> Dict[str, Any]:
-    """更新规范条目."""
-    return memory.update_standard(
-        project_id=project_id,
-        standard_id=standard_id,
-        content=content,
-        tags=tags,
-        summary=summary
-    )
-
-
-def delete_standard(memory: ProjectMemory, project_id: str, standard_id: str) -> Dict[str, Any]:
-    """删除规范条目."""
-    return memory.delete_standard(project_id=project_id, standard_id=standard_id)
-
-
-# ==================== Tag Management ====================
-
-def add_item_tag(
-    memory: ProjectMemory,
-    project_id: str,
-    group_name: str,
-    item_id: str,
-    tag: str
-) -> Dict[str, Any]:
-    """为条目添加单个标签."""
-    return memory.add_item_tag(
-        project_id=project_id,
-        group_name=group_name,
-        item_id=item_id,
-        tag=tag
-    )
-
-
-def remove_item_tag(
-    memory: ProjectMemory,
-    project_id: str,
-    group_name: str,
-    item_id: str,
-    tag: str
-) -> Dict[str, Any]:
-    """从条目移除单个标签."""
-    return memory.remove_item_tag(
-        project_id=project_id,
-        group_name=group_name,
-        item_id=item_id,
-        tag=tag
-    )
-
-
-def update_feature_tags(
-    memory: ProjectMemory,
-    project_id: str,
-    feature_id: str,
-    tags: List[str]
-) -> Dict[str, Any]:
-    """更新功能条目的标签."""
-    return memory.update_feature_tags(
-        project_id=project_id,
-        feature_id=feature_id,
-        tags=tags
-    )
-
-
-def update_note_tags(
-    memory: ProjectMemory,
-    project_id: str,
-    note_id: str,
-    tags: List[str]
-) -> Dict[str, Any]:
-    """更新笔记条目的标签."""
-    return memory.update_note_tags(
-        project_id=project_id,
-        note_id=note_id,
-        tags=tags
-    )
-
-
-# ==================== Query ====================
-
-def get_project(memory: ProjectMemory, project_id: str) -> Dict[str, Any]:
-    """获取项目信息."""
-    return memory.get_project(project_id)
-
-
-def list_projects(memory: ProjectMemory) -> Dict[str, Any]:
-    """列出所有项目."""
-    return memory.list_projects()
-
-
-def search(memory: ProjectMemory, keyword: str = "", tags: Optional[List[str]] = None) -> Dict[str, Any]:
-    """搜索项目."""
-    return memory.search(keyword=keyword, tags=tags)
-
-
-def list_groups(memory: ProjectMemory, project_id: str) -> Dict[str, Any]:
-    """列出项目分组."""
-    return memory.list_groups(project_id)
-
-
-def list_all_registered_tags(memory: ProjectMemory, project_id: str) -> Dict[str, Any]:
-    """列出所有已注册标签."""
-    return memory.list_all_registered_tags(project_id)
-
-
-def list_group_tags(memory: ProjectMemory, project_id: str, group_name: str) -> Dict[str, Any]:
-    """按分组列出标签."""
-    return memory.list_group_tags(project_id, group_name)
-
-
-def list_unregistered_tags(memory: ProjectMemory, project_id: str, group_name: str) -> Dict[str, Any]:
-    """列出未注册标签."""
-    return memory.list_unregistered_tags(project_id, group_name)
-
-
-def query_by_tag(memory: ProjectMemory, project_id: str, group_name: str, tag: str) -> Dict[str, Any]:
-    """按标签查询."""
-    return memory.query_by_tag(project_id, group_name, tag)
-
-
-# ==================== Tag Registry ====================
-
-def register_tag(
-    memory: ProjectMemory,
-    project_id: str,
-    tag_name: str,
-    summary: str = "",
-    aliases: Optional[List[str]] = None
-) -> Dict[str, Any]:
-    """注册标签."""
-    return memory.register_tag(
-        project_id=project_id,
-        tag_name=tag_name,
-        summary=summary,
-        aliases=aliases
-    )
-
-
-def update_tag(
-    memory: ProjectMemory,
-    project_id: str,
-    tag_name: str,
-    summary: Optional[str] = None
-) -> Dict[str, Any]:
-    """更新标签."""
-    return memory.update_tag(
-        project_id=project_id,
-        tag_name=tag_name,
-        summary=summary
-    )
-
-
-def delete_tag(memory: ProjectMemory, project_id: str, tag_name: str, force: bool = False) -> Dict[str, Any]:
-    """删除标签."""
-    return memory.delete_tag(
-        project_id=project_id,
-        tag_name=tag_name,
-        force=force
-    )
-
-
-def merge_tags(memory: ProjectMemory, project_id: str, old_tag: str, new_tag: str) -> Dict[str, Any]:
-    """合并标签."""
-    return memory.merge_tags(
-        project_id=project_id,
-        old_tag=old_tag,
-        new_tag=new_tag
-    )
