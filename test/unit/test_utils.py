@@ -2,8 +2,12 @@
 """工具函数单元测试."""
 
 import sys
+import os
 import re
+import tempfile
+import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -103,6 +107,46 @@ def test_content_validation():
     return True
 
 
+def test_track_calls_decorator():
+    """测试 track_calls 装饰器."""
+    print("测试: track_calls 装饰器...")
+
+    temp_dir = tempfile.mkdtemp()
+    try:
+        original_storage = os.environ.get("MCP_STORAGE_DIR")
+        os.environ["MCP_STORAGE_DIR"] = temp_dir
+
+        from core.utils import track_calls
+
+        # 使用 mock 验证 record_call 被调用
+        from unittest.mock import MagicMock
+        with patch("features.instances.call_stats") as mock_stats:
+            mock_stats.record_call = MagicMock()
+
+            @track_calls
+            def dummy_func():
+                return "result"
+
+            # 调用被装饰的函数，触发 track_calls 内部逻辑
+            result = dummy_func()
+
+            assert result == "result", "函数返回值应该不变"
+            mock_stats.record_call.assert_called_once()
+            call_kwargs = mock_stats.record_call.call_args.kwargs
+            assert call_kwargs["tool_name"] == "dummy_func"
+            assert "client" in call_kwargs
+            assert "ip" in call_kwargs
+
+        print("  ✓ track_calls 装饰器测试通过")
+        return True
+    finally:
+        if original_storage is not None:
+            os.environ["MCP_STORAGE_DIR"] = original_storage
+        elif "MCP_STORAGE_DIR" in os.environ:
+            del os.environ["MCP_STORAGE_DIR"]
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 def run_all_tests():
     """运行所有单元测试."""
     print("=" * 60)
@@ -115,6 +159,7 @@ def run_all_tests():
         test_group_normalization,
         test_tag_parsing,
         test_content_validation,
+        test_track_calls_decorator,
     ]
 
     passed = 0
