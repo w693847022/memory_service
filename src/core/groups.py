@@ -161,7 +161,10 @@ def validate_content_length(content: str, group_name: str, min_tokens: Optional[
         return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
 
     if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)
+        msg = f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens"
+        if group_name in ("features", "fixes"):
+            msg += "。如果无法简化，建议建立 note 与之关联"
+        return False, msg, int(estimated_tokens)
     return True, None, int(estimated_tokens)
 
 
@@ -187,7 +190,10 @@ def validate_summary_length(summary: str, group_name: str, min_tokens: Optional[
         return False, f"摘要过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）", int(estimated_tokens)
 
     if estimated_tokens > max_tokens:
-        return False, f"摘要过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens", int(estimated_tokens)
+        msg = f"摘要过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens"
+        if group_name in ("features", "fixes"):
+            msg += "。如果无法简化，建议建立 note 与之关联"
+        return False, msg, int(estimated_tokens)
     return True, None, int(estimated_tokens)
 
 
