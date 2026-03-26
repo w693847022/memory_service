@@ -14,7 +14,7 @@ class ApiResponse:
     message: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
-        response = {"success": self.success}
+        response: Dict[str, Any] = {"success": self.success}
         if self.data is not None:
             response["data"] = self.data
         if self.error is not None:

@@ -2,8 +2,6 @@
 
 import argparse
 import os
-from pathlib import Path
-from memory import ProjectMemory, CallStats
 
 
 def parse_args():
@@ -58,12 +56,3 @@ def parse_args():
     )
 
     return parser.parse_args()
-
-
-# ===================
-# Memory Initialization
-# ===================
-# 从环境变量读取存储目录，默认使用用户目录下的.project_memory_ai
-storage_dir = os.environ.get("MCP_STORAGE_DIR", str(Path.home() / ".project_memory_ai"))
-memory = ProjectMemory(storage_dir=storage_dir)
-call_stats = CallStats(storage_dir=storage_dir)

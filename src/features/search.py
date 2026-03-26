@@ -1,9 +1,11 @@
 """搜索功能模块."""
 
+from typing import Optional
+
 import requests
 
 
-def search_github(query: str, language: str = None, max_results: int = 5):
+def search_github(query: str, language: Optional[str] = None, max_results: int = 5):
     """搜索 GitHub 仓库."""
     try:
         search_query = query
@@ -48,7 +50,7 @@ def search_github(query: str, language: str = None, max_results: int = 5):
         return {"success": False, "error": f"Unexpected error: {str(e)}"}
 
 
-def search_stackoverflow(query: str, language: str = None, max_results: int = 5):
+def search_stackoverflow(query: str, language: Optional[str] = None, max_results: int = 5):
     """搜索 Stack Overflow 问答."""
     try:
         url = "https://api.stackexchange.com/2.3/search/advanced"

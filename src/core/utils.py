@@ -33,7 +33,7 @@ def track_calls(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         # Import here to avoid circular dependency
-        from .config import call_stats
+        from features.instances import call_stats
 
         client = detect_client()
         ip = get_caller_ip()

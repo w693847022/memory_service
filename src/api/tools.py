@@ -4,81 +4,31 @@
 """
 
 import json
-from typing import Optional
+from typing import Optional, Dict, List
 
-# 从 core 模块导入依赖（支持相对和绝对导入）
-try:
-    from ..core.config import memory, call_stats
-    from ..core.utils import track_calls
-    from ..models.response import ApiResponse
-except ImportError:
-    from core.config import memory, call_stats
-    from core.utils import track_calls
-    from models.response import ApiResponse
+# 从 features.instances 导入全局实例
+from features.instances import memory, call_stats
+from core.utils import track_calls
+from core.groups import (
+    validate_group_name,
+    validate_status,
+    validate_content_length as groups_validate_content_length,
+    validate_summary_length,
+    get_group_config,
+    is_group_with_status,
+)
+from models.response import ApiResponse
 
 
 # ===================
 # Helper Functions
 # ===================
 
-def _normalize_group(group: str) -> str:
-    """标准化 group 参数.
-
-    支持中英文别名：
-    - features: "features", "feature", "功能", "feat"
-    - fixes: "fixes", "fix", "修复", "bugfix"
-    - notes: "notes", "note", "笔记"
-    - standards: "standards", "standard", "规范", "标准"
-    """
-    group_lower = group.lower().strip()
-
-    # 中文别名映射
-    aliases = {
-        "features": ["features", "feature", "功能", "feat"],
-        "fixes": ["fixes", "fix", "修复", "bugfix"],
-        "notes": ["notes", "note", "笔记"],
-        "standards": ["standards", "standard", "规范", "标准"]
-    }
-
-    for normalized, variants in aliases.items():
-        if group_lower in [v.lower() for v in variants]:
-            return normalized
-
-    return group_lower  # 返回原值，让调用者处理错误
-
-
 def _parse_tags(tags_str: str) -> list:
     """解析标签字符串为列表."""
     if not tags_str:
         return []
     return [t.strip() for t in tags_str.split(",") if t.strip()]
-
-
-def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int = None) -> tuple[bool, str]:
-    """验证内容长度（基于 token 估算）.
-
-    Args:
-        content: 要验证的内容
-        max_tokens: 最大 token 数
-        min_tokens: 最小 token 数（可选）
-
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not content:
-        return False, "内容不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符（中英文混合平均）
-    estimated_tokens = len(content) / 3
-
-    # 最小长度验证
-    if min_tokens is not None and estimated_tokens < min_tokens:
-        return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）"
-
-    # 最大长度验证
-    if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
-    return True, ""
 
 
 def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
@@ -222,8 +172,9 @@ def project_tags_info(
         response = ApiResponse(success=True, data=data, message=f"共 {result['total_tags']} 个已注册标签")
         return response.to_json()
 
-    if group_name not in ["features", "notes", "fixes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组名称: {group_name}")
+    is_valid, error_msg = validate_group_name(group_name)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     # 查询特定标签
@@ -279,95 +230,12 @@ def project_tags_info(
         return response.to_json()
 
 
-
-def _normalize_group(group: str) -> str:
-    """标准化 group 参数.
-
-    支持中英文别名：
-    - features: "features", "feature", "功能", "feat"
-    - fixes: "fixes", "fix", "修复", "bugfix"
-    - notes: "notes", "note", "笔记"
-    - standards: "standards", "standard", "规范", "标准"
-    """
-    group_lower = group.lower().strip()
-
-    # 中文别名映射
-    aliases = {
-        "features": ["features", "feature", "功能", "feat"],
-        "fixes": ["fixes", "fix", "修复", "bugfix"],
-        "notes": ["notes", "note", "笔记"],
-        "standards": ["standards", "standard", "规范", "标准"]
-    }
-
-    for normalized, variants in aliases.items():
-        if group_lower in [v.lower() for v in variants]:
-            return normalized
-
-    return group_lower  # 返回原值，让调用者处理错误
-
-
-def _parse_tags(tags_str: str) -> list:
-    """解析标签字符串为列表."""
-    if not tags_str:
-        return []
-    return [t.strip() for t in tags_str.split(",") if t.strip()]
-
-
-def _validate_content_length(content: str, max_tokens: int = 30, min_tokens: int = None) -> tuple[bool, str]:
-    """验证内容长度（基于 token 估算）.
-
-    Args:
-        content: 要验证的内容
-        max_tokens: 最大 token 数
-        min_tokens: 最小 token 数（可选）
-
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not content:
-        return False, "内容不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符（中英文混合平均）
-    estimated_tokens = len(content) / 3
-
-    # 最小长度验证
-    if min_tokens is not None and estimated_tokens < min_tokens:
-        return False, f"内容过短：预估 {int(estimated_tokens)} tokens，最小允许 {min_tokens} tokens（约 {min_tokens * 3} 字符）"
-
-    # 最大长度验证
-    if estimated_tokens > max_tokens:
-        return False, f"内容过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
-    return True, ""
-
-
-def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
-    """验证单个标签长度（基于 token 估算）.
-
-    Args:
-        tag: 要验证的标签
-        max_tokens: 最大 token 数
-
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not tag:
-        return False, "标签不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符
-    estimated_tokens = len(tag) / 3
-
-    if estimated_tokens > max_tokens:
-        return False, f"标签 '{tag}' 过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
-    return True, ""
-
-
-
 def project_add(
     project_id: str,
     group: str,
     content: str = "",
     summary: str = "",
-    status: str = None,  # 哨兵值，用于检测是否显式传入
+    status: Optional[str] = None,  # 哨兵值，用于检测是否显式传入
     severity: str = "medium",
     related_feature: str = "",
     note_id: str = "",
@@ -393,21 +261,21 @@ def project_add(
     Returns:
         JSON 格式的操作结果
     """
-    # 标准化 group 参数
-    group_normalized = _normalize_group(group)
-
     # 验证 group 有效性
-    if group_normalized not in ["features", "fixes", "notes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group} (支持: features/fixes/notes/standards 或 功能/修复/笔记/规范)")
+    is_valid, error_msg = validate_group_name(group)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     # status 参数验证（仅 features/fixes 分组必填）
-    if group_normalized in ["features", "fixes"]:
+    config = get_group_config(group)
+    if config and config.status_values:
         if status is None:
             response = ApiResponse(success=False, error="features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)")
             return response.to_json()
-        if status not in ["pending", "in_progress", "completed"]:
-            response = ApiResponse(success=False, error=f"无效的 status 值: {status} (有效值: pending/in_progress/completed)")
+        is_valid, error_msg = validate_status(status, group)
+        if not is_valid:
+            response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
     else:
         # notes/standards 忽略 status 参数
@@ -418,20 +286,8 @@ def project_add(
         response = ApiResponse(success=False, error="content 参数不能为空")
         return response.to_json()
 
-    # 根据 group 类型设置不同的 max_tokens
-    # features/fixes/standards: 30 tokens, notes: 500 tokens (允许详细的技术笔记)
-    max_tokens_map = {
-        "features": 80,
-        "fixes": 80,
-        "notes": 500,
-        "standards": 80
-    }
-    max_tokens = max_tokens_map.get(group_normalized, 30)
-
     # 验证 content 长度
-    # notes 分组添加最小长度验证（1 token）
-    min_tokens = 1 if group_normalized == "notes" else None
-    is_valid, error_msg = _validate_content_length(content, max_tokens=max_tokens, min_tokens=min_tokens)
+    is_valid, error_msg, _ = groups_validate_content_length(content, group)
     if not is_valid:
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
@@ -442,9 +298,7 @@ def project_add(
         return response.to_json()
 
     # 验证 summary 长度
-    # notes 分组 50 tokens，其他分组 30 tokens
-    desc_max_tokens = 50 if group_normalized == "notes" else 30
-    is_valid, error_msg = _validate_content_length(summary, max_tokens=desc_max_tokens)
+    is_valid, error_msg, _ = validate_summary_length(summary, group)
     if not is_valid:
         response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
@@ -464,127 +318,68 @@ def project_add(
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 根据 group 分发
-    if group_normalized == "features":
-        result = memory.add_feature(
-            project_id,
-            content,  # feature content
-            summary,  # feature summary (overview)
-            status,
-            tag_list,
-            note_id or None
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "features",
-                "item_id": result["feature_id"],
-                "item": {
-                    "id": result["feature_id"],
-                    "content": content,
-                    "summary": summary,
-                    "status": status,
-                    "tags": tag_list,
-                    "note_id": note_id or None
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
+    related: Dict[str, List[str]] = {}
+    if note_id:
+        related["notes"] = [note_id]
+    if related_feature:
+        if "features" not in related:
+            related["features"] = []
+        related["features"].append(related_feature)
 
-    elif group_normalized == "fixes":
-        result = memory.add_fix(
-            project_id,
-            content,  # fix content
-            summary,  # fix summary (overview)
-            status,
-            severity,
-            related_feature or None,
-            note_id or None,
-            tag_list
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "fixes",
-                "item_id": result["fix_id"],
-                "item": {
-                    "id": result["fix_id"],
-                    "content": content,
-                    "summary": summary,
-                    "status": status,
-                    "severity": severity,
-                    "tags": tag_list,
-                    "related_feature": related_feature or None,
-                    "note_id": note_id or None
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+    # 统一调用 add_item
+    result = memory.add_item(
+        project_id=project_id,
+        group=group,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related if related else None,
+        tags=tag_list
+    )
 
-    elif group_normalized == "notes":
-        result = memory.add_note(
-            project_id,
-            content,  # note content
-            tag_list,
-            summary
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "notes",
-                "item_id": result["note_id"],
-                "item": {
-                    "id": result["note_id"],
-                    "content": content,
-                    "summary": summary,
-                    "tags": tag_list
-                }
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": result["item_id"],
+            "item": {
+                "id": result["item_id"],
+                "summary": summary,
+                "content": content,
+                "tags": tag_list,
             }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        }
+        # 可选字段
+        if status:
+            data["item"]["status"] = status
+        if severity and severity != "medium":
+            data["item"]["severity"] = severity
+        if related:
+            data["item"]["related"] = related
+        if note_id:
+            data["item"]["note_id"] = note_id
+        if related_feature:
+            data["item"]["related_feature"] = related_feature
 
-    elif group_normalized == "standards":
-        result = memory.add_standard(
-            project_id,
-            content,  # standard content
-            tag_list,
-            summary
-        )
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group": "standards",
-                "item_id": result["standard_id"],
-                "item": {
-                    "id": result["standard_id"],
-                    "content": content,
-                    "summary": summary,
-                    "tags": tag_list
-                }
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+        response = ApiResponse(success=True, data=data, message=result['message'])
         return response.to_json()
+    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    return response.to_json()
 
 
 def project_update(
     project_id: str,
     group: str,
     item_id: str,
-    content: str = None,
-    summary: str = None,
-    status: str = None,
-    severity: str = None,
-    related_feature: str = None,
-    note_id: str = None,
-    tags: str = None
+    content: Optional[str] = None,
+    summary: Optional[str] = None,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    related_feature: Optional[str] = None,
+    note_id: Optional[str] = None,
+    tags: Optional[str] = None
 ) -> str:
     """更新项目条目（统一接口）.
 
@@ -596,19 +391,17 @@ def project_update(
         summary: 摘要更新（可选）
         status: 状态更新（可选）
         severity: 严重程度更新（仅 fixes）
-        related_feature: 关联功能更新（仅 fixes）
-        note_id: 关联笔记更新（仅 features/fixes）
+        related_feature: 关联功能更新（仅 fixes） - 已废弃，使用 related
+        note_id: 关联笔记更新（仅 features/fixes） - 已废弃，使用 related
         tags: 标签更新（可选）
 
     Returns:
         JSON 格式的操作结果
     """
-    # 标准化 group 参数
-    group_normalized = _normalize_group(group)
-
     # 验证 group 有效性
-    if group_normalized not in ["features", "fixes", "notes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group} (支持: features/fixes/notes/standards)")
+    is_valid, error_msg = validate_group_name(group)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     # 验证必需参数
@@ -618,134 +411,53 @@ def project_update(
 
     # 验证 content 长度
     if content is not None:
-        # 根据 group 类型设置不同的 max_tokens
-        # features/fixes/standards: 80 tokens, notes: 500 tokens (允许详细的技术笔记)
-        max_tokens_map = {"features": 80, "fixes": 80, "notes": 500, "standards": 80}
-        max_tokens = max_tokens_map.get(group_normalized, 30)
-        # notes 分组添加最小长度验证（1 token）
-        min_tokens = 1 if group_normalized == "notes" else None
-        is_valid, error_msg = _validate_content_length(content, max_tokens=max_tokens, min_tokens=min_tokens)
+        is_valid, error_msg, _ = groups_validate_content_length(content, group)
         if not is_valid:
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
     # 验证 summary 长度
     if summary is not None:
-        # notes 分组 50 tokens，其他分组 30 tokens
-        desc_max_tokens = 50 if group_normalized == "notes" else 30
-        is_valid, error_msg = _validate_content_length(summary, max_tokens=desc_max_tokens)
+        is_valid, error_msg, _ = validate_summary_length(summary, group)
         if not is_valid:
             response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
-    # 根据 group 分发
-    if group_normalized == "features":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if status is not None:
-            update_params["status"] = status
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-        if note_id is not None:
-            update_params["note_id"] = note_id
+    # 构建 related 字典（从 note_id 和 related_feature 转换，保持向后兼容）
+    related: Optional[Dict[str, List[str]]] = None
+    if note_id or related_feature:
+        related = {}
+        if note_id:
+            related["notes"] = [note_id]
+        if related_feature:
+            if "features" not in related:
+                related["features"] = []
+            related["features"].append(related_feature)
 
-        result = memory.update_feature(project_id, item_id, **update_params)
+    # 统一调用 update_item
+    result = memory.update_item(
+        project_id=project_id,
+        group=group,
+        item_id=item_id,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related,
+        tags=_parse_tags(tags) if tags else None
+    )
 
-        if result["success"]:
-            feature = result["feature"]
-            data = {
-                "project_id": project_id,
-                "group": "features",
-                "item_id": item_id,
-                "item": feature
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": item_id,
+            "item": result["item"]
+        }
+        response = ApiResponse(success=True, data=data, message=result['message'])
         return response.to_json()
-
-    elif group_normalized == "fixes":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if status is not None:
-            update_params["status"] = status
-        if severity is not None:
-            update_params["severity"] = severity
-        if related_feature is not None:
-            update_params["related_feature"] = related_feature
-        if note_id is not None:
-            update_params["note_id"] = note_id
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_fix(project_id, item_id, **update_params)
-
-        if result["success"]:
-            fix = result["fix"]
-            data = {
-                "project_id": project_id,
-                "group": "fixes",
-                "item_id": item_id,
-                "item": fix
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
-
-    elif group_normalized == "notes":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_note(project_id, item_id, **update_params)
-
-        if result["success"]:
-            note = result["note"]
-            data = {
-                "project_id": project_id,
-                "group": "notes",
-                "item_id": item_id,
-                "item": note
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
-
-    elif group_normalized == "standards":
-        update_params = {}
-        if content is not None:
-            update_params["content"] = content
-        if summary is not None:
-            update_params["summary"] = summary
-        if tags is not None:
-            update_params["tags"] = _parse_tags(tags)
-
-        result = memory.update_standard(project_id, item_id, **update_params)
-
-        if result["success"]:
-            standard = result["standard"]
-            data = {
-                "project_id": project_id,
-                "group": "standards",
-                "item_id": item_id,
-                "item": standard
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
+    return response.to_json()
 
 
 def project_delete(
@@ -763,12 +475,10 @@ def project_delete(
     Returns:
         JSON 格式的操作结果
     """
-    # 标准化 group 参数
-    group_normalized = _normalize_group(group)
-
     # 验证 group 有效性
-    if group_normalized not in ["features", "fixes", "notes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组类型: {group} (支持: features/fixes/notes/standards)")
+    is_valid, error_msg = validate_group_name(group)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     # 验证必需参数
@@ -776,20 +486,13 @@ def project_delete(
         response = ApiResponse(success=False, error="item_id 参数不能为空")
         return response.to_json()
 
-    # 根据 group 分发
-    if group_normalized == "features":
-        result = memory.delete_feature(project_id, item_id)
-    elif group_normalized == "fixes":
-        result = memory.delete_fix(project_id, item_id)
-    elif group_normalized == "notes":
-        result = memory.delete_note(project_id, item_id)
-    elif group_normalized == "standards":
-        result = memory.delete_standard(project_id, item_id)
+    # 统一调用 delete_item
+    result = memory.delete_item(project_id=project_id, group=group, item_id=item_id)
 
     if result["success"]:
         data = {
             "project_id": project_id,
-            "group": group_normalized,
+            "group": group,
             "item_id": item_id,
             "deleted": True
         }
@@ -820,8 +523,9 @@ def project_item_tag_manage(
     Returns:
         JSON 格式的操作结果
     """
-    if group_name not in ["features", "notes", "fixes", "standards"]:
-        response = ApiResponse(success=False, error=f"无效的分组名称: {group_name}")
+    is_valid, error_msg = validate_group_name(group_name)
+    if not is_valid:
+        response = ApiResponse(success=False, error=error_msg)
         return response.to_json()
 
     if operation == "set" or operation == "设置":
@@ -830,14 +534,7 @@ def project_item_tag_manage(
             return response.to_json()
         tag_list = [t.strip() for t in tags.split(",")]
 
-        if group_name == "features":
-            result = memory.update_feature_tags(project_id, item_id, tag_list)
-        elif group_name == "notes":
-            result = memory.update_note_tags(project_id, item_id, tag_list)
-        elif group_name == "standards":
-            result = memory.update_standard(project_id, item_id, tags=tag_list)
-        else:  # fixes - need to use update_fix
-            result = memory.update_fix(project_id, item_id, tags=tag_list)
+        result = memory.update_item(project_id, group_name, item_id, tags=tag_list)
 
         if result["success"]:
             data = {
@@ -940,7 +637,7 @@ def tag_register(
 def tag_update(
     project_id: str,
     tag_name: str,
-    summary: str = ""
+    summary: Optional[str] = ""
 ) -> str:
     """更新已注册标签的语义信息.
 
@@ -1111,8 +808,9 @@ def project_get(
 
     # 如果指定了 group_name
     if group_name:
-        if group_name not in ["features", "notes", "fixes", "standards"]:
-            response = ApiResponse(success=False, error=f"无效的分组名称: {group_name} (支持: features/notes/fixes/standards)")
+        is_valid, error_msg = validate_group_name(group_name)
+        if not is_valid:
+            response = ApiResponse(success=False, error=error_msg)
             return response.to_json()
 
         items = data.get(group_name, [])
@@ -1152,7 +850,7 @@ def project_get(
         tag_list = _parse_tags(tags) if tags else []
 
         # 应用过滤条件
-        if group_name in ["features", "fixes"]:
+        if is_group_with_status(group_name):
             if status:
                 filtered_items = [f for f in filtered_items if f.get("status") == status]
             if severity:
@@ -1228,13 +926,16 @@ def project_get(
         response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目")
         return response.to_json()
 
-    # 默认行为：返回整个项目信息
+    # 默认行为：返回精简的项目概览（仅统计信息，不返回各分组摘要列表）
     response_data = {
         "project_id": project_id,
         "info": data['info'],
-        "features": data["features"],
-        "notes": data["notes"],
-        "fixes": data.get("fixes", [])
+        "groups": {
+            "features": {"count": len(data["features"])},
+            "notes": {"count": len(data["notes"])},
+            "fixes": {"count": len(data.get("fixes", []))},
+            "standards": {"count": len(data.get("standards", []))}
+        }
     }
     response = ApiResponse(success=True, data=response_data, message="获取项目信息成功")
     return response.to_json()

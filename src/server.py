@@ -21,15 +21,31 @@ except ImportError:
 
 # 导入核心模块（支持相对和绝对导入）
 try:
-    from .core.config import parse_args, memory, call_stats
+    from .core.config import parse_args
+    from .features.instances import memory, call_stats
     from .core.utils import track_calls
     from .models.response import ApiResponse
     from .features.guidelines import _build_guidelines_content
+    from .api.tools import (
+        project_register, project_rename, project_list, project_groups_list, project_tags_info,
+        project_add, project_update, project_delete, project_item_tag_manage,
+        tag_register, tag_update, tag_delete, tag_merge,
+        project_get, project_stats,
+        stats_summary, stats_cleanup,
+    )
 except ImportError:
-    from core.config import parse_args, memory, call_stats
+    from core.config import parse_args
+    from features.instances import memory, call_stats
     from core.utils import track_calls
     from models.response import ApiResponse
     from features.guidelines import _build_guidelines_content
+    from api.tools import (
+        project_register, project_rename, project_list, project_groups_list, project_tags_info,
+        project_add, project_update, project_delete, project_item_tag_manage,
+        tag_register, tag_update, tag_delete, tag_merge,
+        project_get, project_stats,
+        stats_summary, stats_cleanup,
+    )
 
 
 # ===================
@@ -48,29 +64,6 @@ server = FastMCP(
     stateless_http=True,  # 启用无状态HTTP模式，兼容Claude Code
     json_response=True,   # 使用JSON响应格式，兼容Claude Code HTTP客户端
 )
-
-
-# ===================
-# Import Tool Functions
-# ===================
-# 从 features.tools 导入所有工具函数
-# 这些函数将在下面注册为 MCP 工具
-try:
-    from .features.tools import (
-        project_register, project_rename, project_list, project_groups_list, project_tags_info,
-        project_add, project_update, project_delete, project_item_tag_manage,
-        tag_register, tag_update, tag_delete, tag_merge,
-        project_get, project_stats,
-        stats_summary, stats_cleanup,
-    )
-except ImportError:
-    from features.tools import (
-        project_register, project_rename, project_list, project_groups_list, project_tags_info,
-        project_add, project_update, project_delete, project_item_tag_manage,
-        tag_register, tag_update, tag_delete, tag_merge,
-        project_get, project_stats,
-        stats_summary, stats_cleanup,
-    )
 
 
 # ===================

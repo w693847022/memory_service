@@ -2,8 +2,12 @@
 """工具函数单元测试."""
 
 import sys
+import os
 import re
+import tempfile
+import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -34,24 +38,23 @@ def test_id_generation():
 
 
 def test_group_normalization():
-    """测试分组标准化."""
-    print("测试: 分组标准化...")
+    """测试分组验证."""
+    print("测试: 分组验证...")
 
-    # 测试中文别名
-    aliases_map = {
-        "features": ["features", "feature", "功能", "feat"],
-        "fixes": ["fixes", "fix", "修复", "bugfix"],
-        "notes": ["notes", "note", "笔记"],
-        "standards": ["standards", "standard", "规范", "标准"]
-    }
+    from core.groups import validate_group_name
 
-    for normalized, variants in aliases_map.items():
-        for variant in variants:
-            from features.tools import _normalize_group
-            result = _normalize_group(variant)
-            assert result == normalized, f"'{variant}' 应该标准化为 '{normalized}'"
+    # 测试有效分组名
+    for group in ["features", "fixes", "notes", "standards"]:
+        is_valid, error_msg = validate_group_name(group)
+        assert is_valid, f"'{group}' 应该是有效的分组名"
 
-    print("  ✓ 分组标准化测试通过")
+    # 测试无效分组名（不再支持别名）
+    invalid_names = ["feature", "fix", "功能", "feat", "invalid"]
+    for invalid in invalid_names:
+        is_valid, error_msg = validate_group_name(invalid)
+        assert not is_valid, f"'{invalid}' 应该是无效的分组名"
+
+    print("  ✓ 分组验证测试通过")
     return True
 
 
@@ -59,7 +62,7 @@ def test_tag_parsing():
     """测试标签解析."""
     print("测试: 标签解析...")
 
-    from features.tools import _parse_tags
+    from api.tools import _parse_tags
 
     # 测试逗号分隔
     tags = _parse_tags("tag1,tag2,tag3")
@@ -81,19 +84,67 @@ def test_content_validation():
     """测试内容长度验证."""
     print("测试: 内容长度验证...")
 
-    from features.tools import _validate_content_length
+    from core.groups import validate_content_length
 
     # 测试有效内容
-    valid, msg = _validate_content_length("短内容", max_tokens=30)
+    valid, msg, _ = validate_content_length("短内容", "features")
     assert valid, f"短内容应该有效: {msg}"
 
-    # 测试过长内容
-    long_content = "a" * 100
-    valid, msg = _validate_content_length(long_content, max_tokens=30)
+    # 测试过长内容 (features: 80 tokens = ~240 chars)
+    long_content = "a" * 300
+    valid, msg, _ = validate_content_length(long_content, "features")
     assert not valid, "过长内容应该无效"
+
+    # 测试 notes 分组的 1 token 最小长度 (3字符 ≈ 1 token)
+    valid, msg, _ = validate_content_length("aaa", "notes", min_tokens=1)
+    assert valid, f"3字符应该满足 min_tokens=1: {msg}"
+
+    # 测试不满足最小长度
+    valid, msg, _ = validate_content_length("a", "notes", min_tokens=1)
+    assert not valid, "1字符不应该满足 min_tokens=1"
 
     print("  ✓ 内容长度验证测试通过")
     return True
+
+
+def test_track_calls_decorator():
+    """测试 track_calls 装饰器."""
+    print("测试: track_calls 装饰器...")
+
+    temp_dir = tempfile.mkdtemp()
+    try:
+        original_storage = os.environ.get("MCP_STORAGE_DIR")
+        os.environ["MCP_STORAGE_DIR"] = temp_dir
+
+        from core.utils import track_calls
+
+        # 使用 mock 验证 record_call 被调用
+        from unittest.mock import MagicMock
+        with patch("features.instances.call_stats") as mock_stats:
+            mock_stats.record_call = MagicMock()
+
+            @track_calls
+            def dummy_func():
+                return "result"
+
+            # 调用被装饰的函数，触发 track_calls 内部逻辑
+            result = dummy_func()
+
+            assert result == "result", "函数返回值应该不变"
+            mock_stats.record_call.assert_called_once()
+            call_kwargs = mock_stats.record_call.call_args.kwargs
+            assert call_kwargs["tool_name"] == "dummy_func"
+            assert "client" in call_kwargs
+            assert "ip" in call_kwargs
+
+        print("  ✓ track_calls 装饰器测试通过")
+        return True
+    finally:
+        if original_storage is not None:
+            os.environ["MCP_STORAGE_DIR"] = original_storage
+        elif "MCP_STORAGE_DIR" in os.environ:
+            del os.environ["MCP_STORAGE_DIR"]
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def run_all_tests():
@@ -108,6 +159,7 @@ def run_all_tests():
         test_group_normalization,
         test_tag_parsing,
         test_content_validation,
+        test_track_calls_decorator,
     ]
 
     passed = 0

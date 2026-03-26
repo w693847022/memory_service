@@ -10,7 +10,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from memory import ProjectMemory
+from features.project import ProjectMemory
 
 
 def test_complete_workflow():
@@ -42,26 +42,29 @@ def test_complete_workflow():
 
         # 3. 添加功能
         print("  步骤3: 添加功能...")
-        result = memory.add_feature(
-            project_id,
+        result = memory.add_item(
+            project_id=project_id,
+            group="features",
             content="实现用户认证功能的详细描述",
             summary="实现用户认证功能",
-            status="pending"
+            status="pending",
+            tags=["backend"]
         )
         assert result["success"], f"添加功能失败: {result}"
-        feature_id = result["feature_id"]
+        feature_id = result["item_id"]
         print(f"    ✓ 功能已添加 (ID: {feature_id})")
 
         # 4. 添加笔记
         print("  步骤4: 添加笔记...")
-        result = memory.add_note(
-            project_id,
-            note="技术选型: 使用 PyJWT 库实现 token 验证，过期时间设置为 24 小时。",
+        result = memory.add_item(
+            project_id=project_id,
+            group="notes",
+            content="技术选型: 使用 PyJWT 库实现 token 验证，过期时间设置为 24 小时。",
             summary="JWT 实现方案",
             tags=["backend"]
         )
         assert result["success"], f"添加笔记失败: {result}"
-        note_id = result["note_id"]
+        note_id = result["item_id"]
         print(f"    ✓ 笔记已添加 (ID: {note_id})")
 
         # 5. 查询项目
@@ -81,7 +84,7 @@ def test_complete_workflow():
 
         # 7. 更新功能状态
         print("  步骤7: 更新功能状态...")
-        result = memory.update_feature(project_id, feature_id, status="in_progress")
+        result = memory.update_item(project_id, "features", feature_id, status="in_progress")
         assert result["success"], f"更新功能失败: {result}"
         project_data = memory.get_project(project_id)
         feature = project_data["data"]["features"][0]
@@ -90,22 +93,26 @@ def test_complete_workflow():
 
         # 8. 添加修复记录
         print("  步骤8: 添加修复记录...")
-        result = memory.add_fix(
-            project_id,
+        result = memory.add_item(
+            project_id=project_id,
+            group="fixes",
             content="修复 token 刷新逻辑的详细描述",
             summary="修复 token 刷新逻辑",
             status="completed",
-            severity="medium"
+            severity="medium",
+            tags=["backend"]
         )
         assert result["success"], f"添加修复失败: {result}"
         print("    ✓ 修复记录已添加")
 
         # 9. 添加规范
         print("  步骤9: 添加规范...")
-        result = memory.add_standard(
-            project_id,
+        result = memory.add_item(
+            project_id=project_id,
+            group="standards",
             content="后端 API 统一使用 RESTful 风格，返回 JSON 格式数据。",
-            summary="API 设计规范"
+            summary="API 设计规范",
+            tags=["backend"]
         )
         assert result["success"], f"添加规范失败: {result}"
         print("    ✓ 规范已添加")
@@ -121,7 +128,7 @@ def test_complete_workflow():
 
         # 11. 删除功能
         print("  步骤11: 删除功能...")
-        result = memory.delete_feature(project_id, feature_id)
+        result = memory.delete_item(project_id, "features", feature_id)
         assert result["success"], f"删除功能失败: {result}"
         project_data = memory.get_project(project_id)
         assert len(project_data["data"]["features"]) == 0, "功能未正确删除"
@@ -155,10 +162,10 @@ def test_multi_project_workflow():
         project_b = memory.register_project("项目B", "/path/b", tags=["api"])
         project_c = memory.register_project("项目C", "/path/c", tags=["mobile"])
 
-        # 为每个项目添加内容
-        memory.add_feature(project_a["project_id"], "Web前端功能内容", "Web前端功能", status="pending")
-        memory.add_feature(project_b["project_id"], "API接口功能内容", "API接口功能", status="pending")
-        memory.add_feature(project_c["project_id"], "移动端功能内容", "移动端功能", status="pending")
+        # 为每个项目添加内容（使用 add_item 统一接口）
+        memory.add_item(project_id=project_a["project_id"], group="features", content="Web前端功能内容", summary="Web前端功能", status="pending", tags=["web"])
+        memory.add_item(project_id=project_b["project_id"], group="features", content="API接口功能内容", summary="API接口功能", status="pending", tags=["api"])
+        memory.add_item(project_id=project_c["project_id"], group="features", content="移动端功能内容", summary="移动端功能", status="pending", tags=["mobile"])
 
         # 获取项目列表
         result = memory.list_projects()
