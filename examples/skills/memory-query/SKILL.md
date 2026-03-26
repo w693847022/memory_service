@@ -2,69 +2,111 @@
 name: memory-query
 description: query memory explore show search 搜索 记忆 查询 回忆 展示 使用MCP[memory_mcp]查询过往记录
 allowed-tools: mcp__memory_mcp__project_list, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__project_get, mcp__memory_mcp__project_groups_list
-argument-hint: <项目名称> <搜索关键词>
+argument-hint: <搜索内容>
 context: fork
 ---
 
-# 前提:
+# memory-query 技能
 
-如果没有 $ARGUMENTS 询问用户需要输入查询内容
+自动判断输入类型，在所有分组中搜索相关记忆条目并格式化输出。
 
-# 参数格式
+## 输入类型判断
 
-支持两种格式：
-1. `<项目名称> <搜索关键词>` - 空格分隔
-2. `<项目名称>:<搜索关键词>` - 冒号分隔
+根据语言（中文/英文）匹配标签，判断顺序：需求 → Bug → 关键字（兜底）
 
-示例：`mcp_test api` 或 `mcp_test:api`
+### 需求模式
 
-# 查询流程
+| 中文特征 | 英文特征 |
+|----------|----------|
+| 添加、新增、实现、功能、特性 | add, new, implement, feature, enhance |
 
-1. **解析参数**
-    - 从 $ARGUMENTS 中提取项目名称和搜索关键词
-    - 支持空格或冒号作为分隔符
+**匹配标签**：`enhancement`, `api`, `implementation`, `feature`, `storage`, `structure`
 
-2. **确定项目 ID**
-    - 调用 `project_list` 获取所有项目列表
-    - 根据项目名称查找匹配的项目 ID
-    - 如果未找到匹配项目，提示用户
+### Bug模式
 
-3. **查询项目所有注册标签**
-    - 调用 `project_tags_info(project_id)` 获取标签列表
-    - 返回信息包含：
-        - 标签描述
-        - 所属分组（features/notes/fixes）及每个分组中的条目数
-        - 使用次数
+| 中文特征 | 英文特征 |
+|----------|----------|
+| bug、问题、错误、修复、fix | bug, error, fix, issue, broken |
 
-4. **筛选和搜索关键词相关的标签**
-    - 根据标签描述和所属分组信息，确定需要查询的标签名称
-    - 注意所属分组信息格式：`features(2), notes(1)` 表示该标签在 features 分组有 2 条，notes 分组有 1 条
-    - 支持模糊匹配标签描述
+**匹配标签**：`fix`, `validation`, `implementation`, `refactor`
 
-5. **查询标签下的具体内容**
-    - 调用 `project_tags_info(project_id, group_name, tag_name)`
-    - 查看该标签在指定分组下的所有条目详情
-    - 总结摘要和对应的记录ID返回
+### 关键字模式
 
----
+直接使用输入作为标签名搜索（无特征匹配时）
 
-# 示例
+## 执行流程
+
+### 步骤 1：确定项目 ID
+
+1. 调用 `project_list` 获取项目列表
+2. 从当前目录 `CLAUDE.md` 提取项目名称（格式：`# 项目名称`）
+3. 匹配获取项目 ID
+4. **异常**：未找到项目 → 直接报错中断
+
+### 步骤 2：根据输入判断类型并生成标签列表
 
 ```
-# 1. 列出项目
-project_list()
-
-# 2. 查看 mcp_test 项目的所有标签
-project_tags_info("mcp_test")
-
-# 3. 假设要查看 "api" 标签在 "features" 分组下的内容
-project_tags_info("mcp_test", "features", "api")
+输入内容 → 检测语言 → 匹配标签
 ```
 
----
+- 检测输入是否包含中文特征词 → 需求/Bug模式（中文标签）
+- 检测输入是否包含英文特征词 → 需求/Bug模式（英文标签）
+- 两者都没有 → 关键字模式，直接用输入作为标签
 
-# 输出说明
+### 步骤 3：在所有分组中查询并获取详情
 
-- `所属分组: features(2), notes(1)` - 该标签在 features 分组有 2 条记录，notes 分组有 1 条记录
-- `所属分组: 未使用` - 该标签已注册但尚未被任何条目使用
-- `使用次数` - 标签被使用的总次数
+1. 对每个标签在所有分组中查询（列表模式）：
+```python
+project_get(project_id, group_name="features", tags=<tag>)
+project_get(project_id, group_name="notes", tags=<tag>)
+project_get(project_id, group_name="fixes", tags=<tag>)
+project_get(project_id, group_name="standards", tags=<tag>)
+```
+
+2. 对每个结果调用 `project_get` + `item_id` 获取完整 content：
+```python
+project_get(project_id, group_name=<group>, item_id=<item_id>)
+```
+
+### 步骤 4：JSON 结构化输出
+
+```json
+{
+  "input": "<原始输入>",
+  "type": "<需求|Bug|关键字>",
+  "tags": ["<标签列表>"],
+  "items": [
+    {
+      "id": "<item_id>",
+      "group": "<group>",
+      "summary": "<summary>",
+      "content": "<content>",
+      "status": "<status>",  // 仅 features/fixes 分组有此字段：pending/in_progress/completed
+      "severity": "<severity>"  // 仅 fixes 分组有此字段：critical/high/medium/low
+    }
+  ]
+}
+```
+
+**返回字段说明**：
+- `id`: 条目 ID
+- `group`: 分组名称
+- `summary`: 条目摘要
+- `content`: 条目内容
+- `status`: 状态（仅 features/fixes 分组有此字段，notes/standards 无此字段）
+- `severity`: 严重程度（仅 fixes 分组有此字段，notes/standards/features 无此字段）
+
+**异常处理**：
+- 项目不存在 → `{"error": "project_not_found"}`
+- 标签无结果 → items 为空数组
+- 查询失败 → 中断并报告错误
+
+## 示例
+
+| 输入 | 类型 | 匹配标签 |
+|------|------|----------|
+| `添加一个xxx接口` | 需求 | enhancement, api, implementation |
+| `add new feature` | 需求 | enhancement, feature |
+| `xxx有问题` | Bug | fix, validation |
+| `docker` | 关键字 | docker |
+| `fix bug` | Bug | fix |
