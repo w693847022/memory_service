@@ -485,7 +485,10 @@ class ProjectMemory(ProjectStorage):
             item["severity"] = severity
 
         if related is not None:
-            item["related"] = related
+            if related:  # 非空字典，设置关联
+                item["related"] = related
+            else:  # 空字典，删除关联
+                item.pop("related", None)
 
         project_data[group][item_index] = item
         project_data["info"]["updated_at"] = datetime.now().isoformat()

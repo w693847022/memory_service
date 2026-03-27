@@ -219,20 +219,21 @@ from typing import Tuple
 
 
 def validate_related(
-    related: Optional[str],
+    related: Optional[str] | Optional[Dict[str, List[str]]],
     group_name: str
 ) -> Tuple[bool, str, Optional[Dict[str, List[str]]]]:
     """解析并验证 related 参数.
 
     Args:
-        related: JSON 字符串格式的关联数据
+        related: JSON 字符串格式或字典格式的关联数据
         group_name: 分组名称
 
     Returns:
         (是否有效, 错误信息, 解析后的字典)
+        None 表示不更新，{} 表示删除关联，非空字典表示设置关联
     """
-    if not related:
-        return True, "", None
+    if related is None:
+        return True, "", None  # 不更新
 
     # 仅 features/fixes 分组支持
     group_enum = GroupType.from_string(group_name)
@@ -242,10 +243,14 @@ def validate_related(
     if group_enum not in (GroupType.FEATURES, GroupType.FIXES):
         return False, "related 参数仅适用于 features/fixes 分组", None
 
-    # JSON 解析
-    try:
-        related_dict = json.loads(related)
-    except json.JSONDecodeError:
-        return False, "related 参数 JSON 格式无效", None
+    # 处理字典类型（MCP 协议自动解析 JSON 时）
+    if isinstance(related, dict):
+        related_dict = related
+    else:
+        # JSON 字符串解析
+        try:
+            related_dict = json.loads(related)
+        except json.JSONDecodeError:
+            return False, "related 参数 JSON 格式无效", None
 
     return True, "", related_dict

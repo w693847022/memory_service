@@ -4,7 +4,7 @@
 """
 
 import json
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union
 
 from typing import Tuple
 
@@ -240,7 +240,7 @@ def project_add(
     summary: str = "",
     status: Optional[str] = None,  # 哨兵值，用于检测是否显式传入
     severity: str = "medium",
-    related: str = "",
+    related: Union[str, Dict[str, List[str]], None] = "",
     tags: str = ""
 ) -> str:
     """添加项目条目（统一接口）.
@@ -256,7 +256,7 @@ def project_add(
         summary: 摘要（所有分组必填，标准摘要描述）
         status: 状态（仅 features/fixes 使用，必填，有效值: pending/in_progress/completed）
         severity: 严重程度（仅 fixes 使用，默认 "medium"）
-        related: 关联条目，JSON格式，如 '{"features": ["feat_001"], "notes": ["note_001"]}'（仅 features/fixes 使用）
+        related: 关联条目，支持JSON字符串或字典格式，如 '{"features": ["feat_001"], "notes": ["note_001"]}' 或 {"features": ["feat_001"]}（仅 features/fixes 使用）
         tags: 标签列表，逗号分隔
 
     Returns:
@@ -371,7 +371,7 @@ def project_update(
     summary: Optional[str] = None,
     status: Optional[str] = None,
     severity: Optional[str] = None,
-    related: Optional[str] = None,
+    related: Optional[Union[str, Dict[str, List[str]]]] = None,
     tags: Optional[str] = None
 ) -> str:
     """更新项目条目（统一接口）.
@@ -384,7 +384,7 @@ def project_update(
         summary: 摘要更新（可选）
         status: 状态更新（可选）
         severity: 严重程度更新（仅 fixes）
-        related: 关联条目更新,JSON格式,如 '{"features": ["feat_001"]}'（仅 features/fixes）
+        related: 关联条目更新,支持JSON字符串或字典格式,如 '{"features": ["feat_001"]}' 或 {"features": ["feat_001"]}（仅 features/fixes）
         tags: 标签更新（可选）
 
     Returns:
