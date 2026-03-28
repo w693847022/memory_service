@@ -3,26 +3,18 @@
 这些函数将在 server.py 中注册为 MCP 工具。
 """
 
-import json
 import re
 from datetime import datetime
 from typing import Optional, Dict, List, Union
 
-from typing import Tuple
-
 # 从 features.instances 导入全局实例
 from features.instances import memory, call_stats
-from core.utils import track_calls
 from core.groups import (
     validate_group_name,
-    validate_status,
-    validate_content_length as groups_validate_content_length,
-    validate_summary_length,
-    get_group_config,
     is_group_with_status,
-    validate_related,
 )
 from models.response import ApiResponse
+from core.utils import paginate, resolve_default_size
 
 
 # ===================
@@ -47,25 +39,15 @@ def _validate_date(date_str: str) -> bool:
         return False
 
 
-def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
-    """验证单个标签长度（基于 token 估算）.
+def _tool_response(result, success_data=None, success_message=None):
+    if result.get("success"):
+        msg = success_message or result.get("message", "操作成功")
+        return ApiResponse(success=True, data=success_data, message=msg).to_json()
+    return ApiResponse(success=False, error=result.get("error", "未知错误")).to_json()
 
-    Args:
-        tag: 要验证的标签
-        max_tokens: 最大 token 数
 
-    Returns:
-        (是否有效, 错误信息)
-    """
-    if not tag:
-        return False, "标签不能为空"
-
-    # 简化的 token 估算：1 token ≈ 3 字符
-    estimated_tokens = len(tag) / 3
-
-    if estimated_tokens > max_tokens:
-        return False, f"标签 '{tag}' 过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
-    return True, ""
+def _error_response(error):
+    return ApiResponse(success=False, error=error).to_json()
 
 
 # ===================
@@ -84,8 +66,10 @@ def project_register(name: str, path: str = "", summary: str = "", tags: str = "
     """
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
     result = memory.register_project(name, path, summary, tag_list)
-    response = ApiResponse.from_result(result)
-    return response.to_json()
+    if result["success"]:
+        data = {k: v for k, v in result.items() if k not in ("success", "error", "message")}
+        return _tool_response(result, data if data else None)
+    return _tool_response(result)
 
 
 def project_rename(project_id: str, new_name: str) -> str:
@@ -99,17 +83,8 @@ def project_rename(project_id: str, new_name: str) -> str:
         JSON 格式的操作结果
     """
     result = memory.project_rename(project_id, new_name)
-
-    if result["success"]:
-        data = {
-            "old_name": result.get("old_name"),
-            "new_name": result.get("new_name")
-        }
-        response = ApiResponse(success=True, data=data, message=result.get("message"))
-    else:
-        response = ApiResponse(success=False, error=result.get("error"))
-
-    return response.to_json()
+    data = {"old_name": result.get("old_name"), "new_name": result.get("new_name")} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def project_list(
@@ -149,8 +124,7 @@ def project_list(
     """
     # 验证 view_mode 参数
     if view_mode not in ("summary", "detail"):
-        response = ApiResponse(success=False, error=f"无效的 view_mode: {view_mode} (支持: summary/detail)")
-        return response.to_json()
+        return _error_response(f"无效的 view_mode: {view_mode} (支持: summary/detail)")
 
     # 验证 name_pattern 正则有效性
     name_regex = None
@@ -158,22 +132,15 @@ def project_list(
         try:
             name_regex = re.compile(name_pattern)
         except re.error as e:
-            response = ApiResponse(success=False, error=f"无效的正则表达式: {name_pattern} ({e})")
-            return response.to_json()
+            return _error_response(f"无效的正则表达式: {name_pattern} ({e})")
 
     # 根据 view_mode 设置 size 默认值
-    size_int_for_default = int(size) if size not in (None, "", "0") else 0
-    if size_int_for_default == 0:  # 用户未显式指定 size
-        if view_mode == "summary":
-            size = 20  # 精简模式默认返回 20 条
-        else:  # detail
-            size = 0  # 完整模式默认返回全部
+    size = resolve_default_size(size, view_mode)
 
     result = memory.list_projects()
 
     if not result["success"]:
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        return _tool_response(result)
 
     projects = result["projects"]
     total = result["total"]
@@ -182,37 +149,12 @@ def project_list(
     if name_regex:
         projects = [p for p in projects if name_regex.search(p.get("name", ""))]
 
-    filtered_total = len(projects)
-
     # 分页处理
-    try:
-        page_int = int(page) if page else 1
-        size_int = int(size) if size else 0
-    except (ValueError, TypeError):
-        response = ApiResponse(success=False, error="分页参数必须为有效的整数")
-        return response.to_json()
-
-    pagination_meta = {}
-    if size_int > 0:
-        if page_int < 1:
-            response = ApiResponse(success=False, error=f"无效的页码: {page_int} (页码必须大于 0)")
-            return response.to_json()
-        if size_int < 0:
-            response = ApiResponse(success=False, error=f"无效的每页条数: {size_int} (每页条数不能为负数)")
-            return response.to_json()
-
-        total_pages = (filtered_total + size_int - 1) // size_int if filtered_total > 0 else 0
-        start_idx = (page_int - 1) * size_int
-        end_idx = start_idx + size_int
-        projects = projects[start_idx:end_idx]
-
-        pagination_meta = {
-            "page": page_int,
-            "size": size_int,
-            "total_pages": total_pages,
-            "has_next": page_int < total_pages,
-            "has_prev": page_int > 1
-        }
+    pr, err = paginate(projects, page, size)
+    if err:
+        return _error_response(err)
+    assert pr is not None
+    projects, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
 
     # view_mode 字段过滤
     if view_mode == "summary":
@@ -240,8 +182,7 @@ def project_list(
     if name_pattern:
         response_data["filters"] = {"name_pattern": name_pattern}
 
-    response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个项目")
-    return response.to_json()
+    return _tool_response({"success": True}, response_data, f"共 {filtered_total} 个项目")
 
 
 def project_groups_list(project_id: str) -> str:
@@ -256,15 +197,13 @@ def project_groups_list(project_id: str) -> str:
     result = memory.list_groups(project_id)
 
     if not result["success"]:
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        return _tool_response(result)
 
     data = {
         "project_id": project_id,
         "groups": result["groups"]
     }
-    response = ApiResponse(success=True, data=data, message="获取分组成功")
-    return response.to_json()
+    return _tool_response(result, data, "获取分组成功")
 
 
 def project_tags_info(
@@ -287,75 +226,30 @@ def project_tags_info(
     # 不指定 group_name 时，列出所有已注册标签
     if not group_name:
         result = memory.list_all_registered_tags(project_id)
-
-        if not result["success"]:
-            response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-            return response.to_json()
-
-        data = {
-            "project_id": project_id,
-            "total_tags": result["total_tags"],
-            "tags": result["tags"]
-        }
-        response = ApiResponse(success=True, data=data, message=f"共 {result['total_tags']} 个已注册标签")
-        return response.to_json()
+        data = {"project_id": project_id, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data, f"共 {result.get('total_tags', 0)} 个已注册标签")
 
     is_valid, error_msg = validate_group_name(group_name)
     if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+        return _error_response(error_msg)
 
     # 查询特定标签
     if tag_name:
         result = memory.query_by_tag(project_id, group_name, tag_name)
-
-        if not result["success"]:
-            response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-            return response.to_json()
-
-        data = {
-            "project_id": project_id,
-            "group_name": group_name,
-            "tag_name": tag_name,
-            "total": result["total"],
-            "items": result["items"]
-        }
-        response = ApiResponse(success=True, data=data, message=f"共 {result['total']} 个条目")
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "tag_name": tag_name, "total": result.get("total", 0), "items": result.get("items", [])} if result.get("success") else None
+        return _tool_response(result, data, f"共 {result.get('total', 0)} 个条目")
 
     # 仅返回未注册标签
     elif unregistered_only:
         result = memory.list_unregistered_tags(project_id, group_name)
-
-        if not result["success"]:
-            response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-            return response.to_json()
-
-        data = {
-            "project_id": project_id,
-            "group_name": group_name,
-            "total_tags": result["total_tags"],
-            "tags": result["tags"]
-        }
-        response = ApiResponse(success=True, data=data, message=f"共 {result['total_tags']} 个未注册标签")
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data, f"共 {result.get('total_tags', 0)} 个未注册标签")
 
     # 返回所有标签
     else:
         result = memory.list_group_tags(project_id, group_name)
-
-        if not result["success"]:
-            response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-            return response.to_json()
-
-        data = {
-            "project_id": project_id,
-            "group_name": group_name,
-            "total_tags": result["total_tags"],
-            "tags": result["tags"]
-        }
-        response = ApiResponse(success=True, data=data, message=f"共 {result['total_tags']} 个标签")
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data, f"共 {result.get('total_tags', 0)} 个标签")
 
 
 def project_add(
@@ -387,68 +281,13 @@ def project_add(
     Returns:
         JSON 格式的操作结果
     """
-    # 验证 group 有效性
-    is_valid, error_msg = validate_group_name(group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
-
-    # status 参数验证（仅 features/fixes 分组必填）
-    config = get_group_config(group)
-    if config and config.status_values:
-        if status is None:
-            response = ApiResponse(success=False, error="features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)")
-            return response.to_json()
-        is_valid, error_msg = validate_status(status, group)
-        if not is_valid:
-            response = ApiResponse(success=False, error=error_msg)
-            return response.to_json()
-    else:
-        # notes/standards 忽略 status 参数
-        status = None
-
-    # 验证必需参数
-    if not content:
-        response = ApiResponse(success=False, error="content 参数不能为空")
-        return response.to_json()
-
-    # 验证 content 长度
-    is_valid, error_msg, _ = groups_validate_content_length(content, group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
-
-    # 验证 summary 必填（所有分组）
-    if not summary or not summary.strip():
-        response = ApiResponse(success=False, error="summary 参数不能为空，请提供标准摘要描述")
-        return response.to_json()
-
-    # 验证 summary 长度
-    is_valid, error_msg, _ = validate_summary_length(summary, group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
-
-    # 解析标签
     tag_list = _parse_tags(tags)
 
-    # 验证 tags 不能为空
-    if not tag_list:
-        response = ApiResponse(success=False, error="tags 参数不能为空，请至少提供一个标签")
-        return response.to_json()
+    v = memory.validate_add_item(group, content, summary, status, related, tag_list)
+    if not v["success"]:
+        return _error_response(v["error"])
 
-    # 验证每个 tag 长度 (1-10 tokens)
-    for tag in tag_list:
-        is_valid, error_msg = _validate_tag_length(tag, max_tokens=10)
-        if not is_valid:
-            response = ApiResponse(success=False, error=error_msg)
-            return response.to_json()
-
-    # 解析并验证 related 参数（仅 features/fixes 分组有效）
-    is_valid, error_msg, related_dict = validate_related(related, group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+    related_dict = v["related_dict"]
 
     # 统一调用 add_item
     result = memory.add_item(
@@ -481,11 +320,8 @@ def project_add(
             data["item"]["severity"] = severity
         if related_dict:
             data["item"]["related"] = related_dict
-
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+        return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def project_update(
@@ -515,36 +351,11 @@ def project_update(
     Returns:
         JSON 格式的操作结果
     """
-    # 验证 group 有效性
-    is_valid, error_msg = validate_group_name(group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+    v = memory.validate_update_item(group, item_id, content, summary, related)
+    if not v["success"]:
+        return _error_response(v["error"])
 
-    # 验证必需参数
-    if not item_id:
-        response = ApiResponse(success=False, error="item_id 参数不能为空")
-        return response.to_json()
-
-    # 验证 content 长度
-    if content is not None:
-        is_valid, error_msg, _ = groups_validate_content_length(content, group)
-        if not is_valid:
-            response = ApiResponse(success=False, error=error_msg)
-            return response.to_json()
-
-    # 验证 summary 长度
-    if summary is not None:
-        is_valid, error_msg, _ = validate_summary_length(summary, group)
-        if not is_valid:
-            response = ApiResponse(success=False, error=error_msg)
-            return response.to_json()
-
-    # 解析并验证 related 参数（仅 features/fixes 分组有效）
-    is_valid, error_msg, related_dict = validate_related(related, group)
-    if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+    related_dict = v["related_dict"]
 
     # 统一调用 update_item
     result = memory.update_item(
@@ -566,10 +377,8 @@ def project_update(
             "item_id": item_id,
             "item": result["item"]
         }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+        return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def project_delete(
@@ -590,28 +399,16 @@ def project_delete(
     # 验证 group 有效性
     is_valid, error_msg = validate_group_name(group)
     if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+        return _error_response(error_msg)
 
     # 验证必需参数
     if not item_id:
-        response = ApiResponse(success=False, error="item_id 参数不能为空")
-        return response.to_json()
+        return _error_response("item_id 参数不能为空")
 
     # 统一调用 delete_item
     result = memory.delete_item(project_id=project_id, group=group, item_id=item_id)
-
-    if result["success"]:
-        data = {
-            "project_id": project_id,
-            "group": group,
-            "item_id": item_id,
-            "deleted": True
-        }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+    data = {"project_id": project_id, "group": group, "item_id": item_id, "deleted": True} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def project_item_tag_manage(
@@ -637,73 +434,33 @@ def project_item_tag_manage(
     """
     is_valid, error_msg = validate_group_name(group_name)
     if not is_valid:
-        response = ApiResponse(success=False, error=error_msg)
-        return response.to_json()
+        return _error_response(error_msg)
 
     if operation == "set" or operation == "设置":
         if not tags:
-            response = ApiResponse(success=False, error="operation='set' 时 tags 参数不能为空")
-            return response.to_json()
+            return _error_response("operation='set' 时 tags 参数不能为空")
         tag_list = [t.strip() for t in tags.split(",")]
 
         result = memory.update_item(project_id, group_name, item_id, tags=tag_list)
-
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group_name": group_name,
-                "item_id": item_id,
-                "operation": "set",
-                "tags": result.get('tags', tag_list)
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)} if result.get("success") else None
+        return _tool_response(result, data)
 
     elif operation == "add" or operation == "添加":
         if not tag:
-            response = ApiResponse(success=False, error="operation='add' 时 tag 参数不能为空")
-            return response.to_json()
+            return _error_response("operation='add' 时 tag 参数不能为空")
         result = memory.add_item_tag(project_id, group_name, item_id, tag)
-
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group_name": group_name,
-                "item_id": item_id,
-                "operation": "add",
-                "tag": tag,
-                "tags": result.get("tags", [])
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data)
 
     elif operation == "remove" or operation == "移除":
         if not tag:
-            response = ApiResponse(success=False, error="operation='remove' 时 tag 参数不能为空")
-            return response.to_json()
+            return _error_response("operation='remove' 时 tag 参数不能为空")
         result = memory.remove_item_tag(project_id, group_name, item_id, tag)
-
-        if result["success"]:
-            data = {
-                "project_id": project_id,
-                "group_name": group_name,
-                "item_id": item_id,
-                "operation": "remove",
-                "tag": tag,
-                "tags": result.get("tags", [])
-            }
-            response = ApiResponse(success=True, data=data, message=result['message'])
-            return response.to_json()
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data)
 
     else:
-        response = ApiResponse(success=False, error=f"无效的操作类型: {operation} (支持: set/add/remove)")
-        return response.to_json()
+        return _error_response(f"无效的操作类型: {operation} (支持: set/add/remove)")
 
 
 def tag_register(
@@ -734,16 +491,8 @@ def tag_register(
         aliases=alias_list
     )
 
-    if result.get("success"):
-        data = {
-            "project_id": project_id,
-            "tag_name": tag_name,
-            "tag_info": result.get("tag_info", {})
-        }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+    data = {"project_id": project_id, "tag_name": tag_name, "tag_info": result.get("tag_info", {})} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def tag_update(
@@ -769,16 +518,8 @@ def tag_update(
         summary=summary_param
     )
 
-    if result.get("success"):
-        data = {
-            "project_id": project_id,
-            "tag_name": tag_name,
-            "updated": True
-        }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+    data = {"project_id": project_id, "tag_name": tag_name, "updated": True} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def tag_delete(
@@ -804,17 +545,8 @@ def tag_delete(
         force=force_flag
     )
 
-    if result.get("success"):
-        data = {
-            "project_id": project_id,
-            "tag_name": tag_name,
-            "force": force_flag,
-            "deleted": True
-        }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+    data = {"project_id": project_id, "tag_name": tag_name, "force": force_flag, "deleted": True} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def tag_merge(
@@ -838,17 +570,8 @@ def tag_merge(
         new_tag=new_tag
     )
 
-    if result.get("success"):
-        data = {
-            "project_id": project_id,
-            "old_tag": old_tag,
-            "new_tag": new_tag,
-            "merged": True
-        }
-        response = ApiResponse(success=True, data=data, message=result['message'])
-        return response.to_json()
-    response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-    return response.to_json()
+    data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag, "merged": True} if result.get("success") else None
+    return _tool_response(result, data)
 
 
 def project_get(
@@ -934,8 +657,7 @@ def project_get(
     """
     # 验证 view_mode 参数
     if view_mode not in ("summary", "detail"):
-        response = ApiResponse(success=False, error=f"无效的 view_mode: {view_mode} (支持: summary/detail)")
-        return response.to_json()
+        return _error_response(f"无效的 view_mode: {view_mode} (支持: summary/detail)")
 
     # 验证 summary_pattern 正则有效性
     summary_regex = None
@@ -943,34 +665,25 @@ def project_get(
         try:
             summary_regex = re.compile(summary_pattern)
         except re.error as e:
-            response = ApiResponse(success=False, error=f"无效的summary正则表达式: {summary_pattern} ({e})")
-            return response.to_json()
+            return _error_response(f"无效的summary正则表达式: {summary_pattern} ({e})")
 
     # 验证时间范围参数格式 (YYYY-MM-DD)
-    for param_name, param_val in [
+    for _, param_val in [
         ("created_after", created_after),
         ("created_before", created_before),
         ("updated_after", updated_after),
         ("updated_before", updated_before),
     ]:
         if param_val and not _validate_date(param_val):
-            response = ApiResponse(success=False, error=f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
-            return response.to_json()
+            return _error_response(f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
 
     # 根据 view_mode 设置 size 默认值
-    # 注意：需要将 size 转换为整数进行比较，因为 MCP 工具传入的参数是字符串类型
-    size_int_for_default = int(size) if size not in (None, "", "0") else 0
-    if size_int_for_default == 0:  # 用户未显式指定 size
-        if view_mode == "summary":
-            size = 20  # 精简模式默认返回 20 条
-        else:  # detail
-            size = 0  # 完整模式默认返回全部
+    size = resolve_default_size(size, view_mode)
 
     result = memory.get_project(project_id)
 
     if not result["success"]:
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        return _tool_response(result)
 
     data = result["data"]
 
@@ -978,8 +691,7 @@ def project_get(
     if group_name:
         is_valid, error_msg = validate_group_name(group_name)
         if not is_valid:
-            response = ApiResponse(success=False, error=error_msg)
-            return response.to_json()
+            return _error_response(error_msg)
 
         items = data.get(group_name, [])
 
@@ -992,8 +704,7 @@ def project_get(
                     break
 
             if not item:
-                response = ApiResponse(success=False, error=f"在分组 '{group_name}' 中找不到条目 '{item_id}'")
-                return response.to_json()
+                return _error_response(f"在分组 '{group_name}' 中找不到条目 '{item_id}'")
 
             # 对于 notes 分组，从 .md 文件加载 content
             if group_name == "notes":
@@ -1007,8 +718,7 @@ def project_get(
                 "item_id": item_id,
                 "item": item
             }
-            response = ApiResponse(success=True, data=response_data, message="获取条目详情成功")
-            return response.to_json()
+            return _tool_response({"success": True}, response_data, "获取条目详情成功")
 
         # 如果只指定了 group_name 但没有 item_id，返回该分组列表
         # 列表模式不返回 content 字段以减少数据量，使用 item_id 查询详情可获取完整 content
@@ -1051,47 +761,11 @@ def project_get(
             filtered_items = new_filtered
 
         # 分页处理：先过滤，后分页
-        paginated_items = filtered_items
-        pagination_meta = {}
-        filtered_total = len(filtered_items)
-
-        # 转换分页参数为整数（MCP 工具传入的参数是字符串类型）
-        try:
-            page_int = int(page) if page else 1
-            size_int = int(size) if size else 0
-        except (ValueError, TypeError):
-            response = ApiResponse(success=False, error="分页参数必须为有效的整数")
-            return response.to_json()
-
-        if size_int > 0:
-            # 验证 page 参数
-            if page_int < 1:
-                response = ApiResponse(success=False, error=f"无效的页码: {page_int} (页码必须大于 0)")
-                return response.to_json()
-
-            # 验证 size 参数
-            if size_int < 0:
-                response = ApiResponse(success=False, error=f"无效的每页条数: {size_int} (每页条数不能为负数)")
-                return response.to_json()
-
-            # 计算总页数
-            total_pages = (filtered_total + size_int - 1) // size_int if filtered_total > 0 else 0
-
-            # 计算起始和结束索引
-            start_idx = (page_int - 1) * size_int
-            end_idx = start_idx + size_int
-
-            # 获取分页数据
-            paginated_items = filtered_items[start_idx:end_idx]
-
-            # 分页元信息
-            pagination_meta = {
-                "page": page_int,
-                "size": size_int,
-                "total_pages": total_pages,
-                "has_next": page_int < total_pages,
-                "has_prev": page_int > 1
-            }
+        pr, err = paginate(filtered_items, page, size)
+        if err:
+            return _error_response(err)
+        assert pr is not None
+        paginated_items, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
 
         # 列表模式根据 view_mode 决定返回字段
         if view_mode == "summary":
@@ -1134,8 +808,7 @@ def project_get(
                 "updated_before": updated_before,
             }
 
-        response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目")
-        return response.to_json()
+        return _tool_response({"success": True}, response_data, f"共 {filtered_total} 个条目")
 
     # 默认行为：返回精简的项目概览（仅统计信息，不返回各分组摘要列表）
     response_data = {
@@ -1148,8 +821,7 @@ def project_get(
             "standards": {"count": len(data.get("standards", []))}
         }
     }
-    response = ApiResponse(success=True, data=response_data, message="获取项目信息成功")
-    return response.to_json()
+    return _tool_response({"success": True}, response_data, "获取项目信息成功")
 
 
 def project_stats() -> str:
@@ -1161,8 +833,7 @@ def project_stats() -> str:
     result = memory.get_stats()
 
     if not result["success"]:
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        return _tool_response(result)
 
     stats = result["stats"]
     data = {
@@ -1174,8 +845,7 @@ def project_stats() -> str:
         "top_feature_tags": stats["top_feature_tags"],
         "top_note_tags": stats["top_note_tags"]
     }
-    response = ApiResponse(success=True, data=data, message="获取统计成功")
-    return response.to_json()
+    return _tool_response(result, data, "获取统计成功")
 
 
 
@@ -1200,8 +870,7 @@ def stats_summary(
         if tool_name:
             result = call_stats.get_tool_stats(tool_name)
             if not result["success"]:
-                response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-                return response.to_json()
+                return _tool_response(result)
 
             data = {
                 "type": "tool",
@@ -1213,30 +882,25 @@ def stats_summary(
                 "by_client": result.get("by_client", {}),
                 "by_ip": result.get("by_ip", {})
             }
-            response = ApiResponse(success=True, data=data, message=f"工具 '{tool_name}' 调用统计")
-            return response.to_json()
+            return _tool_response(result, data, f"工具 '{tool_name}' 调用统计")
         else:
             result = call_stats.get_tool_stats()
             if not result["success"]:
-                response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-                return response.to_json()
+                return _tool_response(result)
 
             data = {
                 "type": "tool",
                 "tools": result["tools"]
             }
-            response = ApiResponse(success=True, data=data, message="所有工具调用统计")
-            return response.to_json()
+            return _tool_response(result, data, "所有工具调用统计")
 
     elif type == "project" or type == "项目":
         if not project_id:
-            response = ApiResponse(success=False, error="project_id 参数不能为空")
-            return response.to_json()
+            return _error_response("project_id 参数不能为空")
         result = call_stats.get_project_stats(project_id)
 
         if not result["success"]:
-            response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-            return response.to_json()
+            return _tool_response(result)
 
         data = {
             "type": "project",
@@ -1244,43 +908,37 @@ def stats_summary(
             "total_calls": result['total_calls'],
             "tools_called": result["tools_called"]
         }
-        response = ApiResponse(success=True, data=data, message=f"项目 '{project_id}' 调用统计")
-        return response.to_json()
+        return _tool_response(result, data, f"项目 '{project_id}' 调用统计")
 
     elif type == "client" or type == "客户端":
         result = call_stats.get_client_stats()
 
         if not result["success"]:
-            response = ApiResponse(success=False, error="获取客户端统计失败")
-            return response.to_json()
+            return _tool_response(result, None, "获取客户端统计失败")
 
         data = {
             "type": "client",
             "clients": result["clients"]
         }
-        response = ApiResponse(success=True, data=data, message="客户端调用统计")
-        return response.to_json()
+        return _tool_response(result, data, "客户端调用统计")
 
     elif type == "ip" or type == "IP":
         result = call_stats.get_ip_stats()
 
         if not result["success"]:
-            response = ApiResponse(success=False, error="获取IP统计失败")
-            return response.to_json()
+            return _tool_response(result, None, "获取IP统计失败")
 
         data = {
             "type": "ip",
             "ips": result["ips"]
         }
-        response = ApiResponse(success=True, data=data, message="IP地址调用统计")
-        return response.to_json()
+        return _tool_response(result, data, "IP地址调用统计")
 
     elif type == "daily" or type == "每日":
         if date:
             result = call_stats.get_daily_stats(date)
             if not result["success"]:
-                response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-                return response.to_json()
+                return _tool_response(result)
 
             data = {
                 "type": "daily",
@@ -1288,28 +946,24 @@ def stats_summary(
                 "total_calls": result['total_calls'],
                 "tools": result["tools"]
             }
-            response = ApiResponse(success=True, data=data, message=f"日期 '{date}' 统计")
-            return response.to_json()
+            return _tool_response(result, data, f"日期 '{date}' 统计")
         else:
             result = call_stats.get_daily_stats()
             if not result["success"]:
-                response = ApiResponse(success=False, error="获取每日统计失败")
-                return response.to_json()
+                return _tool_response(result, None, "获取每日统计失败")
 
             data = {
                 "type": "daily",
                 "recent_days": result["recent_days"],
                 "stats": result["stats"]
             }
-            response = ApiResponse(success=True, data=data, message="最近7天统计")
-            return response.to_json()
+            return _tool_response(result, data, "最近7天统计")
 
     elif type == "full" or type == "完整":
         result = call_stats.get_full_summary()
 
         if not result["success"]:
-            response = ApiResponse(success=False, error="获取完整统计失败")
-            return response.to_json()
+            return _tool_response(result, None, "获取完整统计失败")
 
         data = {
             "type": "full",
@@ -1319,15 +973,13 @@ def stats_summary(
             "ip_stats": result["ip_stats"],
             "daily_stats": result["daily_stats"]
         }
-        response = ApiResponse(success=True, data=data, message="完整统计")
-        return response.to_json()
+        return _tool_response(result, data, "完整统计")
 
     else:
         # 默认返回所有统计摘要
         result = call_stats.get_full_summary()
         if not result["success"]:
-            response = ApiResponse(success=False, error="获取完整统计失败")
-            return response.to_json()
+            return _tool_response(result, None, "获取完整统计失败")
 
         data = {
             "type": "summary",
@@ -1336,8 +988,7 @@ def stats_summary(
             "client_stats": result["client_stats"],
             "daily_stats": result["daily_stats"]
         }
-        response = ApiResponse(success=True, data=data, message="统计摘要")
-        return response.to_json()
+        return _tool_response(result, data, "统计摘要")
 
 
 def stats_cleanup(retention_days: int = 30) -> str:
@@ -1355,8 +1006,7 @@ def stats_cleanup(retention_days: int = 30) -> str:
     result = call_stats.cleanup_stats(retention_days)
 
     if not result["success"]:
-        response = ApiResponse(success=False, error=result.get('error', '未知错误'))
-        return response.to_json()
+        return _tool_response(result)
 
     cleanup_result = result["cleanup_result"]
     before = result["before"]
@@ -1375,8 +1025,7 @@ def stats_cleanup(retention_days: int = 30) -> str:
         "storage_before": before,
         "storage_after": after
     }
-    response = ApiResponse(success=True, data=data, message="统计数据清理完成")
-    return response.to_json()
+    return _tool_response(result, data, "统计数据清理完成")
 
 
 

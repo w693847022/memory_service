@@ -11,41 +11,18 @@ src_dir = Path(__file__).parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-# Handle both relative and absolute imports
-try:
-    from . import __version__
-except ImportError:
-    # Fallback to absolute import when run as script
-    import __init__ as _init
-    __version__ = _init.__version__
+from __init__ import __version__
 
-# 导入核心模块（支持相对和绝对导入）
-try:
-    from .core.config import parse_args
-    from .features.instances import memory, call_stats
-    from .core.utils import track_calls
-    from .models.response import ApiResponse
-    from .features.guidelines import _build_guidelines_content
-    from .api.tools import (
-        project_register, project_rename, project_list, project_groups_list, project_tags_info,
-        project_add, project_update, project_delete, project_item_tag_manage,
-        tag_register, tag_update, tag_delete, tag_merge,
-        project_get, project_stats,
-        stats_summary, stats_cleanup,
-    )
-except ImportError:
-    from core.config import parse_args
-    from features.instances import memory, call_stats
-    from core.utils import track_calls
-    from models.response import ApiResponse
-    from features.guidelines import _build_guidelines_content
-    from api.tools import (
-        project_register, project_rename, project_list, project_groups_list, project_tags_info,
-        project_add, project_update, project_delete, project_item_tag_manage,
-        tag_register, tag_update, tag_delete, tag_merge,
-        project_get, project_stats,
-        stats_summary, stats_cleanup,
-    )
+from core.config import parse_args
+from core.utils import track_calls
+from features.guidelines import _build_guidelines_content
+from api.tools import (
+    project_register, project_rename, project_list, project_groups_list, project_tags_info,
+    project_add, project_update, project_delete, project_item_tag_manage,
+    tag_register, tag_update, tag_delete, tag_merge,
+    project_get, project_stats,
+    stats_summary, stats_cleanup,
+)
 
 
 # ===================

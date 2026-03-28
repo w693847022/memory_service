@@ -21,10 +21,6 @@ from datetime import datetime, timedelta
 # TTL 缓存配置
 CACHE_TTL_SECONDS = 300
 CACHE_MAX_SIZE = 50
-DEFAULT_TAGS = [
-    "implementation", "enhancement", "bug", "docs",
-    "refactor", "test", "ops", "security"
-]
 
 
 class ProjectStorage:

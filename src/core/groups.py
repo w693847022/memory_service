@@ -214,6 +214,13 @@ def all_group_names() -> List[str]:
     return GroupType.values()
 
 
+# 默认标签列表
+DEFAULT_TAGS = [
+    "implementation", "enhancement", "bug", "docs",
+    "refactor", "test", "ops", "security"
+]
+
+
 import json
 from typing import Tuple
 
