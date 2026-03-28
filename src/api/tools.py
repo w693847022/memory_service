@@ -5,6 +5,7 @@
 
 import json
 import re
+from datetime import datetime
 from typing import Optional, Dict, List, Union
 
 from typing import Tuple
@@ -33,6 +34,17 @@ def _parse_tags(tags_str: str) -> list:
     if not tags_str:
         return []
     return [t.strip() for t in tags_str.split(",") if t.strip()]
+
+
+def _validate_date(date_str: str) -> bool:
+    """验证日期字符串格式 (YYYY-MM-DD)."""
+    if not date_str:
+        return True
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
 
 
 def _validate_tag_length(tag: str, max_tokens: int = 10) -> tuple[bool, str]:
@@ -848,7 +860,12 @@ def project_get(
     tags: str = "",
     page: int = 1,
     size: int = 0,
-    view_mode: str = "summary"
+    view_mode: str = "summary",
+    summary_pattern: str = "",
+    created_after: str = "",
+    created_before: str = "",
+    updated_after: str = "",
+    updated_before: str = ""
 ) -> str:
     """获取项目信息或查询条目列表/详情.
 
@@ -869,6 +886,11 @@ def project_get(
         view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
             - summary: 只返回 id, summary, tags，size 默认 20
             - detail: 返回所有字段（不含 content），size 默认 0（全部）
+        summary_pattern: 摘要正则过滤 (可选): 正则表达式匹配摘要，默认不过滤
+        created_after: 创建时间起始 (可选): YYYY-MM-DD，包含边界，默认不过滤
+        created_before: 创建时间截止 (可选): YYYY-MM-DD，包含边界，默认不过滤
+        updated_after: 修改时间起始 (可选): YYYY-MM-DD，包含边界，默认不过滤
+        updated_before: 修改时间截止 (可选): YYYY-MM-DD，包含边界，默认不过滤
 
     Returns:
         JSON 格式的项目信息、条目列表或单个条目详情
@@ -901,6 +923,12 @@ def project_get(
         # 查询功能列表（过滤 + 分页）
         project_get(project_id="my_project", group_name="features", status="pending", page=1, size=10)
 
+        # 查询功能列表（带摘要正则过滤）
+        project_get(project_id="my_project", group_name="features", summary_pattern="API")
+
+        # 查询功能列表（带时间范围过滤）
+        project_get(project_id="my_project", group_name="features", created_after="2026-03-01", created_before="2026-03-31")
+
         # 查询单个条目详情
         project_get(project_id="my_project", group_name="features", item_id="feat_20260318_001")
     """
@@ -908,6 +936,26 @@ def project_get(
     if view_mode not in ("summary", "detail"):
         response = ApiResponse(success=False, error=f"无效的 view_mode: {view_mode} (支持: summary/detail)")
         return response.to_json()
+
+    # 验证 summary_pattern 正则有效性
+    summary_regex = None
+    if summary_pattern:
+        try:
+            summary_regex = re.compile(summary_pattern)
+        except re.error as e:
+            response = ApiResponse(success=False, error=f"无效的summary正则表达式: {summary_pattern} ({e})")
+            return response.to_json()
+
+    # 验证时间范围参数格式 (YYYY-MM-DD)
+    for param_name, param_val in [
+        ("created_after", created_after),
+        ("created_before", created_before),
+        ("updated_after", updated_after),
+        ("updated_before", updated_before),
+    ]:
+        if param_val and not _validate_date(param_val):
+            response = ApiResponse(success=False, error=f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
+            return response.to_json()
 
     # 根据 view_mode 设置 size 默认值
     # 注意：需要将 size 转换为整数进行比较，因为 MCP 工具传入的参数是字符串类型
@@ -979,6 +1027,28 @@ def project_get(
         # tags 过滤：OR 逻辑，适用于所有分组
         if tag_list:
             filtered_items = [f for f in filtered_items if any(tag in f.get("tags", []) for tag in tag_list)]
+
+        # summary 正则过滤 + 时间范围过滤（单次遍历优化）
+        if summary_regex or created_after or created_before or updated_after or updated_before:
+            new_filtered = []
+            for item in filtered_items:
+                # summary 正则
+                if summary_regex and not summary_regex.search(item.get("summary", "")):
+                    continue
+                # 创建时间范围
+                created = (item.get("created_at") or "")[:10]
+                if created_after and created < created_after:
+                    continue
+                if created_before and created > created_before:
+                    continue
+                # 修改时间范围
+                updated = (item.get("updated_at") or "")[:10]
+                if updated_after and (not updated or updated < updated_after):
+                    continue
+                if updated_before and (not updated or updated > updated_before):
+                    continue
+                new_filtered.append(item)
+            filtered_items = new_filtered
 
         # 分页处理：先过滤，后分页
         paginated_items = filtered_items
@@ -1052,8 +1122,17 @@ def project_get(
             response_data.update(pagination_meta)
 
         # 添加过滤器信息（如果有过滤条件）
-        if status or severity or tags:
-            response_data["filters"] = {"status": status, "severity": severity, "tags": tags}
+        if status or severity or tags or summary_pattern or created_after or created_before or updated_after or updated_before:
+            response_data["filters"] = {
+                "status": status,
+                "severity": severity,
+                "tags": tags,
+                "summary_pattern": summary_pattern,
+                "created_after": created_after,
+                "created_before": created_before,
+                "updated_after": updated_after,
+                "updated_before": updated_before,
+            }
 
         response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目")
         return response.to_json()
