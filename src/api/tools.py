@@ -4,6 +4,7 @@
 """
 
 import json
+import re
 from typing import Optional, Dict, List, Union
 
 from typing import Tuple
@@ -99,23 +100,135 @@ def project_rename(project_id: str, new_name: str) -> str:
     return response.to_json()
 
 
-def project_list() -> str:
+def project_list(
+    view_mode: str = "summary",
+    page: int = 1,
+    size: int = 0,
+    name_pattern: str = ""
+) -> str:
     """列出所有项目.
+
+    Args:
+        view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
+            - summary: 只返回 id, name, summary, tags，size 默认 20
+            - detail: 返回所有字段（含 created_at），size 默认 0（全部）
+        page: 页码 (可选): 从 1 开始，默认为 1
+        size: 每页条数 (可选): 根据 view_mode 决定默认值
+        name_pattern: 项目名称正则过滤 (可选): 正则表达式匹配项目名称，默认不过滤
 
     Returns:
         JSON 格式的项目列表
+
+    使用示例:
+        # 列出所有项目（精简模式，默认前20条）
+        project_list()
+
+        # 列出所有项目（完整模式）
+        project_list(view_mode="detail")
+
+        # 按名称过滤（支持正则）
+        project_list(name_pattern="test")
+
+        # 分页查询
+        project_list(page=2, size=5)
+
+        # 组合使用
+        project_list(view_mode="detail", name_pattern="^api", page=1, size=10)
     """
+    # 验证 view_mode 参数
+    if view_mode not in ("summary", "detail"):
+        response = ApiResponse(success=False, error=f"无效的 view_mode: {view_mode} (支持: summary/detail)")
+        return response.to_json()
+
+    # 验证 name_pattern 正则有效性
+    name_regex = None
+    if name_pattern:
+        try:
+            name_regex = re.compile(name_pattern)
+        except re.error as e:
+            response = ApiResponse(success=False, error=f"无效的正则表达式: {name_pattern} ({e})")
+            return response.to_json()
+
+    # 根据 view_mode 设置 size 默认值
+    size_int_for_default = int(size) if size not in (None, "", "0") else 0
+    if size_int_for_default == 0:  # 用户未显式指定 size
+        if view_mode == "summary":
+            size = 20  # 精简模式默认返回 20 条
+        else:  # detail
+            size = 0  # 完整模式默认返回全部
+
     result = memory.list_projects()
 
     if not result["success"]:
         response = ApiResponse(success=False, error=result.get('error', '未知错误'))
         return response.to_json()
 
-    data = {
-        "total": result["total"],
-        "projects": result["projects"]
+    projects = result["projects"]
+    total = result["total"]
+
+    # name_pattern 过滤
+    if name_regex:
+        projects = [p for p in projects if name_regex.search(p.get("name", ""))]
+
+    filtered_total = len(projects)
+
+    # 分页处理
+    try:
+        page_int = int(page) if page else 1
+        size_int = int(size) if size else 0
+    except (ValueError, TypeError):
+        response = ApiResponse(success=False, error="分页参数必须为有效的整数")
+        return response.to_json()
+
+    pagination_meta = {}
+    if size_int > 0:
+        if page_int < 1:
+            response = ApiResponse(success=False, error=f"无效的页码: {page_int} (页码必须大于 0)")
+            return response.to_json()
+        if size_int < 0:
+            response = ApiResponse(success=False, error=f"无效的每页条数: {size_int} (每页条数不能为负数)")
+            return response.to_json()
+
+        total_pages = (filtered_total + size_int - 1) // size_int if filtered_total > 0 else 0
+        start_idx = (page_int - 1) * size_int
+        end_idx = start_idx + size_int
+        projects = projects[start_idx:end_idx]
+
+        pagination_meta = {
+            "page": page_int,
+            "size": size_int,
+            "total_pages": total_pages,
+            "has_next": page_int < total_pages,
+            "has_prev": page_int > 1
+        }
+
+    # view_mode 字段过滤
+    if view_mode == "summary":
+        filtered_projects = [
+            {
+                "id": p.get("id"),
+                "name": p.get("name"),
+                "summary": p.get("summary"),
+                "tags": p.get("tags", [])
+            }
+            for p in projects
+        ]
+    else:
+        filtered_projects = projects
+
+    response_data = {
+        "total": total,
+        "filtered_total": filtered_total,
+        "projects": filtered_projects
     }
-    response = ApiResponse(success=True, data=data, message=f"共 {result['total']} 个项目")
+
+    if pagination_meta:
+        response_data.update(pagination_meta)
+
+    if name_pattern:
+        response_data["filters"] = {"name_pattern": name_pattern}
+
+    response = ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个项目")
     return response.to_json()
 
 
