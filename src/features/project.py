@@ -388,6 +388,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果，包含 item_id
         """
+        # 检查项目是否已归档（在 _load_project 之前检查，因为归档后目录已删除）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -480,6 +485,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 检查项目是否已归档（在 _load_project 之前检查）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -542,6 +552,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 检查项目是否已归档（在 _load_project 之前检查）
+        not_archived, archive_err = self.check_project_not_archived(project_id)
+        if not not_archived:
+            return {"success": False, "error": archive_err}
+
         project_data = self._load_project(project_id)
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
@@ -649,8 +664,11 @@ class ProjectMemory(ProjectStorage):
             "data": project_data
         }
 
-    def list_projects(self) -> Dict[str, Any]:
+    def list_projects(self, include_archived: bool = False) -> Dict[str, Any]:
         """列出所有项目.
+
+        Args:
+            include_archived: 是否包含归档项目
 
         Returns:
             项目列表
@@ -666,7 +684,21 @@ class ProjectMemory(ProjectStorage):
                     "name": project_data["info"]["name"],
                     "summary": project_data["info"].get("summary", ""),
                     "tags": project_data["info"]["tags"],
-                    "created_at": project_data["info"]["created_at"]
+                    "created_at": project_data["info"]["created_at"],
+                    "status": "active"
+                })
+
+        # 如果需要包含归档项目
+        if include_archived:
+            archived_projects = self._get_archived_projects()
+            for meta in archived_projects:
+                projects.append({
+                    "id": meta["id"],
+                    "name": meta["name"],
+                    "summary": meta.get("summary", ""),
+                    "tags": meta.get("tags", []),
+                    "status": "archived",
+                    "archived_at": meta.get("archived_at", "")
                 })
 
         return {
@@ -1453,8 +1485,11 @@ class ProjectMemory(ProjectStorage):
         Returns:
             操作结果
         """
+        # 支持新格式（目录）和旧格式（单文件）
+        project_dir = self._get_project_dir(project_id)
         project_path = self._get_project_path(project_id)
-        if not project_path.exists():
+
+        if not project_dir.exists() and not project_path.exists():
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
         # 获取项目名称用于返回消息
@@ -1462,10 +1497,16 @@ class ProjectMemory(ProjectStorage):
         project_name = project_data["info"]["name"] if project_data else project_id
 
         try:
-            project_path.unlink()
+            import shutil
+            if project_dir.exists():
+                shutil.rmtree(project_dir)
+            else:
+                project_path.unlink()
             # 清理缓存
             if project_id in self._projects_cache:
                 del self._projects_cache[project_id]
+            if project_id in self._uuid_to_name_cache:
+                del self._uuid_to_name_cache[project_id]
             # 清理 TTL 缓存
             self._project_data_cache.pop(project_id, None)
             self._save_metadata()
@@ -1475,6 +1516,60 @@ class ProjectMemory(ProjectStorage):
             }
         except IOError:
             return {"success": False, "error": "删除文件失败"}
+
+    def check_project_not_archived(self, project_id: str) -> tuple[bool, Optional[str]]:
+        """检查项目是否未归档.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            (是否未归档, 错误信息)
+        """
+        if self._is_project_archived(project_id):
+            return False, f"项目 '{project_id}' 已归档，无法执行操作"
+        return True, None
+
+    def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
+        """归档或永久删除项目.
+
+        Args:
+            project_id: 项目ID
+            mode: 操作模式 - "archive"(归档，默认) 或 "delete"(永久删除)
+
+        Returns:
+            操作结果
+        """
+        if mode not in ("archive", "delete"):
+            return {"success": False, "error": f"无效的 mode: {mode} (支持: archive/delete)"}
+
+        # 检查项目是否已归档
+        if self._is_project_archived(project_id):
+            return {"success": False, "error": f"项目 '{project_id}' 已归档，无法再次操作"}
+
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        project_name = project_data["info"].get("name", project_id)
+
+        if mode == "archive":
+            result = self._compress_and_archive_project(project_id)
+            if result["success"]:
+                # 清理缓存
+                if project_id in self._projects_cache:
+                    del self._projects_cache[project_id]
+                if project_id in self._uuid_to_name_cache:
+                    del self._uuid_to_name_cache[project_id]
+                self._project_data_cache.pop(project_id, None)
+                self._save_metadata()
+                result["message"] = f"项目 '{project_name}' (ID: {project_id}) 已归档"
+            return result
+        else:
+            # 永久删除
+            result = self.delete_project(project_id)
+            return result
 
     # ==================== 导入导出 ====================
 

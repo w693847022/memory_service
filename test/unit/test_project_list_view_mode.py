@@ -47,7 +47,7 @@ def test_view_mode_default():
             assert len(projects) > 0, "应该返回至少一条数据"
             project = projects[0]
 
-            expected_keys = {"id", "name", "summary", "tags"}
+            expected_keys = {"id", "name", "summary", "tags", "status"}
             actual_keys = set(project.keys())
             assert actual_keys == expected_keys, f"summary 模式应只返回 {expected_keys}，实际返回 {actual_keys}"
             assert "created_at" not in project, "summary 模式不应包含 created_at 字段"
@@ -73,7 +73,7 @@ def test_view_mode_summary():
             assert data["success"], f"请求失败: {data.get('error')}"
 
             project = data["data"]["projects"][0]
-            expected_keys = {"id", "name", "summary", "tags"}
+            expected_keys = {"id", "name", "summary", "tags", "status"}
             actual_keys = set(project.keys())
             assert actual_keys == expected_keys, f"summary 模式应只返回 {expected_keys}，实际返回 {actual_keys}"
 

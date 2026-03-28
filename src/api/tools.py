@@ -91,7 +91,8 @@ def project_list(
     view_mode: str = "summary",
     page: int = 1,
     size: int = 0,
-    name_pattern: str = ""
+    name_pattern: str = "",
+    include_archived: bool = False
 ) -> str:
     """列出所有项目.
 
@@ -102,6 +103,7 @@ def project_list(
         page: 页码 (可选): 从 1 开始，默认为 1
         size: 每页条数 (可选): 根据 view_mode 决定默认值
         name_pattern: 项目名称正则过滤 (可选): 正则表达式匹配项目名称，默认不过滤
+        include_archived: 是否包含归档项目 (可选): 默认 false，传入 true 时显示归档项目
 
     Returns:
         JSON 格式的项目列表
@@ -112,6 +114,9 @@ def project_list(
 
         # 列出所有项目（完整模式）
         project_list(view_mode="detail")
+
+        # 包含归档项目
+        project_list(include_archived=true)
 
         # 按名称过滤（支持正则）
         project_list(name_pattern="test")
@@ -137,7 +142,7 @@ def project_list(
     # 根据 view_mode 设置 size 默认值
     size = resolve_default_size(size, view_mode)
 
-    result = memory.list_projects()
+    result = memory.list_projects(include_archived=include_archived)
 
     if not result["success"]:
         return _tool_response(result)
@@ -163,7 +168,8 @@ def project_list(
                 "id": p.get("id"),
                 "name": p.get("name"),
                 "summary": p.get("summary"),
-                "tags": p.get("tags", [])
+                "tags": p.get("tags", []),
+                "status": p.get("status", "active")
             }
             for p in projects
         ]
@@ -409,6 +415,33 @@ def project_delete(
     result = memory.delete_item(project_id=project_id, group=group, item_id=item_id)
     data = {"project_id": project_id, "group": group, "item_id": item_id, "deleted": True} if result.get("success") else None
     return _tool_response(result, data)
+
+
+def project_remove(
+    project_id: str,
+    mode: str = "archive"
+) -> str:
+    """归档或永久删除项目（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        mode: 操作模式 - "archive"(归档，默认) 或 "delete"(永久删除)
+
+    Returns:
+        JSON 格式的操作结果
+
+    使用示例:
+        # 归档项目（默认）
+        project_remove(project_id="xxx")
+
+        # 永久删除项目
+        project_remove(project_id="xxx", mode="delete")
+    """
+    result = memory.remove_project(project_id=project_id, mode=mode)
+    if result.get("success"):
+        data = {"project_id": project_id, "mode": mode}
+        return _tool_response(result, data, result.get("message", "操作成功"))
+    return _tool_response(result)
 
 
 def project_item_tag_manage(

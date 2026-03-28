@@ -18,7 +18,7 @@ from core.utils import track_calls
 from features.guidelines import _build_guidelines_content
 from api.tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,
-    project_add, project_update, project_delete, project_item_tag_manage,
+    project_add, project_update, project_delete, project_remove, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
     project_get, project_stats,
     stats_summary, stats_cleanup,
@@ -58,6 +58,7 @@ server.tool()(track_calls(project_tags_info))
 server.tool()(track_calls(project_add))
 server.tool()(track_calls(project_update))
 server.tool()(track_calls(project_delete))
+server.tool()(track_calls(project_remove))
 server.tool()(track_calls(project_item_tag_manage))
 
 # Tag Management Tools

@@ -8,6 +8,7 @@
 """
 
 import json
+import tarfile
 import time
 import re
 import shutil
@@ -508,6 +509,150 @@ class ProjectStorage:
         except OSError as e:
             logging.warning(f"删除归档文件失败: {archived_path}, 错误: {e}")
             return False
+
+    # ==================== 归档管理 ====================
+
+    def _get_archive_dir(self) -> Path:
+        """获取归档目录路径."""
+        archive_dir = self.storage_dir / ".archived"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        return archive_dir
+
+    def _compress_and_archive_project(self, project_id: str) -> Dict[str, Any]:
+        """压缩项目目录为 tar.gz 并移动到 .archived/，同时生成元数据文件.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            操作结果，包含 archive_path 和 meta_path
+        """
+        project_dir = self._get_project_dir(project_id)
+        if not project_dir.exists():
+            return {"success": False, "error": f"项目目录不存在: {project_dir}"}
+
+        # 读取项目信息用于元数据和命名
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"无法加载项目数据: {project_id}"}
+
+        project_name = project_data["info"].get("name", project_dir.name)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        archive_base_name = f"{timestamp}_{project_name}"
+
+        archive_dir = self._get_archive_dir()
+        archive_file = archive_dir / f"{archive_base_name}.tar.gz"
+        meta_file = archive_dir / f"{archive_base_name}_meta.json"
+
+        try:
+            # 压缩项目目录为 tar.gz
+            with tarfile.open(str(archive_file), "w:gz") as tar:
+                tar.add(str(project_dir), arcname=project_dir.name)
+
+            # 生成元数据文件
+            meta_data = {
+                "id": project_data.get("id") or project_data["info"].get("id", project_id),
+                "name": project_name,
+                "summary": project_data["info"].get("summary", ""),
+                "tags": project_data["info"].get("tags", []),
+                "archived_at": datetime.now().isoformat(),
+                "archive_file": archive_file.name
+            }
+            with open(meta_file, "w", encoding="utf-8") as f:
+                json.dump(meta_data, f, ensure_ascii=False, indent=2)
+
+            # 删除原项目目录
+            shutil.rmtree(project_dir)
+
+            return {
+                "success": True,
+                "message": f"项目 '{project_name}' 已归档",
+                "archive_path": str(archive_file),
+                "meta_path": str(meta_file)
+            }
+        except (OSError, tarfile.TarError) as e:
+            # 清理可能残留的文件
+            for f in [archive_file, meta_file]:
+                if f.exists():
+                    try:
+                        f.unlink()
+                    except OSError:
+                        pass
+            return {"success": False, "error": f"归档失败: {str(e)}"}
+
+    def _is_project_archived(self, project_id: str) -> bool:
+        """检查项目是否已归档（在 .archived/ 中查找 _meta.json）.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            是否已归档
+        """
+        archive_dir = self.storage_dir / ".archived"
+        if not archive_dir.exists():
+            return False
+
+        for meta_file in archive_dir.glob("*_meta.json"):
+            try:
+                with open(meta_file, "r", encoding="utf-8") as f:
+                    meta_data = json.load(f)
+                if meta_data.get("id") == project_id:
+                    return True
+            except (json.JSONDecodeError, IOError):
+                continue
+        return False
+
+    def _get_archived_projects(self) -> List[Dict[str, Any]]:
+        """从 .archived/ 目录读取所有归档项目的元数据.
+
+        Returns:
+            归档项目元数据列表
+        """
+        archive_dir = self.storage_dir / ".archived"
+        if not archive_dir.exists():
+            return []
+
+        archived = []
+        for meta_file in archive_dir.glob("*_meta.json"):
+            try:
+                with open(meta_file, "r", encoding="utf-8") as f:
+                    meta_data = json.load(f)
+                archived.append(meta_data)
+            except (json.JSONDecodeError, IOError):
+                continue
+        return archived
+
+    def _delete_archived_project(self, project_id: str) -> bool:
+        """删除归档的 tar.gz 和 _meta.json 文件.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            是否删除成功
+        """
+        import logging
+
+        archive_dir = self.storage_dir / ".archived"
+        if not archive_dir.exists():
+            return True
+
+        for meta_file in archive_dir.glob("*_meta.json"):
+            try:
+                with open(meta_file, "r", encoding="utf-8") as f:
+                    meta_data = json.load(f)
+                if meta_data.get("id") == project_id:
+                    archive_file = archive_dir / meta_data["archive_file"]
+                    # 删除 tar.gz
+                    if archive_file.exists():
+                        archive_file.unlink()
+                    # 删除 meta.json
+                    meta_file.unlink()
+                    return True
+            except (json.JSONDecodeError, IOError):
+                continue
+        return False
 
     def _find_project_name_by_uuid(self, uuid_str: str) -> Optional[str]:
         """通过 UUID 查找项目名称（目录名）。
