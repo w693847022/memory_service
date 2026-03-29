@@ -46,6 +46,7 @@ services:
       - "${FASTAPI_PORT:-8001}:8001"
     environment:
       - PYTHONUNBUFFERED=1
+      - MCP_SERVER_URL=${MCP_SERVER_URL:-http://mcp-memory-server:8000/mcp}
     volumes:
       # 共享数据卷 - 访问 MCP Server 的数据
       - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai:ro
