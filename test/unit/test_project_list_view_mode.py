@@ -195,7 +195,7 @@ def test_name_pattern_invalid_regex():
             data = json.loads(result)
 
             assert not data["success"], "无效正则应该返回失败"
-            assert "无效的正则表达式" in data.get("error", ""), f"错误信息应包含'无效的正则表达式'，实际: {data.get('error')}"
+            assert "无效的name_pattern正则表达式" in data.get("error", ""), f"错误信息应包含'无效的name_pattern正则表达式'，实际: {data.get('error')}"
 
         print("  ✓ 无效正则表达式测试通过")
     finally:

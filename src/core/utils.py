@@ -1,6 +1,7 @@
 """辅助函数和装饰器模块."""
 
 import os
+import re
 from dataclasses import dataclass
 from functools import wraps
 from typing import Any, Dict, List, Optional, Tuple
@@ -82,3 +83,52 @@ def paginate(items, page=1, size=0) -> Tuple[Optional[PaginationResult], Optiona
     meta = {"page": page_int, "size": size_int, "total_pages": tp,
             "has_next": page_int < tp, "has_prev": page_int > 1}
     return PaginationResult(items[(page_int - 1) * size_int:page_int * size_int], meta, filtered_total), None
+
+
+def validate_view_mode(view_mode: str) -> Tuple[bool, Optional[str]]:
+    """验证 view_mode 参数.
+
+    Args:
+        view_mode: 视图模式字符串
+
+    Returns:
+        (True, None) 或 (False, error_message)
+    """
+    if view_mode in ("summary", "detail"):
+        return True, None
+    return False, f"无效的 view_mode: {view_mode} (支持: summary/detail)"
+
+
+def validate_regex_pattern(pattern: str, param_name: str = "pattern") -> Tuple[Optional[re.Pattern], Optional[str]]:
+    """验证正则表达式并返回编译后的对象.
+
+    Args:
+        pattern: 正则表达式字符串
+        param_name: 参数名称，用于错误信息
+
+    Returns:
+        (compiled_regex, None) 或 (None, error_message)
+        pattern 为空时返回 (None, None)
+    """
+    if not pattern:
+        return None, None
+    try:
+        return re.compile(pattern), None
+    except re.error as e:
+        return None, f"无效的{param_name}正则表达式: {pattern} ({e})"
+
+
+def apply_view_mode(items: list, view_mode: str, summary_fields: list) -> list:
+    """根据 view_mode 过滤返回字段.
+
+    Args:
+        items: 原始数据列表
+        view_mode: "summary" 或 "detail"
+        summary_fields: summary 模式下保留的字段列表
+
+    Returns:
+        过滤后的数据列表
+    """
+    if view_mode == "summary":
+        return [{k: item.get(k) for k in summary_fields} for item in items]
+    return items

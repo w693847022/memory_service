@@ -147,6 +147,87 @@ def test_track_calls_decorator():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def test_validate_view_mode():
+    """测试 validate_view_mode 通用函数."""
+    print("测试: validate_view_mode...")
+
+    from core.utils import validate_view_mode
+
+    # 有效值
+    is_valid, error = validate_view_mode("summary")
+    assert is_valid and error is None, f"summary 应有效: {error}"
+
+    is_valid, error = validate_view_mode("detail")
+    assert is_valid and error is None, f"detail 应有效: {error}"
+
+    # 无效值
+    is_valid, error = validate_view_mode("invalid")
+    assert not is_valid, "invalid 应无效"
+    assert "view_mode" in error
+
+    is_valid, error = validate_view_mode("")
+    assert not is_valid, "空字符串应无效"
+
+    print("  ✓ validate_view_mode 测试通过")
+    return True
+
+
+def test_validate_regex_pattern():
+    """测试 validate_regex_pattern 通用函数."""
+    print("测试: validate_regex_pattern...")
+
+    from core.utils import validate_regex_pattern
+
+    # 空字符串
+    regex, error = validate_regex_pattern("")
+    assert regex is None and error is None, "空字符串应返回 (None, None)"
+
+    # 有效正则
+    regex, error = validate_regex_pattern("API")
+    assert regex is not None and error is None, f"有效正则应成功: {error}"
+    assert regex.search("API 接口"), "应匹配"
+
+    # 无效正则
+    regex, error = validate_regex_pattern("[invalid")
+    assert regex is None, "无效正则应返回 None"
+    assert error is not None
+    assert "正则表达式" in error
+
+    # 自定义参数名
+    regex, error = validate_regex_pattern("[x", "tag_name_pattern")
+    assert "tag_name_pattern" in error
+
+    print("  ✓ validate_regex_pattern 测试通过")
+    return True
+
+
+def test_apply_view_mode():
+    """测试 apply_view_mode 通用函数."""
+    print("测试: apply_view_mode...")
+
+    from core.utils import apply_view_mode
+
+    items = [
+        {"id": "1", "name": "test", "summary": "测试", "tags": ["a"]},
+        {"id": "2", "name": "test2", "summary": "测试2", "tags": ["b"]},
+    ]
+
+    # summary 模式
+    result = apply_view_mode(items, "summary", ["id", "summary"])
+    assert len(result) == 2
+    assert set(result[0].keys()) == {"id", "summary"}
+    assert result[0]["id"] == "1"
+    assert result[0]["summary"] == "测试"
+
+    # detail 模式返回原数据
+    result = apply_view_mode(items, "detail", ["id"])
+    assert len(result) == 2
+    assert set(result[0].keys()) == {"id", "name", "summary", "tags"}
+
+    print("  ✓ apply_view_mode 测试通过")
+    return True
+
+
 def run_all_tests():
     """运行所有单元测试."""
     print("=" * 60)
@@ -160,6 +241,9 @@ def run_all_tests():
         test_tag_parsing,
         test_content_validation,
         test_track_calls_decorator,
+        test_validate_view_mode,
+        test_validate_regex_pattern,
+        test_apply_view_mode,
     ]
 
     passed = 0

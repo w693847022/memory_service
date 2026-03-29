@@ -100,8 +100,8 @@ def test_summary_pattern_regex():
             )
             data2 = json.loads(result2)
             assert not data2["success"], "无效正则应返回失败"
-            assert "无效的summary正则表达式" in data2.get("error", ""), \
-                f"错误信息应包含'无效的summary正则表达式'，实际: {data2.get('error')}"
+            assert "无效的summary_pattern正则表达式" in data2.get("error", ""), \
+                f"错误信息应包含'无效的summary_pattern正则表达式'，实际: {data2.get('error')}"
 
         print("  ✓ summary 正则特殊模式测试通过")
     finally:
