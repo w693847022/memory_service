@@ -35,6 +35,36 @@ services:
       - "com.mcp-memory.description=Project Memory MCP Server"
       - "com.mcp-memory.version=1.0.0"
 
+  fastapi-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.fastapi
+    container_name: fastapi-server
+    restart: unless-stopped
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    ports:
+      - "${FASTAPI_PORT:-8001}:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # 共享数据卷 - 访问 MCP Server 的数据
+      - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai:ro
+      # 挂载源代码（开发模式热更新）
+      - ../src:/app/src:ro
+    networks:
+      - mcp-network
+    depends_on:
+      - mcp-memory-server
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.mcp-memory.description=FastAPI REST API Server"
+      - "com.mcp-memory.version=1.0.0"
+
 networks:
   mcp-network:
     driver: bridge
