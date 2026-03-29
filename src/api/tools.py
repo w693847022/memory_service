@@ -259,133 +259,101 @@ def project_tags_info(
         # 分页查询
         project_tags_info(project_id="my_project", page=1, size=5)
 
-        # 查询特定标签（不受分页/过滤影响）
+        # 查询特定标签
         project_tags_info(project_id="my_project", group_name="features", tag_name="api")
     """
-    # 不指定 group_name 时，列出所有已注册标签
-    if not group_name:
-        result = memory.list_all_registered_tags(project_id)
-        if not result.get("success"):
-            return _tool_response(result)
-
-        tags_list = result.get("tags", [])
-        total_tags = result.get("total_tags", 0)
-
-        # 参数验证
-        is_valid, error_msg = validate_view_mode(view_mode)
-        if not is_valid:
-            return _error_response(error_msg)
-
-        summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
-        if error_msg:
-            return _error_response(error_msg)
-
-        tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
-        if error_msg:
-            return _error_response(error_msg)
-
-        size = resolve_default_size(size, view_mode)
-
-        # 正则过滤
-        if summary_regex or tag_name_regex:
-            tags_list = _filter_tags_by_regex(tags_list, summary_regex, tag_name_regex)
-
-        # 分页
-        pr, err = paginate(tags_list, page, size)
-        if err:
-            return _error_response(err)
-        assert pr is not None
-
-        # view_mode 字段过滤
-        filtered_tags = apply_view_mode(pr.items, view_mode, ["tag", "summary"])
-
-        response_data = {
-            "project_id": project_id,
-            "total_tags": total_tags,
-            "filtered_total": pr.filtered_total,
-            "tags": filtered_tags
-        }
-        if pr.pagination_meta:
-            response_data.update(pr.pagination_meta)
-
-        if summary_pattern or tag_name_pattern:
-            response_data["filters"] = {
-                "summary_pattern": summary_pattern,
-                "tag_name_pattern": tag_name_pattern
-            }
-
-        return _tool_response({"success": True}, response_data, f"共 {pr.filtered_total} 个已注册标签")
-
-    is_valid, error_msg = validate_group_name(group_name)
+    # 统一参数验证
+    is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
         return _error_response(error_msg)
 
-    # 查询特定标签（不受分页/过滤影响）
-    if tag_name:
-        result = memory.query_by_tag(project_id, group_name, tag_name)
-        data = {"project_id": project_id, "group_name": group_name, "tag_name": tag_name, "total": result.get("total", 0), "items": result.get("items", [])} if result.get("success") else None
-        return _tool_response(result, data, f"共 {result.get('total', 0)} 个条目")
+    summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
+    if error_msg:
+        return _error_response(error_msg)
 
-    # 仅返回未注册标签（不受分页/过滤影响）
+    tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
+    if error_msg:
+        return _error_response(error_msg)
+
+    size = resolve_default_size(size, view_mode)
+
+    # 根据不同模式获取原始列表
+    items_list = None
+    total_count = 0
+    data_key = "tags"
+    total_key = "total_tags"
+    summary_fields = ["tag", "summary"]
+    extra_fields = {}
+    msg_suffix = "已注册标签"
+
+    if not group_name:
+        # 所有已注册标签
+        result = memory.list_all_registered_tags(project_id)
+        if not result.get("success"):
+            return _tool_response(result)
+        items_list = result.get("tags", [])
+        total_count = result.get("total_tags", 0)
+    elif tag_name:
+        # 查询特定标签的条目
+        result = memory.query_by_tag(project_id, group_name, tag_name)
+        if not result.get("success"):
+            return _tool_response(result)
+        items_list = result.get("items", [])
+        total_count = result.get("total", 0)
+        data_key = "items"
+        total_key = "total"
+        summary_fields = ["id", "summary", "tags"]
+        extra_fields = {"group_name": group_name, "tag_name": tag_name, "tag_info": result.get("tag_info")}
+        msg_suffix = "条目"
     elif unregistered_only:
+        # 未注册标签不支持分页，直接返回
         result = memory.list_unregistered_tags(project_id, group_name)
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])} if result.get("success") else None
         return _tool_response(result, data, f"共 {result.get('total_tags', 0)} 个未注册标签")
-
-    # 返回分组所有标签（支持分页和过滤）
     else:
+        # 分组标签列表
+        is_valid, error_msg = validate_group_name(group_name)
+        if not is_valid:
+            return _error_response(error_msg)
         result = memory.list_group_tags(project_id, group_name)
         if not result.get("success"):
             return _tool_response(result)
+        items_list = result.get("tags", [])
+        total_count = result.get("total_tags", 0)
+        extra_fields = {"group_name": group_name}
+        msg_suffix = "标签"
 
-        tags_list = result.get("tags", [])
-        total_tags = result.get("total_tags", 0)
+    # 统一的正则过滤（仅对标签列表模式，tag_name 查询不需要）
+    if summary_regex or tag_name_regex:
+        items_list = _filter_tags_by_regex(items_list, summary_regex, tag_name_regex)
 
-        # 参数验证
-        is_valid, error_msg = validate_view_mode(view_mode)
-        if not is_valid:
-            return _error_response(error_msg)
+    # 统一分页
+    pr, err = paginate(items_list, page, size)
+    if err:
+        return _error_response(err)
+    assert pr is not None
 
-        summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
-        if error_msg:
-            return _error_response(error_msg)
+    # 统一 view_mode 字段过滤
+    filtered_items = apply_view_mode(pr.items, view_mode, summary_fields)
 
-        tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
-        if error_msg:
-            return _error_response(error_msg)
+    # 统一响应组装
+    response_data = {
+        "project_id": project_id,
+        total_key: total_count,
+        "filtered_total": pr.filtered_total,
+        data_key: filtered_items
+    }
+    response_data.update(extra_fields)
+    if pr.pagination_meta:
+        response_data.update(pr.pagination_meta)
 
-        size = resolve_default_size(size, view_mode)
-
-        # 正则过滤
-        if summary_regex or tag_name_regex:
-            tags_list = _filter_tags_by_regex(tags_list, summary_regex, tag_name_regex)
-
-        # 分页
-        pr, err = paginate(tags_list, page, size)
-        if err:
-            return _error_response(err)
-        assert pr is not None
-
-        # view_mode 字段过滤
-        filtered_tags = apply_view_mode(pr.items, view_mode, ["tag", "summary"])
-
-        response_data = {
-            "project_id": project_id,
-            "group_name": group_name,
-            "total_tags": total_tags,
-            "filtered_total": pr.filtered_total,
-            "tags": filtered_tags
+    if summary_pattern or tag_name_pattern:
+        response_data["filters"] = {
+            "summary_pattern": summary_pattern,
+            "tag_name_pattern": tag_name_pattern
         }
-        if pr.pagination_meta:
-            response_data.update(pr.pagination_meta)
 
-        if summary_pattern or tag_name_pattern:
-            response_data["filters"] = {
-                "summary_pattern": summary_pattern,
-                "tag_name_pattern": tag_name_pattern
-            }
-
-        return _tool_response({"success": True}, response_data, f"共 {pr.filtered_total} 个标签")
+    return _tool_response({"success": True}, response_data, f"共 {pr.filtered_total} 个{msg_suffix}")
 
 
 def project_add(

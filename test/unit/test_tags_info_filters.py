@@ -312,9 +312,9 @@ def test_tags_info_invalid_view_mode():
         shutil.rmtree(test_dir, ignore_errors=True)
 
 
-def test_tags_info_tag_name_query_unchanged():
-    """测试按标签名查询不受分页/过滤影响."""
-    print("测试: 按标签名查询保持不变...")
+def test_tags_info_tag_name_query_with_pagination():
+    """测试按标签名查询支持分页和 view_mode."""
+    print("测试: 按标签名查询支持分页...")
 
     test_dir = tempfile.mkdtemp()
     try:
@@ -322,20 +322,32 @@ def test_tags_info_tag_name_query_unchanged():
         project_id = _setup_project(memory)
 
         with patch.object(api.tools, 'memory', memory):
-            # tag_name 模式应忽略分页/过滤参数
+            # tag_name 模式支持分页
             result = api.tools.project_tags_info(
                 project_id=project_id, group_name="features",
-                tag_name="api", page=1, size=1,
-                summary_pattern="不存在的", view_mode="detail"
+                tag_name="api", page=1, size=2, view_mode="detail"
             )
             data = json.loads(result)
             assert data["success"], f"请求失败: {data.get('error')}"
             assert data["data"]["total"] == 1
+            assert data["data"]["filtered_total"] == 1
             assert data["data"]["tag_name"] == "api"
-            # 不应有分页信息
-            assert "page" not in data["data"]
+            # 应有分页信息
+            assert "page" in data["data"]
+            assert data["data"]["page"] == 1
+            assert data["data"]["size"] == 2
 
-        print("  ✓ 按标签名查询保持不变测试通过")
+            # summary 模式只返回指定字段
+            result2 = api.tools.project_tags_info(
+                project_id=project_id, group_name="features",
+                tag_name="api", view_mode="summary"
+            )
+            data2 = json.loads(result2)
+            assert data2["success"]
+            item = data2["data"]["items"][0]
+            assert set(item.keys()) == {"id", "summary", "tags"}
+
+        print("  ✓ 按标签名查询支持分页测试通过")
     finally:
         shutil.rmtree(test_dir, ignore_errors=True)
 
