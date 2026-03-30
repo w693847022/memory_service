@@ -591,6 +591,12 @@ class ProjectMemory(ProjectStorage):
 
         # 处理标签更新
         if tags is not None:
+            # 强制注册检查：所有标签必须已注册
+            if tags:
+                check_result = self._check_tags_registered(project_data, tags)
+                if not check_result["success"]:
+                    return check_result
+
             old_tags = item.get("tags", [])
             tag_registry = project_data.get("tag_registry", {})
 

@@ -25,7 +25,7 @@
 
 1. **Fork** 本仓库
 2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. **测试** 确保代码通过测试 (`pytest`)
+3. **测试** 确保代码通过测试 (`./scripts/run_tests.sh`)
 4. **提交** 更改 (`git commit -m 'Add some AmazingFeature'`)
 5. **推送** 到分支 (`git push origin feature/AmazingFeature`)
 6. 开启 **Pull Request**
@@ -72,22 +72,55 @@ Closes #123
 
 ## 开发环境
 
-### 安装依赖
+### 环境配置
+
+项目使用 conda 管理依赖：
 
 ```bash
+# 创建并激活 conda 环境
+conda create -n ai_memory_mcp python=3.12
+conda activate ai_memory_mcp
+
+# 安装依赖
 pip install -r requirements.txt
+pip install -r requirements-test.txt      # 测试依赖
+pip install -r requirements-fastapi.txt   # REST API 依赖
 ```
 
 ### 运行测试
 
+使用统一的测试脚本：
+
 ```bash
-pytest
+# 默认运行所有单元测试
+./scripts/run_tests.sh
+
+# 只运行 MCP 接口测试
+./scripts/run_tests.sh -m
+
+# 只运行 REST API 测试
+./scripts/run_tests.sh -r
+
+# 生成覆盖率报告
+./scripts/run_tests.sh -c
+
+# 详细输出
+./scripts/run_tests.sh -v
+
+# 查看所有选项
+./scripts/run_tests.sh -h
 ```
+
+测试脚本会自动激活 `ai_memory_mcp` conda 环境。
 
 ### 启动开发服务器
 
 ```bash
+# MCP 服务器
 python run.py
+
+# REST API 服务器
+python run_fastapi.py
 ```
 
 ## 行为准则

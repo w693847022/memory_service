@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 
 # 添加 src 目录到路径
-src_dir = Path(__file__).parent.parent.parent / "src"
+src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from src.rest_api.main import app
+from rest_api.main import app
 
 
 @pytest.fixture
@@ -46,7 +46,7 @@ class TestHealthCheck:
 class TestErrorHandling:
     """测试错误处理."""
 
-    @patch("src.rest_api.routers.projects.mcp_client")
+    @patch("rest_api.routers.projects.mcp_client")
     def test_mcp_connection_error(self, mock_mcp, client):
         """测试 MCP 连接错误."""
         mock_mcp.call_tool.return_value = {
@@ -61,7 +61,7 @@ class TestErrorHandling:
         assert "detail" in data
         assert "MCP 连接失败" in data["detail"]
 
-    @patch("src.rest_api.routers.projects.mcp_client")
+    @patch("rest_api.routers.projects.mcp_client")
     def test_mcp_timeout_error(self, mock_mcp, client):
         """测试 MCP 超时错误."""
         mock_mcp.call_tool.return_value = {
@@ -73,7 +73,7 @@ class TestErrorHandling:
 
         assert response.status_code == 400
 
-    @patch("src.rest_api.routers.projects.mcp_client")
+    @patch("rest_api.routers.projects.mcp_client")
     def test_invalid_response_format(self, mock_mcp, client):
         """测试无效响应格式."""
         mock_mcp.call_tool.return_value = {
@@ -131,7 +131,7 @@ class TestValidationErrors:
 class TestApiResponseFormat:
     """测试统一响应格式."""
 
-    @patch("src.rest_api.routers.projects.mcp_client")
+    @patch("rest_api.routers.projects.mcp_client")
     def test_success_response_format(self, mock_mcp, client):
         """测试成功响应格式."""
         mock_mcp.call_tool.return_value = {
@@ -147,7 +147,7 @@ class TestApiResponseFormat:
         assert "data" in data
         assert data["success"] is True
 
-    @patch("src.rest_api.routers.projects.mcp_client")
+    @patch("rest_api.routers.projects.mcp_client")
     def test_error_response_format(self, mock_mcp, client):
         """测试错误响应格式."""
         mock_mcp.call_tool.return_value = {

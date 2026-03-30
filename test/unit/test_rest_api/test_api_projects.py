@@ -8,11 +8,11 @@ import sys
 from pathlib import Path
 
 # 添加 src 目录到路径
-src_dir = Path(__file__).parent.parent.parent / "src"
+src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from src.rest_api.main import app
+from rest_api.main import app
 
 
 @pytest.fixture
@@ -24,7 +24,7 @@ def client():
 @pytest.fixture
 def mock_mcp_client():
     """Mock MCP 客户端."""
-    with patch("src.rest_api.routers.projects.mcp_client") as mock:
+    with patch("rest_api.routers.projects.mcp_client") as mock:
         yield mock
 
 
