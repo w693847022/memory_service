@@ -112,13 +112,13 @@ class MCPClient:
             logger.error(f"MCP tool request error: {e}")
             return {
                 "success": False,
-                "error": f"Failed to connect to MCP server: {str(e)}"
+                "error": "Failed to connect to MCP server"
             }
         except Exception as e:
             logger.error(f"MCP tool exception: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": "Internal MCP tool error"
             }
 
 
