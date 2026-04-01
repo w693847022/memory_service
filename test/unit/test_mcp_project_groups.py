@@ -287,7 +287,7 @@ class TestReservedFields:
     def test_is_reserved_field(self):
         """测试保留字段检测."""
         print("测试: 保留字段检测...")
-        from core.groups import is_reserved_field
+        from business.core.groups import is_reserved_field
 
         assert is_reserved_field("id") == True
         assert is_reserved_field("info") == True

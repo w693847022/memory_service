@@ -41,7 +41,7 @@ def test_group_normalization():
     """测试分组验证."""
     print("测试: 分组验证...")
 
-    from core.groups import validate_group_name
+    from business.core.groups import validate_group_name
 
     # 测试有效分组名
     for group in ["features", "fixes", "notes", "standards"]:
@@ -84,7 +84,7 @@ def test_content_validation():
     """测试内容长度验证."""
     print("测试: 内容长度验证...")
 
-    from core.groups import validate_content_length
+    from business.core.groups import validate_content_length
 
     # 测试有效内容
     valid, msg, _ = validate_content_length("短内容", "features")
@@ -116,7 +116,7 @@ def test_track_calls_decorator():
         original_storage = os.environ.get("MCP_STORAGE_DIR")
         os.environ["MCP_STORAGE_DIR"] = temp_dir
 
-        from core.utils import track_calls
+        from business.core.utils import track_calls
 
         # 使用 mock 验证 record_call 被调用
         from unittest.mock import MagicMock
@@ -151,7 +151,7 @@ def test_validate_view_mode():
     """测试 validate_view_mode 通用函数."""
     print("测试: validate_view_mode...")
 
-    from core.utils import validate_view_mode
+    from business.core.utils import validate_view_mode
 
     # 有效值
     is_valid, error = validate_view_mode("summary")
@@ -176,7 +176,7 @@ def test_validate_regex_pattern():
     """测试 validate_regex_pattern 通用函数."""
     print("测试: validate_regex_pattern...")
 
-    from core.utils import validate_regex_pattern
+    from business.core.utils import validate_regex_pattern
 
     # 空字符串
     regex, error = validate_regex_pattern("")
@@ -205,7 +205,7 @@ def test_apply_view_mode():
     """测试 apply_view_mode 通用函数."""
     print("测试: apply_view_mode...")
 
-    from core.utils import apply_view_mode
+    from business.core.utils import apply_view_mode
 
     items = [
         {"id": "1", "name": "test", "summary": "测试", "tags": ["a"]},

@@ -13,8 +13,8 @@ if str(src_dir) not in sys.path:
 
 from __init__ import __version__
 
-from core.config import parse_args
-from core.utils import track_calls
+from business.core.config import parse_args
+from business.core.utils import track_calls
 from features.guidelines import _build_guidelines_content
 from api.tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,

@@ -11,15 +11,15 @@ src_dir = Path(__file__).parent.parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
-from core.storage_base import ProjectStorage
-from core.groups import (
+from business.core.storage_base import ProjectStorage
+from business.core.groups import (
     GroupType, all_group_names, is_group_with_status, DEFAULT_TAGS,
     validate_group_name, validate_status, validate_severity, is_reserved_field,
     validate_content_length, validate_summary_length,
     get_group_config, validate_related, get_all_groups,
     UnifiedGroupConfig, GroupSettings, DEFAULT_RELATED_RULES,
 )
-from models.item import Item, ItemRelated
+from business.models.item import Item, ItemRelated
 
 # ==================== ProjectMemory ====================
 
