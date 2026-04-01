@@ -11,6 +11,7 @@ from features.instances import memory, call_stats
 from core.groups import (
     validate_group_name,
     is_group_with_status,
+    CustomGroupConfig,
 )
 from models.response import ApiResponse
 from core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode
@@ -194,7 +195,12 @@ def project_list(
 
 
 def project_groups_list(project_id: str) -> str:
-    """列出项目的所有分组（功能、笔记、规范）.
+    """列出项目的所有分组（内置组 + 自定义组）.
+
+    需要通过此接口获取目前所有可用的组信息。
+
+    内置组: features, notes, fixes, standards
+    自定义组: 用户创建的组
 
     Args:
         project_id: 项目ID
@@ -370,7 +376,7 @@ def project_add(
 
     Args:
         project_id: 项目ID
-        group: 分组类型 - "features"/"fixes"/"notes"/"standards"（支持中文："功能"/"修复"/"笔记"/"规范"）
+        group: 分组类型 - 需要通过 project_groups_list 接口获取目前组信息，默认组为 features/notes/fixes/standards
         content: 补充描述
             - features: 功能详细内容
             - fixes: 修复详细内容
@@ -387,7 +393,16 @@ def project_add(
     """
     tag_list = _parse_tags(tags)
 
-    v = memory.validate_add_item(group, content, summary, status, related, tag_list)
+    # 加载组配置
+    group_configs = memory._load_group_configs(project_id)
+    custom_groups_raw = group_configs.get("custom_groups", {})
+    custom_groups = {
+        name: CustomGroupConfig(**cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in custom_groups_raw.items()
+    }
+    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
+
+    v = memory.validate_add_item(group, content, summary, status, severity, related, tag_list, custom_groups, default_rules)
     if not v["success"]:
         return _error_response(v["error"])
 
@@ -443,7 +458,7 @@ def project_update(
 
     Args:
         project_id: 项目ID
-        group: 分组类型 - "features"/"fixes"/"notes"/"standards"
+        group: 分组类型 - 需要通过 project_groups_list 接口获取目前组信息，默认组为 features/notes/fixes/standards
         item_id: 条目ID
         content: 内容更新（可选）
         summary: 摘要更新（可选）
@@ -455,7 +470,16 @@ def project_update(
     Returns:
         JSON 格式的操作结果
     """
-    v = memory.validate_update_item(group, item_id, content, summary, related)
+    # 加载组配置
+    group_configs = memory._load_group_configs(project_id)
+    custom_groups_raw = group_configs.get("custom_groups", {})
+    custom_groups = {
+        name: CustomGroupConfig(**cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in custom_groups_raw.items()
+    }
+    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
+
+    v = memory.validate_update_item(group, item_id, content, summary, related, custom_groups, default_rules)
     if not v["success"]:
         return _error_response(v["error"])
 
@@ -494,7 +518,7 @@ def project_delete(
 
     Args:
         project_id: 项目ID
-        group: 分组类型 - "features"/"fixes"/"notes"/"standards"
+        group: 分组类型 - 需要通过 project_groups_list 接口获取目前组信息，默认组为 features/notes/fixes/standards
         item_id: 条目ID
 
     Returns:
@@ -730,7 +754,7 @@ def project_get(
 
     Args:
         project_id: 项目ID
-        group_name: 分组名称 (可选): "features"|"notes"|"fixes"|"standards"
+        group_name: 分组名称 (可选): 需要通过 project_groups_list 接口获取目前组信息，默认组为 features/notes/fixes/standards
         item_id: 条目ID (可选): 查询单个条目时指定
         status: 状态过滤 (可选): 对 group_name="features" 或 "fixes" 有效，过滤状态 (pending/in_progress/completed)
         severity: 严重程度过滤 (可选): 仅对 group_name="fixes" 有效，过滤严重程度 (critical/high/medium/low)

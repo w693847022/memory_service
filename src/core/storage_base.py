@@ -322,6 +322,114 @@ class ProjectStorage:
         except IOError:
             return False
 
+    # ==================== 组配置存储 ====================
+
+    def _get_group_config_path(self, project_id: str) -> Path:
+        """获取组配置文件路径.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            组配置文件路径
+        """
+        project_dir = self._get_project_dir(project_id)
+        return project_dir / "_group_configs.json"
+
+    def _load_group_configs(self, project_id: str) -> Dict[str, Any]:
+        """加载组配置文件.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            组配置字典，custom_groups 值为 CustomGroupConfig 数据类对象
+        """
+        from core.groups import CustomGroupConfig
+
+        config_path = self._get_group_config_path(project_id)
+        if config_path.exists():
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    raw_configs = json.load(f)
+
+                # 将 custom_groups 转换为 CustomGroupConfig 数据类
+                if "custom_groups" in raw_configs:
+                    custom_groups = {}
+                    for group_name, group_config in raw_configs["custom_groups"].items():
+                        if isinstance(group_config, dict):
+                            custom_groups[group_name] = CustomGroupConfig.from_dict(group_config)
+                        else:
+                            custom_groups[group_name] = group_config
+                    raw_configs["custom_groups"] = custom_groups
+
+                return raw_configs
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        return {
+            "custom_groups": {},
+            "group_settings": {
+                "default_related_rules": {
+                    "features": ["notes"],
+                    "fixes": ["features", "notes"],
+                    "standards": ["notes"],
+                    "notes": []
+                }
+            }
+        }
+
+    def _save_group_configs(self, project_id: str, configs: Dict[str, Any]) -> bool:
+        """保存组配置文件.
+
+        Args:
+            project_id: 项目ID
+            configs: 组配置字典
+
+        Returns:
+            是否保存成功
+        """
+        try:
+            config_path = self._get_group_config_path(project_id)
+            # 确保项目目录存在
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # 将 dataclass 转换为字典以便 JSON 序列化
+            save_configs = self._serialize_group_configs(configs)
+
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(save_configs, f, ensure_ascii=False, indent=2)
+            return True
+        except IOError:
+            return False
+
+    def _serialize_group_configs(self, configs: Dict[str, Any]) -> Dict[str, Any]:
+        """将组配置中的 dataclass 转换为字典.
+
+        Args:
+            configs: 组配置字典
+
+        Returns:
+            可序列化的配置字典
+        """
+        from core.groups import CustomGroupConfig
+
+        result = {}
+        for key, value in configs.items():
+            if key == "custom_groups" and isinstance(value, dict):
+                # 转换自定义组配置
+                result[key] = {}
+                for group_name, group_config in value.items():
+                    if isinstance(group_config, CustomGroupConfig):
+                        result[key][group_name] = group_config.to_dict()
+                    elif isinstance(group_config, dict):
+                        result[key][group_name] = group_config
+            elif isinstance(value, dict):
+                result[key] = self._serialize_group_configs(value)
+            else:
+                result[key] = value
+        return result
+
     def _refresh_projects_cache(self):
         """刷新项目缓存（支持新旧格式）."""
         self._projects_cache = {}

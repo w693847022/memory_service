@@ -14,9 +14,10 @@ if str(src_dir) not in sys.path:
 from core.storage_base import ProjectStorage
 from core.groups import (
     GroupType, all_group_names, is_group_with_status, DEFAULT_TAGS,
-    validate_group_name, validate_status,
+    validate_group_name, validate_status, validate_severity, is_reserved_field,
     validate_content_length, validate_summary_length,
-    get_group_config, validate_related,
+    get_group_config, validate_related, get_all_groups,
+    CustomGroupConfig, GroupSettings, DEFAULT_RELATED_RULES,
 )
 from models.item import Item, ItemRelated
 
@@ -75,8 +76,11 @@ class ProjectMemory(ProjectStorage):
         content: str,
         summary: str,
         status: Optional[str],
+        severity: str,
         related: Optional[Union[str, Dict[str, List[str]]]],
         tag_list: List[str],
+        custom_groups: Optional[Dict[str, CustomGroupConfig]] = None,
+        default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """统一验证添加条目的所有参数.
 
@@ -87,32 +91,50 @@ class ProjectMemory(ProjectStorage):
             status: 状态（可选）
             related: 关联数据
             tag_list: 标签列表
+            custom_groups: 自定义组配置字典（可选）
+            default_rules: 默认关联规则（可选）
 
         Returns:
             验证结果，成功包含 related_dict，失败包含 error
         """
         # 验证 group 有效性
-        is_valid, error_msg = validate_group_name(group)
+        is_valid, error_msg = validate_group_name(group, custom_groups)
         if not is_valid:
             return {"success": False, "error": error_msg}
+
+        # 获取自定义组配置
+        custom_config = custom_groups.get(group) if custom_groups else None
 
         # status 参数验证（仅 features/fixes 分组必填）
         config = get_group_config(group)
         if config and config.status_values:
             if status is None:
                 return {"success": False, "error": "features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)"}
-            is_valid, error_msg = validate_status(status, group)
+            is_valid, error_msg = validate_status(status, group, custom_config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+        elif custom_config and custom_config.enable_status:
+            # 自定义组开启了 status
+            if status is None:
+                return {"success": False, "error": f"'{group}' 分组必须传入 status 参数 (有效值: pending/in_progress/completed)"}
+            is_valid, error_msg = validate_status(status, group, custom_config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
         else:
             status = None
+
+        # severity 参数验证（仅 fixes 分组和 enable_severity=True 的自定义组有效）
+        if severity is not None:
+            is_valid, error_msg = validate_severity(severity, custom_config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
 
         # 验证必需参数
         if not content:
             return {"success": False, "error": "content 参数不能为空"}
 
         # 验证 content 长度
-        is_valid, error_msg, _ = validate_content_length(content, group)
+        is_valid, error_msg, _ = validate_content_length(content, group, custom_config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -121,7 +143,7 @@ class ProjectMemory(ProjectStorage):
             return {"success": False, "error": "summary 参数不能为空，请提供标准摘要描述"}
 
         # 验证 summary 长度
-        is_valid, error_msg, _ = validate_summary_length(summary, group)
+        is_valid, error_msg, _ = validate_summary_length(summary, group, custom_config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -135,8 +157,8 @@ class ProjectMemory(ProjectStorage):
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 解析并验证 related 参数（仅 features/fixes 分组有效）
-        is_valid, error_msg, related_dict = validate_related(related, group)
+        # 解析并验证 related 参数
+        is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -149,6 +171,8 @@ class ProjectMemory(ProjectStorage):
         content: Optional[str] = None,
         summary: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]], None]] = None,
+        custom_groups: Optional[Dict[str, CustomGroupConfig]] = None,
+        default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
         """统一验证更新条目参数.
 
@@ -158,14 +182,19 @@ class ProjectMemory(ProjectStorage):
             content: 新内容（可选）
             summary: 新摘要（可选）
             related: 关联数据（可选）
+            custom_groups: 自定义组配置字典（可选）
+            default_rules: 默认关联规则（可选）
 
         Returns:
             验证结果，成功包含 related_dict，失败包含 error
         """
         # 验证 group 有效性
-        is_valid, error_msg = validate_group_name(group)
+        is_valid, error_msg = validate_group_name(group, custom_groups)
         if not is_valid:
             return {"success": False, "error": error_msg}
+
+        # 获取自定义组配置
+        custom_config = custom_groups.get(group) if custom_groups else None
 
         # 验证必需参数
         if not item_id:
@@ -173,18 +202,18 @@ class ProjectMemory(ProjectStorage):
 
         # 验证 content 长度
         if content is not None:
-            is_valid, error_msg, _ = validate_content_length(content, group)
+            is_valid, error_msg, _ = validate_content_length(content, group, custom_config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         # 验证 summary 长度
         if summary is not None:
-            is_valid, error_msg, _ = validate_summary_length(summary, group)
+            is_valid, error_msg, _ = validate_summary_length(summary, group, custom_config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 解析并验证 related 参数（仅 features/fixes 分组有效）
-        is_valid, error_msg, related_dict = validate_related(related, group)
+        # 解析并验证 related 参数
+        is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -428,7 +457,8 @@ class ProjectMemory(ProjectStorage):
         timestamps = self._generate_timestamps()
 
         # 生成唯一ID
-        id_prefix = {"features": "feat", "fixes": "fix", "notes": "note", "standards": "std"}[group]
+        id_prefix_map = {"features": "feat", "fixes": "fix", "notes": "note", "standards": "std"}
+        id_prefix = id_prefix_map.get(group, group.lower())  # 自定义组使用组全名作为前缀
         item_id = self._generate_item_id(id_prefix, project_id, project_data)
 
         # 构建 Item 对象
@@ -781,7 +811,7 @@ class ProjectMemory(ProjectStorage):
     # ==================== 分层查询功能 ====================
 
     def list_groups(self, project_id: str) -> Dict[str, Any]:
-        """列出项目的所有分组及其统计信息.
+        """列出项目的所有分组及其统计信息（包括自定义组）.
 
         Args:
             project_id: 项目ID
@@ -793,33 +823,293 @@ class ProjectMemory(ProjectStorage):
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+        custom_groups = group_configs.get("custom_groups", {})
+
+        # 内置组
         groups = [
             {
                 "name": "features",
+                "is_builtin": True,
                 "count": len(project_data["features"]),
                 "summary": "功能列表"
             },
             {
                 "name": "notes",
+                "is_builtin": True,
                 "count": len(project_data["notes"]),
                 "summary": "开发笔记"
             },
             {
                 "name": "fixes",
+                "is_builtin": True,
                 "count": len(project_data.get("fixes", [])),
                 "summary": "Bug修复记录"
             },
             {
                 "name": "standards",
+                "is_builtin": True,
                 "count": len(project_data.get("standards", [])),
                 "summary": "项目规范"
             }
         ]
 
+        # 添加自定义组
+        for group_name, config in custom_groups.items():
+            groups.append({
+                "name": group_name,
+                "is_builtin": False,
+                "count": len(project_data.get(group_name, [])),
+                "summary": f"自定义组: {group_name}",
+                "config": {
+                    "content_max_bytes": config.content_max_bytes,
+                    "summary_max_bytes": config.summary_max_bytes,
+                    "allow_related": config.allow_related,
+                    "allowed_related_to": config.allowed_related_to,
+                    "enable_status": config.enable_status,
+                    "enable_severity": config.enable_severity,
+                }
+            })
+
         return {
             "success": True,
             "project_id": project_id,
             "groups": groups
+        }
+
+    # ==================== 自定义组管理 ====================
+
+    def create_custom_group(
+        self,
+        project_id: str,
+        group_name: str,
+        content_max_bytes: int = 240,
+        summary_max_bytes: int = 90,
+        allow_related: bool = False,
+        allowed_related_to: Optional[List[str]] = None,
+        enable_status: bool = True,
+        enable_severity: bool = False
+    ) -> Dict[str, Any]:
+        """创建自定义组.
+
+        Args:
+            project_id: 项目ID
+            group_name: 自定义组名称
+            content_max_bytes: content 字段最大字节数
+            summary_max_bytes: summary 字段最大字节数
+            allow_related: 是否允许关联
+            allowed_related_to: 允许关联的目标组列表
+            enable_status: 是否开启 status 字段
+            enable_severity: 是否开启 severity 字段
+
+        Returns:
+            操作结果
+        """
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        # 检查是否与保留字段冲突
+        if is_reserved_field(group_name):
+            return {"success": False, "error": f"组名 '{group_name}' 与系统配置字段冲突"}
+
+        # 检查组是否已存在
+        existing_groups = get_all_groups()
+        if group_name in existing_groups:
+            return {"success": False, "error": f"组名 '{group_name}' 已存在"}
+
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+        custom_groups = group_configs.get("custom_groups", {})
+
+        # 检查自定义组是否已存在
+        if group_name in custom_groups:
+            return {"success": False, "error": f"自定义组 '{group_name}' 已存在"}
+
+        # 创建自定义组配置
+        custom_groups[group_name] = CustomGroupConfig(
+            content_max_bytes=content_max_bytes,
+            summary_max_bytes=summary_max_bytes,
+            allow_related=allow_related,
+            allowed_related_to=allowed_related_to or [],
+            enable_status=enable_status,
+            enable_severity=enable_severity
+        )
+        group_configs["custom_groups"] = custom_groups
+
+        # 保存配置
+        if not self._save_group_configs(project_id, group_configs):
+            return {"success": False, "error": "保存组配置失败"}
+
+        # 初始化项目数据中的自定义组
+        if group_name not in project_data:
+            project_data[group_name] = []
+            self._save_project(project_id, project_data)
+
+        return {
+            "success": True,
+            "message": f"自定义组 '{group_name}' 创建成功"
+        }
+
+    def update_custom_group(
+        self,
+        project_id: str,
+        group_name: str,
+        content_max_bytes: Optional[int] = None,
+        summary_max_bytes: Optional[int] = None,
+        allow_related: Optional[bool] = None,
+        allowed_related_to: Optional[List[str]] = None,
+        enable_status: Optional[bool] = None,
+        enable_severity: Optional[bool] = None
+    ) -> Dict[str, Any]:
+        """更新自定义组配置.
+
+        Args:
+            project_id: 项目ID
+            group_name: 自定义组名称
+            content_max_bytes: content 字段最大字节数
+            summary_max_bytes: summary 字段最大字节数
+            allow_related: 是否允许关联
+            allowed_related_to: 允许关联的目标组列表
+            enable_status: 是否开启 status 字段
+            enable_severity: 是否开启 severity 字段
+
+        Returns:
+            操作结果
+        """
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+        custom_groups = group_configs.get("custom_groups", {})
+
+        # 检查自定义组是否存在
+        if group_name not in custom_groups:
+            return {"success": False, "error": f"自定义组 '{group_name}' 不存在"}
+
+        # 更新配置（数据类格式）
+        config = custom_groups[group_name]
+        if content_max_bytes is not None:
+            config.content_max_bytes = content_max_bytes
+        if summary_max_bytes is not None:
+            config.summary_max_bytes = summary_max_bytes
+        if allow_related is not None:
+            config.allow_related = allow_related
+        if allowed_related_to is not None:
+            config.allowed_related_to = allowed_related_to
+        if enable_status is not None:
+            config.enable_status = enable_status
+        if enable_severity is not None:
+            config.enable_severity = enable_severity
+
+        # 保存配置
+        if not self._save_group_configs(project_id, group_configs):
+            return {"success": False, "error": "保存组配置失败"}
+
+        return {
+            "success": True,
+            "message": f"自定义组 '{group_name}' 更新成功"
+        }
+
+    def delete_custom_group(self, project_id: str, group_name: str) -> Dict[str, Any]:
+        """删除自定义组.
+
+        Args:
+            project_id: 项目ID
+            group_name: 自定义组名称
+
+        Returns:
+            操作结果
+        """
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+        custom_groups = group_configs.get("custom_groups", {})
+
+        # 检查自定义组是否存在
+        if group_name not in custom_groups:
+            return {"success": False, "error": f"自定义组 '{group_name}' 不存在"}
+
+        # 删除自定义组
+        del custom_groups[group_name]
+        group_configs["custom_groups"] = custom_groups
+
+        # 保存配置
+        if not self._save_group_configs(project_id, group_configs):
+            return {"success": False, "error": "删除自定义组失败"}
+
+        return {
+            "success": True,
+            "message": f"自定义组 '{group_name}' 已删除"
+        }
+
+    def get_group_settings(self, project_id: str) -> Dict[str, Any]:
+        """获取组设置.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            组设置信息
+        """
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+        settings = group_configs.get("group_settings", {})
+
+        return {
+            "success": True,
+            "project_id": project_id,
+            "settings": settings
+        }
+
+    def update_group_settings(
+        self,
+        project_id: str,
+        default_related_rules: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """更新组设置.
+
+        Args:
+            project_id: 项目ID
+            default_related_rules: 默认关联规则
+
+        Returns:
+            操作结果
+        """
+        # 检查项目是否存在
+        project_data = self._load_project(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+
+        # 加载组配置
+        group_configs = self._load_group_configs(project_id)
+
+        # 更新设置
+        if default_related_rules is not None:
+            group_configs.setdefault("group_settings", {})
+            group_configs["group_settings"]["default_related_rules"] = default_related_rules
+
+        # 保存配置
+        if not self._save_group_configs(project_id, group_configs):
+            return {"success": False, "error": "保存组设置失败"}
+
+        return {
+            "success": True,
+            "message": "组设置更新成功"
         }
 
     def list_all_registered_tags(self, project_id: str) -> Dict[str, Any]:

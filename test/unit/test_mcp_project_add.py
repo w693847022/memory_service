@@ -735,6 +735,8 @@ class TestProjectAddRelatedValidation:
         temp_dir, memory, project_id = _setup_project()
         try:
             with patch.object(api.tools, 'memory', memory):
+                # features 只能关联 notes，不能关联 features
+                # 所以 {"features": []} 应该被拒绝
                 result = api.tools.project_add(
                     project_id=project_id,
                     group="features",
@@ -746,8 +748,21 @@ class TestProjectAddRelatedValidation:
                 )
                 data = json.loads(result)
 
-                # 空列表可能被允许
-                assert data.get("success") or "related" in data.get("error", "").lower()
+                # features 不能关联 features，应该返回错误
+                assert not data.get("success") and ("features" in data.get("error", "").lower() or "关联" in data.get("error", ""))
+
+                # 测试 features 关联 notes（空列表）应该成功
+                result2 = api.tools.project_add(
+                    project_id=project_id,
+                    group="features",
+                    summary="测试功能摘要2",
+                    content="功能详细描述2",
+                    status="pending",
+                    related='{"notes": []}',
+                    tags="test"
+                )
+                data2 = json.loads(result2)
+                assert data2.get("success"), f"features 关联 notes 空列表应该成功: {data2}"
 
             print("  ✓ 空的关联 ID 列表测试通过")
         finally:

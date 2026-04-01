@@ -1,12 +1,13 @@
 """分组管理 API 路由."""
 
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Query, Path, HTTPException
 
 from ..mcp_client import get_mcp_client
 from ..main import ApiResponse
+from features.instances import memory
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -225,4 +226,121 @@ async def manage_item_tags(
     result = mcp_client.call_tool("project_item_tag_manage", **kwargs)
     if result.get("success"):
         return ApiResponse.success(data=result.get("data"), message="标签操作成功")
+    raise HTTPException(status_code=400, detail=result.get("error"))
+
+
+# ===================
+# 自定义组管理 API
+# ===================
+
+@router.post("/projects/{project_id}/groups")
+async def create_custom_group(
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Query(..., description="自定义组名称"),
+    content_max_bytes: int = Query(240, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(90, description="summary 字段最大字节数"),
+    allow_related: bool = Query(False, description="是否允许关联"),
+    allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(True, description="是否开启 status 字段"),
+    enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+):
+    """创建自定义组."""
+    allowed_list = [g.strip() for g in allowed_related_to.split(",") if g.strip()]
+
+    result = memory.create_custom_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_list if allowed_list else None,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+    )
+    if result.get("success"):
+        return ApiResponse.success(message=result.get("message") or "操作成功")
+    raise HTTPException(status_code=400, detail=result.get("error"))
+
+
+@router.put("/projects/{project_id}/groups/{group_name}")
+async def update_custom_group(
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Path(..., description="自定义组名称"),
+    content_max_bytes: int = Query(None, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(None, description="summary 字段最大字节数"),
+    allow_related: bool = Query(None, description="是否允许关联"),
+    allowed_related_to: str = Query(None, description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(None, description="是否开启 status 字段"),
+    enable_severity: bool = Query(None, description="是否开启 severity 字段"),
+):
+    """更新自定义组."""
+    allowed_list = None
+    if allowed_related_to is not None:
+        allowed_list = [g.strip() for g in allowed_related_to.split(",") if g.strip()]
+        if not allowed_list:
+            allowed_list = []
+
+    result = memory.update_custom_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_list,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+    )
+    if result.get("success"):
+        return ApiResponse.success(message=result.get("message") or "操作成功")
+    raise HTTPException(status_code=400, detail=result.get("error"))
+
+
+@router.delete("/projects/{project_id}/groups/{group_name}")
+async def delete_custom_group(
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Path(..., description="自定义组名称"),
+):
+    """删除自定义组."""
+    result = memory.delete_custom_group(project_id, group_name)
+    if result.get("success"):
+        return ApiResponse.success(message=result.get("message") or "操作成功")
+    raise HTTPException(status_code=400, detail=result.get("error"))
+
+
+# ===================
+# 组设置 API
+# ===================
+
+@router.get("/projects/{project_id}/group-settings")
+async def get_group_settings(
+    project_id: str = Path(..., description="项目 ID"),
+):
+    """获取组设置."""
+    result = memory.get_group_settings(project_id)
+    if result.get("success"):
+        return ApiResponse.success(data=result.get("settings"))
+    raise HTTPException(status_code=400, detail=result.get("error"))
+
+
+@router.put("/projects/{project_id}/group-settings")
+async def update_group_settings(
+    project_id: str = Path(..., description="项目 ID"),
+    default_related_rules: str = Query("", description="默认关联规则（JSON 字符串）"),
+):
+    """更新组设置."""
+    import json
+
+    rules = None
+    if default_related_rules:
+        try:
+            rules = json.loads(default_related_rules)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="default_related_rules JSON 格式无效")
+
+    result = memory.update_group_settings(
+        project_id=project_id,
+        default_related_rules=rules,
+    )
+    if result.get("success"):
+        return ApiResponse.success(message=result.get("message") or "操作成功")
     raise HTTPException(status_code=400, detail=result.get("error"))
