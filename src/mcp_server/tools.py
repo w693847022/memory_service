@@ -1,0 +1,1135 @@
+"""MCP 工具实现模块 - 业务层服务调用版本.
+
+这些函数将在 mcp_server/server.py 中注册为 MCP 工具。
+工具通过调用 business 层服务来实现业务逻辑。
+"""
+
+import os
+from datetime import datetime
+from typing import Optional, Dict, List, Union
+
+# 设置存储目录
+storage_dir = os.environ.get("MCP_STORAGE_DIR", os.path.join(os.path.expanduser("~"), ".project_memory_ai"))
+
+# 导入存储层
+from business.storage import Storage
+from business.project_service import ProjectService
+from business.tag_service import TagService
+from business.stats_service import StatsService
+
+# 导入辅助函数
+from business.core.groups import (
+    validate_group_name,
+    is_group_with_status,
+    UnifiedGroupConfig,
+)
+from business.models.response import ApiResponse
+from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode
+
+# 初始化 business 层服务
+_storage = Storage(storage_dir=storage_dir)
+_project_service = ProjectService(_storage)
+_tag_service = TagService(_storage)
+_stats_service = StatsService(_storage)
+
+
+# ===================
+# Helper Functions
+# ===================
+
+def _parse_tags(tags_str: str) -> list:
+    """解析标签字符串为列表."""
+    if not tags_str:
+        return []
+    return [t.strip() for t in tags_str.split(",") if t.strip()]
+
+
+def _validate_date(date_str: str) -> bool:
+    """验证日期字符串格式 (YYYY-MM-DD)."""
+    if not date_str:
+        return True
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _tool_response(result, success_data=None, success_message=None):
+    """构建工具响应."""
+    if result.get("success"):
+        msg = success_message or result.get("message", "操作成功")
+        return ApiResponse(success=True, data=success_data, message=msg).to_json()
+    return ApiResponse(success=False, error=result.get("error", "未知错误")).to_json()
+
+
+def _error_response(error):
+    """构建错误响应."""
+    return ApiResponse(success=False, error=error).to_json()
+
+
+def _filter_tags_by_regex(tags_list: list, summary_regex=None, tag_name_regex=None) -> list:
+    """正则过滤标签列表（单次遍历优化）."""
+    filtered = []
+    for tag_item in tags_list:
+        if summary_regex and not summary_regex.search(tag_item.get("summary", "")):
+            continue
+        if tag_name_regex and not tag_name_regex.search(tag_item.get("tag", "")):
+            continue
+        filtered.append(tag_item)
+    return filtered
+
+
+# ===================
+# Project Memory Tools
+# ===================
+
+def project_register(name: str, path: str = "", summary: str = "", tags: str = "") -> str:
+    """注册一个新项目.
+
+    Args:
+        name: 项目名称
+        path: 项目路径（可选）
+        summary: 项目摘要（可选）
+        tags: 项目标签，逗号分隔（可选）
+
+    Returns:
+        JSON 格式的注册结果
+    """
+    tag_list = [t.strip() for t in tags.split(",")] if tags else []
+    result = _project_service.register_project(name, path, summary, tag_list)
+    if result["success"]:
+        data = {k: v for k, v in result.items() if k not in ("success", "error", "message")}
+        return _tool_response(result, data if data else None)
+    return _tool_response(result)
+
+
+def project_rename(project_id: str, new_name: str) -> str:
+    """重命名项目（修改 name 字段并重命名目录）.
+
+    Args:
+        project_id: 项目 UUID
+        new_name: 新的项目名称
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    result = _project_service.project_rename(project_id, new_name)
+    data = {"old_name": result.get("old_name"), "new_name": result.get("new_name")} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def project_list(
+    view_mode: str = "summary",
+    page: int = 1,
+    size: int = 0,
+    name_pattern: str = "",
+    include_archived: bool = False
+) -> str:
+    """列出所有项目.
+
+    Args:
+        view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
+        page: 页码 (可选): 从 1 开始，默认为 1
+        size: 每页条数 (可选): 根据 view_mode 决定默认值
+        name_pattern: 项目名称正则过滤 (可选): 正则表达式匹配项目名称，默认不过滤
+        include_archived: 是否包含归档项目 (可选): 默认 false，传入 true 时显示归档项目
+
+    Returns:
+        JSON 格式的项目列表
+    """
+    # 验证 view_mode 参数
+    is_valid, error_msg = validate_view_mode(view_mode)
+    if not is_valid:
+        return _error_response(error_msg)
+
+    # 验证 name_pattern 正则有效性
+    name_regex, error_msg = validate_regex_pattern(name_pattern, "name_pattern")
+    if error_msg:
+        return _error_response(error_msg)
+
+    # 根据 view_mode 设置 size 默认值
+    size = resolve_default_size(size, view_mode)
+
+    result = _project_service.list_projects(include_archived=include_archived)
+
+    if not result["success"]:
+        return _tool_response(result)
+
+    projects = result["projects"]
+    total = result["total"]
+
+    # name_pattern 过滤
+    if name_regex:
+        projects = [p for p in projects if name_regex.search(p.get("name", ""))]
+
+    # 分页处理
+    pr, err = paginate(projects, page, size)
+    if err:
+        return _error_response(err)
+    assert pr is not None
+    projects, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
+
+    # view_mode 字段过滤
+    filtered_projects = apply_view_mode(projects, view_mode, ["id", "name", "summary", "tags", "status"])
+    if view_mode == "summary":
+        # 为 status 设置默认值
+        for p in filtered_projects:
+            if p.get("status") is None:
+                p["status"] = "active"
+
+    response_data = {
+        "total": total,
+        "filtered_total": filtered_total,
+        "projects": filtered_projects
+    }
+
+    if pagination_meta:
+        response_data.update(pagination_meta)
+
+    if name_pattern:
+        response_data["filters"] = {"name_pattern": name_pattern}
+
+    return _tool_response({"success": True}, response_data, f"共 {filtered_total} 个项目")
+
+
+def project_groups_list(project_id: str) -> str:
+    """列出项目的所有分组（内置组 + 自定义组）.
+
+    Args:
+        project_id: 项目ID
+
+    Returns:
+        JSON 格式的分组列表及统计信息
+    """
+    result = _project_service.list_groups(project_id)
+
+    if not result["success"]:
+        return _tool_response(result)
+
+    data = {
+        "project_id": project_id,
+        "groups": result["groups"]
+    }
+    return _tool_response(result, data, "获取分组成功")
+
+
+def project_tags_info(
+    project_id: str,
+    group_name: str = "",
+    tag_name: str = "",
+    unregistered_only: bool = False,
+    page: int = 1,
+    size: int = 0,
+    view_mode: str = "summary",
+    summary_pattern: str = "",
+    tag_name_pattern: str = ""
+) -> str:
+    """查询标签信息（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        group_name: 分组名称 (可选)
+        tag_name: 标签名称 (为空则返回所有标签)
+        unregistered_only: 仅返回未注册标签
+        page: 页码 (可选): 从 1 开始，默认为 1
+        size: 每页条数 (可选): 根据 view_mode 决定默认值
+        view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
+        summary_pattern: 摘要正则过滤 (可选)
+        tag_name_pattern: 标签名正则过滤 (可选)
+
+    Returns:
+        JSON 格式的标签信息
+    """
+    # 统一参数验证
+    is_valid, error_msg = validate_view_mode(view_mode)
+    if not is_valid:
+        return _error_response(error_msg)
+
+    summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
+    if error_msg:
+        return _error_response(error_msg)
+
+    tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
+    if error_msg:
+        return _error_response(error_msg)
+
+    size = resolve_default_size(size, view_mode)
+
+    # 根据不同模式获取原始列表
+    items_list = None
+    total_count = 0
+    data_key = "tags"
+    total_key = "total_tags"
+    summary_fields = ["tag", "summary"]
+    extra_fields = {}
+    msg_suffix = "已注册标签"
+
+    if not group_name:
+        # 所有已注册标签
+        result = _tag_service.list_all_registered_tags(project_id)
+        if not result.get("success"):
+            return _tool_response(result)
+        items_list = result.get("tags", [])
+        total_count = result.get("total_tags", 0)
+    elif tag_name:
+        # 查询特定标签的条目
+        result = _tag_service.query_by_tag(project_id, group_name, tag_name)
+        if not result.get("success"):
+            return _tool_response(result)
+        items_list = result.get("items", [])
+        total_count = result.get("total", 0)
+        data_key = "items"
+        total_key = "total"
+        summary_fields = ["id", "summary", "tags"]
+        extra_fields = {"group_name": group_name, "tag_name": tag_name, "tag_info": result.get("tag_info")}
+        msg_suffix = "条目"
+    elif unregistered_only:
+        # 未注册标签不支持分页，直接返回
+        result = _tag_service.list_unregistered_tags(project_id, group_name)
+        data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data, f"共 {result.get('total_tags', 0)} 个未注册标签")
+    else:
+        # 分组标签列表
+        is_valid, error_msg = validate_group_name(group_name)
+        if not is_valid:
+            return _error_response(error_msg)
+        result = _tag_service.list_group_tags(project_id, group_name)
+        if not result.get("success"):
+            return _tool_response(result)
+        items_list = result.get("tags", [])
+        total_count = result.get("total_tags", 0)
+        extra_fields = {"group_name": group_name}
+        msg_suffix = "标签"
+
+    # 统一的正则过滤（仅对标签列表模式，tag_name 查询不需要）
+    if summary_regex or tag_name_regex:
+        items_list = _filter_tags_by_regex(items_list, summary_regex, tag_name_regex)
+
+    # 统一分页
+    pr, err = paginate(items_list, page, size)
+    if err:
+        return _error_response(err)
+    assert pr is not None
+
+    # 统一 view_mode 字段过滤
+    filtered_items = apply_view_mode(pr.items, view_mode, summary_fields)
+
+    # 统一响应组装
+    response_data = {
+        "project_id": project_id,
+        total_key: total_count,
+        "filtered_total": pr.filtered_total,
+        data_key: filtered_items
+    }
+    response_data.update(extra_fields)
+    if pr.pagination_meta:
+        response_data.update(pr.pagination_meta)
+
+    if summary_pattern or tag_name_pattern:
+        response_data["filters"] = {
+            "summary_pattern": summary_pattern,
+            "tag_name_pattern": tag_name_pattern
+        }
+
+    return _tool_response({"success": True}, response_data, f"共 {pr.filtered_total} 个{msg_suffix}")
+
+
+def project_add(
+    project_id: str,
+    group: str,
+    content: str = "",
+    summary: str = "",
+    status: Optional[str] = None,
+    severity: str = "medium",
+    related: Union[str, Dict[str, List[str]], None] = "",
+    tags: str = ""
+) -> str:
+    """添加项目条目（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        group: 分组类型
+        content: 补充描述
+        summary: 摘要（所有分组必填）
+        status: 状态（仅 features/fixes 使用）
+        severity: 严重程度（仅 fixes 使用，默认 "medium"）
+        related: 关联条目
+        tags: 标签列表，逗号分隔
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    tag_list = _parse_tags(tags)
+
+    # 加载组配置
+    group_configs = _storage.get_group_configs(project_id)
+    all_groups_raw = group_configs.get("groups", {})
+    all_groups = {
+        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in all_groups_raw.items()
+    }
+    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
+
+    v = _project_service.validate_add_item(group, content, summary, status, severity, related, tag_list, all_groups, default_rules)
+    if not v["success"]:
+        return _error_response(v["error"])
+
+    related_dict = v["related_dict"]
+
+    # 统一调用 add_item
+    result = _project_service.add_item(
+        project_id=project_id,
+        group=group,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related_dict,
+        tags=tag_list
+    )
+
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": result["item_id"],
+            "item": {
+                "id": result["item_id"],
+                "summary": summary,
+                "content": content,
+                "tags": tag_list,
+            }
+        }
+        # 可选字段
+        if status:
+            data["item"]["status"] = status
+        if severity and severity != "medium":
+            data["item"]["severity"] = severity
+        if related_dict:
+            data["item"]["related"] = related_dict
+        return _tool_response(result, data)
+    return _tool_response(result)
+
+
+def project_update(
+    project_id: str,
+    group: str,
+    item_id: str,
+    content: Optional[str] = None,
+    summary: Optional[str] = None,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    related: Optional[Union[str, Dict[str, List[str]]]] = None,
+    tags: Optional[str] = None
+) -> str:
+    """更新项目条目（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        group: 分组类型
+        item_id: 条目ID
+        content: 内容更新（可选）
+        summary: 摘要更新（可选）
+        status: 状态更新（可选）
+        severity: 严重程度更新（仅 fixes）
+        related: 关联条目更新（可选）
+        tags: 标签更新（可选）
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    # 加载组配置
+    group_configs = _storage.get_group_configs(project_id)
+    all_groups_raw = group_configs.get("groups", {})
+    all_groups = {
+        name: UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
+        for name, cfg in all_groups_raw.items()
+    }
+    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
+
+    v = _project_service.validate_update_item(group, item_id, content, summary, related, all_groups, default_rules)
+    if not v["success"]:
+        return _error_response(v["error"])
+
+    related_dict = v.get("related_dict")
+
+    # 统一调用 update_item
+    result = _project_service.update_item(
+        project_id=project_id,
+        group=group,
+        item_id=item_id,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        related=related_dict,
+        tags=_parse_tags(tags) if tags else None
+    )
+
+    if result["success"]:
+        data = {
+            "project_id": project_id,
+            "group": group,
+            "item_id": item_id,
+            "item": result["item"]
+        }
+        return _tool_response(result, data)
+    return _tool_response(result)
+
+
+def project_delete(
+    project_id: str,
+    group: str,
+    item_id: str
+) -> str:
+    """删除项目条目（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        group: 分组类型
+        item_id: 条目ID
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    # 验证 group 有效性
+    is_valid, error_msg = validate_group_name(group)
+    if not is_valid:
+        return _error_response(error_msg)
+
+    # 验证必需参数
+    if not item_id:
+        return _error_response("item_id 参数不能为空")
+
+    # 统一调用 delete_item
+    result = _project_service.delete_item(project_id=project_id, group=group, item_id=item_id)
+    data = {"project_id": project_id, "group": group, "item_id": item_id, "deleted": True} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def project_remove(
+    project_id: str,
+    mode: str = "archive"
+) -> str:
+    """归档或永久删除项目（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        mode: 操作模式 - "archive"(归档，默认) 或 "delete"(永久删除)
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    result = _project_service.remove_project(project_id=project_id, mode=mode)
+    if result.get("success"):
+        data = {"project_id": project_id, "mode": mode}
+        return _tool_response(result, data, result.get("message", "操作成功"))
+    return _tool_response(result)
+
+
+def project_item_tag_manage(
+    project_id: str,
+    group_name: str,
+    item_id: str,
+    operation: str,
+    tag: str = "",
+    tags: str = ""
+) -> str:
+    """管理条目标签（统一接口）.
+
+    Args:
+        project_id: 项目ID
+        group_name: 分组名称
+        item_id: 条目ID
+        operation: 操作类型 - "set"|"add"|"remove"
+        tag: 单个标签 (operation="add"|"remove"时)
+        tags: 标签列表逗号分隔 (operation="set"时)
+
+    Returns:
+        JSON 格式的操作结果
+    """
+    is_valid, error_msg = validate_group_name(group_name)
+    if not is_valid:
+        return _error_response(error_msg)
+
+    if operation == "set" or operation == "设置":
+        if not tags:
+            return _error_response("operation='set' 时 tags 参数不能为空")
+        tag_list = [t.strip() for t in tags.split(",")]
+
+        result = _project_service.update_item(project_id, group_name, item_id, tags=tag_list)
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)} if result.get("success") else None
+        return _tool_response(result, data)
+
+    elif operation == "add" or operation == "添加":
+        if not tag:
+            return _error_response("operation='add' 时 tag 参数不能为空")
+        result = _tag_service.add_item_tag(project_id, group_name, item_id, tag)
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data)
+
+    elif operation == "remove" or operation == "移除":
+        if not tag:
+            return _error_response("operation='remove' 时 tag 参数不能为空")
+        result = _tag_service.remove_item_tag(project_id, group_name, item_id, tag)
+        data = {"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])} if result.get("success") else None
+        return _tool_response(result, data)
+
+    else:
+        return _error_response(f"无效的操作类型: {operation} (支持: set/add/remove)")
+
+
+def tag_register(
+    project_id: str,
+    tag_name: str,
+    summary: str,
+    aliases: str = ""
+) -> str:
+    """注册项目标签.
+
+    Args:
+        project_id: 项目ID
+        tag_name: 标签名称（英文，无空格）
+        summary: 标签语义摘要（10-50字）
+        aliases: 别名列表，逗号分隔（可选）
+
+    Returns:
+        JSON 格式的注册结果
+    """
+    alias_list = [a.strip() for a in aliases.split(",")] if aliases else []
+
+    result = _tag_service.register_tag(
+        project_id=project_id,
+        tag_name=tag_name,
+        summary=summary,
+        aliases=alias_list
+    )
+
+    data = {"project_id": project_id, "tag_name": tag_name, "tag_info": result.get("tag_info", {})} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def tag_update(
+    project_id: str,
+    tag_name: str,
+    summary: Optional[str] = ""
+) -> str:
+    """更新已注册标签的语义信息.
+
+    Args:
+        project_id: 项目ID
+        tag_name: 标签名称
+        summary: 新的摘要（可选）
+
+    Returns:
+        JSON 格式的更新结果
+    """
+    summary_param = summary if summary else None
+
+    result = _tag_service.update_tag(
+        project_id=project_id,
+        tag_name=tag_name,
+        summary=summary_param
+    )
+
+    data = {"project_id": project_id, "tag_name": tag_name, "updated": True} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def tag_delete(
+    project_id: str,
+    tag_name: str,
+    force: str = "false"
+) -> str:
+    """删除标签注册.
+
+    Args:
+        project_id: 项目ID
+        tag_name: 标签名称
+        force: 是否强制删除（"true"/"false"，即使标签正在使用）
+
+    Returns:
+        JSON 格式的删除结果
+    """
+    force_flag = force.lower() == "true"
+
+    result = _tag_service.delete_tag(
+        project_id=project_id,
+        tag_name=tag_name,
+        force=force_flag
+    )
+
+    data = {"project_id": project_id, "tag_name": tag_name, "force": force_flag, "deleted": True} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def tag_merge(
+    project_id: str,
+    old_tag: str,
+    new_tag: str
+) -> str:
+    """合并标签：将所有 old_tag 的引用迁移到 new_tag.
+
+    Args:
+        project_id: 项目ID
+        old_tag: 旧标签名称（将被删除）
+        new_tag: 新标签名称（合并目标）
+
+    Returns:
+        JSON 格式的合并结果
+    """
+    result = _tag_service.merge_tags(
+        project_id=project_id,
+        old_tag=old_tag,
+        new_tag=new_tag
+    )
+
+    data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag, "merged": True} if result.get("success") else None
+    return _tool_response(result, data)
+
+
+def project_get(
+    project_id: str,
+    group_name: str = "",
+    item_id: str = "",
+    status: str = "",
+    severity: str = "",
+    tags: str = "",
+    page: int = 1,
+    size: int = 0,
+    view_mode: str = "summary",
+    summary_pattern: str = "",
+    created_after: str = "",
+    created_before: str = "",
+    updated_after: str = "",
+    updated_before: str = ""
+) -> str:
+    """获取项目信息或查询条目列表/详情.
+
+    查询模式:
+        1. 整个项目信息 - 不传 group_name
+        2. 分组列表模式 - 传 group_name，不传 item_id (根据 view_mode 决定返回字段)
+        3. 条目详情模式 - 传 group_name + item_id (含完整 content)
+
+    Args:
+        project_id: 项目ID
+        group_name: 分组名称 (可选)
+        item_id: 条目ID (可选): 查询单个条目时指定
+        status: 状态过滤 (可选)
+        severity: 严重程度过滤 (可选)
+        tags: 标签过滤 (可选)
+        page: 页码 (可选): 从 1 开始，默认为 1
+        size: 每页条数 (可选): 根据 view_mode 决定默认值
+        view_mode: 视图模式 (可选): "summary"(精简，默认) 或 "detail"(完整)
+        summary_pattern: 摘要正则过滤 (可选)
+        created_after: 创建时间起始 (可选): YYYY-MM-DD
+        created_before: 创建时间截止 (可选): YYYY-MM-DD
+        updated_after: 修改时间起始 (可选): YYYY-MM-DD
+        updated_before: 修改时间截止 (可选): YYYY-MM-DD
+
+    Returns:
+        JSON 格式的项目信息、条目列表或单个条目详情
+    """
+    # 验证 view_mode 参数
+    is_valid, error_msg = validate_view_mode(view_mode)
+    if not is_valid:
+        return _error_response(error_msg)
+
+    # 验证 summary_pattern 正则有效性
+    summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
+    if error_msg:
+        return _error_response(error_msg)
+
+    # 验证时间范围参数格式 (YYYY-MM-DD)
+    for _, param_val in [
+        ("created_after", created_after),
+        ("created_before", created_before),
+        ("updated_after", updated_after),
+        ("updated_before", updated_before),
+    ]:
+        if param_val and not _validate_date(param_val):
+            return _error_response(f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
+
+    # 根据 view_mode 设置 size 默认值
+    size = resolve_default_size(size, view_mode)
+
+    result = _project_service.get_project(project_id)
+
+    if not result["success"]:
+        return _tool_response(result)
+
+    data = result["data"]
+
+    # 如果指定了 group_name
+    if group_name:
+        is_valid, error_msg = validate_group_name(group_name)
+        if not is_valid:
+            return _error_response(error_msg)
+
+        items = data.get(group_name, [])
+
+        # 如果指定了 item_id，返回单个条目详情
+        if item_id:
+            item = None
+            for it in items:
+                if it.get("id") == item_id:
+                    item = it.copy()  # 复制以避免修改原始数据
+                    break
+
+            if not item:
+                return _error_response(f"在分组 '{group_name}' 中找不到条目 '{item_id}'")
+
+            # 对于 notes 分组，从 .md 文件加载 content
+            if group_name == "notes":
+                note_content = _storage._load_note_content(project_id, item_id)
+                if note_content is not None:
+                    item["content"] = note_content
+
+            response_data = {
+                "project_id": project_id,
+                "group_name": group_name,
+                "item_id": item_id,
+                "item": item
+            }
+            return _tool_response({"success": True}, response_data, "获取条目详情成功")
+
+        # 如果只指定了 group_name 但没有 item_id，返回该分组列表
+        filtered_items = items
+
+        # 解析 tags 参数
+        tag_list = _parse_tags(tags) if tags else []
+
+        # 应用过滤条件
+        if is_group_with_status(group_name):
+            if status:
+                filtered_items = [f for f in filtered_items if f.get("status") == status]
+            if severity:
+                filtered_items = [f for f in filtered_items if f.get("severity") == severity]
+
+        # tags 过滤：OR 逻辑，适用于所有分组
+        if tag_list:
+            filtered_items = [f for f in filtered_items if any(tag in f.get("tags", []) for tag in tag_list)]
+
+        # summary 正则过滤 + 时间范围过滤（单次遍历优化）
+        if summary_regex or created_after or created_before or updated_after or updated_before:
+            new_filtered = []
+            for item in filtered_items:
+                # summary 正则
+                if summary_regex and not summary_regex.search(item.get("summary", "")):
+                    continue
+                # 创建时间范围
+                created = (item.get("created_at") or "")[:10]
+                if created_after and created < created_after:
+                    continue
+                if created_before and created > created_before:
+                    continue
+                # 修改时间范围
+                updated = (item.get("updated_at") or "")[:10]
+                if updated_after and (not updated or updated < updated_after):
+                    continue
+                if updated_before and (not updated or updated > updated_before):
+                    continue
+                new_filtered.append(item)
+            filtered_items = new_filtered
+
+        # 分页处理：先过滤，后分页
+        pr, err = paginate(filtered_items, page, size)
+        if err:
+            return _error_response(err)
+        assert pr is not None
+        paginated_items, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
+
+        # 列表模式根据 view_mode 决定返回字段
+        if view_mode == "summary":
+            filtered_items_for_response = apply_view_mode(paginated_items, "summary", ["id", "summary", "tags"])
+        else:
+            # 完整模式：返回所有字段（除 content）
+            filtered_items_for_response = [{k: v for k, v in item.items() if k != 'content'} for item in paginated_items]
+
+        response_data = {
+            "project_id": project_id,
+            "project_name": data['info']['name'],
+            "group_name": group_name,
+            "total": len(items),
+            "filtered_total": filtered_total,
+            "items": filtered_items_for_response
+        }
+
+        # 添加分页元信息（仅在启用分页时）
+        if pagination_meta:
+            response_data.update(pagination_meta)
+
+        # 添加过滤器信息（如果有过滤条件）
+        if status or severity or tags or summary_pattern or created_after or created_before or updated_after or updated_before:
+            response_data["filters"] = {
+                "status": status,
+                "severity": severity,
+                "tags": tags,
+                "summary_pattern": summary_pattern,
+                "created_after": created_after,
+                "created_before": created_before,
+                "updated_after": updated_after,
+                "updated_before": updated_before,
+            }
+
+        return _tool_response({"success": True}, response_data, f"共 {filtered_total} 个条目")
+
+    # 默认行为：返回精简的项目概览（仅统计信息，不返回各分组摘要列表）
+    response_data = {
+        "project_id": project_id,
+        "info": data['info'],
+        "groups": {
+            "features": {"count": len(data["features"])},
+            "notes": {"count": len(data["notes"])},
+            "fixes": {"count": len(data.get("fixes", []))},
+            "standards": {"count": len(data.get("standards", []))}
+        }
+    }
+    return _tool_response({"success": True}, response_data, "获取项目信息成功")
+
+
+def project_stats() -> str:
+    """获取全局统计信息.
+
+    Returns:
+        JSON 格式的统计数据
+    """
+    # 计算项目级统计信息
+    _storage.refresh_projects_cache()
+    total_projects = len(_storage.list_all_projects())
+
+    # 统计项目级标签
+    all_tags = []
+    feature_stats = {"pending": 0, "in_progress": 0, "completed": 0}
+    total_features = 0
+    total_notes = 0
+
+    # 统计条目级标签
+    feature_tag_counts = {}
+    note_tag_counts = {}
+
+    for project_id in _storage.list_all_projects().keys():
+        project_data = _storage.get_project_data(project_id)
+        if project_data is None:
+            continue
+
+        all_tags.extend(project_data["info"].get("tags", []))
+
+        total_features += len(project_data.get("features", []))
+        for feature in project_data.get("features", []):
+            status = feature.get("status", "pending")
+            if status in feature_stats:
+                feature_stats[status] += 1
+
+            # 统计功能标签
+            for tag in feature.get("tags", []):
+                feature_tag_counts[tag] = feature_tag_counts.get(tag, 0) + 1
+
+        total_notes += len(project_data.get("notes", []))
+
+        # 统计笔记标签
+        for note in project_data.get("notes", []):
+            for tag in note.get("tags", []):
+                note_tag_counts[tag] = note_tag_counts.get(tag, 0) + 1
+
+    tag_counts = {}
+    for tag in all_tags:
+        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+    stats = {
+        "total_projects": total_projects,
+        "total_features": total_features,
+        "total_notes": total_notes,
+        "feature_status": feature_stats,
+        "top_project_tags": sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:10],
+        "top_feature_tags": sorted(feature_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10],
+        "top_note_tags": sorted(note_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    }
+
+    data = {
+        "total_projects": stats['total_projects'],
+        "total_features": stats['total_features'],
+        "total_notes": stats['total_notes'],
+        "feature_status": stats["feature_status"],
+        "top_project_tags": stats["top_project_tags"],
+        "top_feature_tags": stats["top_feature_tags"],
+        "top_note_tags": stats["top_note_tags"]
+    }
+    return ApiResponse(success=True, data=data, message="获取统计成功").to_json()
+
+
+def stats_summary(
+    type: str = "",
+    tool_name: str = "",
+    project_id: str = "",
+    date: str = ""
+) -> str:
+    """获取统计摘要（统一接口）.
+
+    Args:
+        type: 统计类型 - "tool"|"project"|"client"|"ip"|"daily"|"full"|""(所有)
+        tool_name: 工具名称 (type="tool"时)
+        project_id: 项目ID (type="project"时)
+        date: 日期 YYYY-MM-DD (type="daily"时)
+
+    Returns:
+        JSON 格式的统计摘要
+    """
+    if type == "tool" or type == "工具":
+        if tool_name:
+            result = _stats_service.get_tool_stats(tool_name)
+            if not result["success"]:
+                return _tool_response(result)
+
+            data = {
+                "type": "tool",
+                "tool_name": tool_name,
+                "total": result['total'],
+                "first_called": result.get('first_called'),
+                "last_called": result.get('last_called'),
+                "by_project": result.get("by_project", {}),
+                "by_client": result.get("by_client", {}),
+                "by_ip": result.get("by_ip", {})
+            }
+            return _tool_response(result, data, f"工具 '{tool_name}' 调用统计")
+        else:
+            result = _stats_service.get_tool_stats()
+            if not result["success"]:
+                return _tool_response(result)
+
+            data = {
+                "type": "tool",
+                "tools": result["tools"]
+            }
+            return _tool_response(result, data, "所有工具调用统计")
+
+    elif type == "project" or type == "项目":
+        if not project_id:
+            return _error_response("project_id 参数不能为空")
+        result = _stats_service.get_project_stats(project_id)
+
+        if not result["success"]:
+            return _tool_response(result)
+
+        data = {
+            "type": "project",
+            "project_id": project_id,
+            "total_calls": result['total_calls'],
+            "tools_called": result["tools_called"]
+        }
+        return _tool_response(result, data, f"项目 '{project_id}' 调用统计")
+
+    elif type == "client" or type == "客户端":
+        result = _stats_service.get_client_stats()
+
+        if not result["success"]:
+            return _tool_response(result, None, "获取客户端统计失败")
+
+        data = {
+            "type": "client",
+            "clients": result["clients"]
+        }
+        return _tool_response(result, data, "客户端调用统计")
+
+    elif type == "ip" or type == "IP":
+        result = _stats_service.get_ip_stats()
+
+        if not result["success"]:
+            return _tool_response(result, None, "获取IP统计失败")
+
+        data = {
+            "type": "ip",
+            "ips": result["ips"]
+        }
+        return _tool_response(result, data, "IP地址调用统计")
+
+    elif type == "daily" or type == "每日":
+        if date:
+            result = _stats_service.get_daily_stats(date)
+            if not result["success"]:
+                return _tool_response(result)
+
+            data = {
+                "type": "daily",
+                "date": date,
+                "total_calls": result['total_calls'],
+                "tools": result["tools"]
+            }
+            return _tool_response(result, data, f"日期 '{date}' 统计")
+        else:
+            result = _stats_service.get_daily_stats()
+            if not result["success"]:
+                return _tool_response(result, None, "获取每日统计失败")
+
+            data = {
+                "type": "daily",
+                "recent_days": result["recent_days"],
+                "stats": result["stats"]
+            }
+            return _tool_response(result, data, "最近7天统计")
+
+    elif type == "full" or type == "完整":
+        result = _stats_service.get_full_summary()
+
+        if not result["success"]:
+            return _tool_response(result, None, "获取完整统计失败")
+
+        data = {
+            "type": "full",
+            "metadata": result["metadata"],
+            "tool_stats": result["tool_stats"],
+            "client_stats": result["client_stats"],
+            "ip_stats": result["ip_stats"],
+            "daily_stats": result["daily_stats"]
+        }
+        return _tool_response(result, data, "完整统计")
+
+    else:
+        # 默认返回所有统计摘要
+        result = _stats_service.get_full_summary()
+        if not result["success"]:
+            return _tool_response(result, None, "获取完整统计失败")
+
+        data = {
+            "type": "summary",
+            "metadata": result["metadata"],
+            "tool_stats": result["tool_stats"],
+            "client_stats": result["client_stats"],
+            "daily_stats": result["daily_stats"]
+        }
+        return _tool_response(result, data, "统计摘要")
+
+
+def stats_cleanup(retention_days: int = 30) -> str:
+    """手动清理过期统计数据.
+
+    Args:
+        retention_days: 保留天数（默认30天），超过此天数的数据将被清理
+
+    Returns:
+        JSON 格式的清理结果摘要
+    """
+    result = _stats_service.cleanup_stats(retention_days)
+
+    if not result["success"]:
+        return _tool_response(result)
+
+    cleanup_result = result["cleanup_result"]
+    before = result["before"]
+    after = result["after"]
+
+    data = {
+        "retention_days": retention_days,
+        "cutoff_date": cleanup_result['cutoff_date'],
+        "cleanup_details": {
+            "daily_stats_removed": cleanup_result['daily_stats_removed'],
+            "tools_removed": cleanup_result['tools_removed'],
+            "projects_cleaned": cleanup_result['projects_cleaned'],
+            "clients_cleaned": cleanup_result['clients_cleaned'],
+            "ips_cleaned": cleanup_result['ips_cleaned']
+        },
+        "storage_before": before,
+        "storage_after": after
+    }
+    return _tool_response(result, data, "统计数据清理完成")

@@ -5,12 +5,16 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Query, Path, HTTPException
 
-from ..mcp_client import get_mcp_client
+from ..business_client import (
+    api_project_list, api_register_project, api_get_project, api_rename_project,
+    api_remove_project, api_list_groups, api_project_tags_info,
+    api_project_get, api_project_add, api_project_update, api_project_delete,
+    api_manage_item_tags,
+)
 from ..main import ApiResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-mcp_client = get_mcp_client()
 
 
 # ===================
@@ -26,8 +30,7 @@ async def list_projects(
     include_archived: bool = Query(False, description="包含归档项目"),
 ):
     """获取项目列表."""
-    result = mcp_client.call_tool(
-        "project_list",
+    result = api_project_list(
         page=page,
         size=size,
         view_mode=view_mode,
@@ -47,8 +50,7 @@ async def register_project(
     tags: str = Query("", description="项目标签（逗号分隔）"),
 ):
     """注册新项目."""
-    result = mcp_client.call_tool(
-        "project_register",
+    result = api_register_project(
         name=name,
         path=path,
         summary=summary,
@@ -64,7 +66,7 @@ async def get_project(
     project_id: str = Path(..., description="项目 ID"),
 ):
     """获取项目详情."""
-    result = mcp_client.call_tool("project_get", project_id=project_id)
+    result = api_get_project(project_id=project_id)
     if result.get("success"):
         return ApiResponse.success(data=result.get("data"))
     raise HTTPException(status_code=404, detail=result.get("error"))
@@ -77,16 +79,8 @@ async def update_project(
     tags: str = Query(None, description="项目标签（逗号分隔）"),
 ):
     """更新项目信息."""
-    kwargs = {"project_id": project_id}
-    if summary is not None:
-        kwargs["summary"] = summary
-    if tags is not None:
-        kwargs["tags"] = tags
-
-    result = mcp_client.call_tool("project_update", **kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="项目更新成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    # 项目更新暂不支持通过此接口，直接用重命名接口
+    raise HTTPException(status_code=400, detail="此接口暂不支持，请使用 /projects/{project_id}/rename 重命名项目")
 
 
 @router.delete("/projects/{project_id}")
@@ -95,8 +89,7 @@ async def delete_project(
     mode: str = Query("archive", pattern="^(archive|delete)$", description="操作模式"),
 ):
     """删除或归档项目."""
-    result = mcp_client.call_tool(
-        "project_remove",
+    result = api_remove_project(
         project_id=project_id,
         mode=mode,
     )
@@ -112,8 +105,7 @@ async def rename_project(
     new_name: str = Query(..., description="新项目名称"),
 ):
     """重命名项目."""
-    result = mcp_client.call_tool(
-        "project_rename",
+    result = api_rename_project(
         project_id=project_id,
         new_name=new_name,
     )
@@ -127,10 +119,7 @@ async def list_project_groups(
     project_id: str = Path(..., description="项目 ID"),
 ):
     """获取项目的所有分组."""
-    result = mcp_client.call_tool(
-        "project_groups_list",
-        project_id=project_id,
-    )
+    result = api_list_groups(project_id=project_id)
     if result.get("success"):
         return ApiResponse.success(data=result.get("data"))
     raise HTTPException(status_code=404, detail=result.get("error"))
@@ -145,8 +134,7 @@ async def list_project_tags(
     size: int = Query(0, ge=0, description="每页条数"),
 ):
     """获取项目的标签信息."""
-    result = mcp_client.call_tool(
-        "project_tags_info",
+    result = api_project_tags_info(
         project_id=project_id,
         group_name=group_name,
         view_mode=view_mode,

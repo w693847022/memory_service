@@ -4,12 +4,13 @@ import logging
 
 from fastapi import APIRouter, Query, Path, HTTPException
 
-from ..mcp_client import get_mcp_client
+from ..business_client import (
+    api_project_tags_info, api_tag_register, api_tag_update, api_tag_delete, api_tag_merge,
+)
 from ..main import ApiResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-mcp_client = get_mcp_client()
 
 
 # ===================
@@ -27,8 +28,7 @@ async def list_tags(
     tag_name_pattern: str = Query("", description="标签名正则过滤"),
 ):
     """获取项目标签列表."""
-    result = mcp_client.call_tool(
-        "project_tags_info",
+    result = api_project_tags_info(
         project_id=project_id,
         group_name=group_name,
         view_mode=view_mode,
@@ -50,8 +50,7 @@ async def register_tag(
     aliases: str = Query("", description="别名（逗号分隔）"),
 ):
     """注册项目标签."""
-    result = mcp_client.call_tool(
-        "tag_register",
+    result = api_tag_register(
         project_id=project_id,
         tag_name=tag_name,
         summary=summary,
@@ -69,8 +68,7 @@ async def merge_tags(
     new_tag: str = Query(..., description="新标签名称"),
 ):
     """合并标签：将所有 old_tag 的引用迁移到 new_tag."""
-    result = mcp_client.call_tool(
-        "tag_merge",
+    result = api_tag_merge(
         project_id=project_id,
         old_tag=old_tag,
         new_tag=new_tag,
@@ -87,8 +85,7 @@ async def update_tag(
     summary: str = Query(..., description="新摘要"),
 ):
     """更新已注册标签的语义信息."""
-    result = mcp_client.call_tool(
-        "tag_update",
+    result = api_tag_update(
         project_id=project_id,
         tag_name=tag_name,
         summary=summary,
@@ -105,8 +102,7 @@ async def delete_tag(
     force: str = Query("false", description="是否强制删除"),
 ):
     """删除标签注册."""
-    result = mcp_client.call_tool(
-        "tag_delete",
+    result = api_tag_delete(
         project_id=project_id,
         tag_name=tag_name,
         force=force,

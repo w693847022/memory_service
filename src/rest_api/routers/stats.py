@@ -4,12 +4,13 @@ import logging
 
 from fastapi import APIRouter, Query, HTTPException
 
-from ..mcp_client import get_mcp_client
+from ..business_client import (
+    api_project_stats, api_stats_summary, api_stats_cleanup,
+)
 from ..main import ApiResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-mcp_client = get_mcp_client()
 
 
 # ===================
@@ -22,9 +23,9 @@ async def get_stats(
 ):
     """获取全局统计信息."""
     if type:
-        result = mcp_client.call_tool("stats_summary", type=type)
+        result = api_stats_summary(type=type)
     else:
-        result = mcp_client.call_tool("project_stats")
+        result = api_project_stats()
 
     if result.get("success"):
         return ApiResponse.success(data=result.get("data"))
@@ -49,7 +50,7 @@ async def get_stats_summary(
     if date:
         kwargs["date"] = date
 
-    result = mcp_client.call_tool("stats_summary", **kwargs)
+    result = api_stats_summary(**kwargs)
     if result.get("success"):
         return ApiResponse.success(data=result.get("data"))
     raise HTTPException(status_code=400, detail=result.get("error"))
@@ -60,10 +61,7 @@ async def cleanup_stats(
     retention_days: int = Query(30, ge=1, description="保留天数"),
 ):
     """清理过期统计数据."""
-    result = mcp_client.call_tool(
-        "stats_cleanup",
-        retention_days=retention_days,
-    )
+    result = api_stats_cleanup(retention_days=retention_days)
     if result.get("success"):
         return ApiResponse.success(message="统计数据清理成功")
     raise HTTPException(status_code=400, detail=result.get("error"))

@@ -1,12 +1,46 @@
 services:
-  mcp-memory-server:
+  # ===================
+  # Business Server (业务逻辑核心)
+  # ===================
+  business-server:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
-    container_name: mcp-memory-server
+      dockerfile: docker/Dockerfile.business
+    container_name: business-server
     restart: unless-stopped
-    # Linux: 使用宿主机用户运行，避免文件权限问题
-    # Windows: 不支持此配置，在 .env 中将 USER_ID 留空
+    user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
+    ports:
+      - "${BUSINESS_PORT:-8002}:8002"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
+      - BUSINESS_LOG_LEVEL=${BUSINESS_LOG_LEVEL:-INFO}
+    volumes:
+      # 挂载项目记忆数据目录（持久化）
+      - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai
+      # 挂载源代码（开发模式热更新）
+      - ../src:/app/src:ro
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8002/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.mcp-memory.description=Business Logic Server"
+      - "com.mcp-memory.version=1.0.0"
+
+  # ===================
+  # MCP Server (AI 工具接口)
+  # ===================
+  mcp-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+    container_name: mcp-server
+    restart: unless-stopped
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "${MCP_PORT:-8000}:8000"
@@ -17,24 +51,22 @@ services:
       - MCP_LOG_LEVEL=${MCP_LOG_LEVEL:-INFO}
       - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
     volumes:
-      # 挂载项目记忆数据目录（持久化）- 支持环境变量配置
+      # 挂载项目记忆数据目录（持久化）
       - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai
       # 挂载源代码（开发模式热更新）
       - ../src:/app/src:ro
-      - ../run.py:/app/run.py:ro
+      - ../run_mcp.py:/app/run_mcp.py:ro
     networks:
       - mcp-network
-    # 健康检查已禁用 - MCP SSE端点需要session ID，无法简单检查
-    # healthcheck:
-    #   test: ["CMD", "python", "-c", "import urllib.request; req = urllib.request.Request('http://localhost:8000/mcp', headers={'Accept': 'text/event-stream'}); urllib.request.urlopen(req, timeout=5)"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 10s
+    depends_on:
+      - business-server
     labels:
-      - "com.mcp-memory.description=Project Memory MCP Server"
+      - "com.mcp-memory.description=MCP Adapter Server"
       - "com.mcp-memory.version=1.0.0"
 
+  # ===================
+  # FastAPI Server (Web 管理接口)
+  # ===================
   fastapi-server:
     build:
       context: ..
@@ -46,15 +78,16 @@ services:
       - "${FASTAPI_PORT:-8001}:8001"
     environment:
       - PYTHONUNBUFFERED=1
-      - MCP_SERVER_URL=${MCP_SERVER_URL:-http://mcp-memory-server:8000/mcp}
+      # 直接访问 business 层
+      - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
       # 日志配置
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_DIR=/app/logs
       - LOG_MAX_BYTES=${LOG_MAX_BYTES:-10485760}
       - LOG_BACKUP_COUNT=${LOG_BACKUP_COUNT:-5}
     volumes:
-      # 共享数据卷 - 访问 MCP Server 的数据
-      - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai:ro
+      # 共享数据卷 - 访问共享的数据
+      - ${MCP_DATA_HOST_PATH:-~/.project_memory_ai}:/app/.project_memory_ai
       # 挂载日志目录（持久化）
       - ${LOG_HOST_PATH:-~/.project_memory_ai/logs}:/app/logs
       # 挂载源代码（开发模式热更新）
@@ -62,7 +95,7 @@ services:
     networks:
       - mcp-network
     depends_on:
-      - mcp-memory-server
+      - business-server
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5)"]
       interval: 30s
