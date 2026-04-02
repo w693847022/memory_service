@@ -7,6 +7,7 @@ from typing import Optional, Dict, List, Union
 
 # 导入 HTTP 客户端
 from clients.business_client import get_business_client, BusinessApiClient
+from common.response import ApiResponse
 
 # 获取全局 HTTP 客户端
 _business_client: Optional[BusinessApiClient] = None
@@ -30,7 +31,7 @@ def api_project_list(
     size: int = 0,
     name_pattern: str = "",
     include_archived: bool = False
-) -> Dict:
+) -> ApiResponse:
     """列出所有项目."""
     client = _get_client()
     return client.project_list(
@@ -42,31 +43,31 @@ def api_project_list(
     )
 
 
-def api_register_project(name: str, path: str = "", summary: str = "", tags: str = "") -> Dict:
+def api_register_project(name: str, path: str = "", summary: str = "", tags: str = "") -> ApiResponse:
     """注册新项目."""
     client = _get_client()
     return client.register_project(name=name, path=path, summary=summary, tags=tags)
 
 
-def api_get_project(project_id: str) -> Dict:
+def api_get_project(project_id: str) -> ApiResponse:
     """获取项目详情."""
     client = _get_client()
     return client.get_project(project_id)
 
 
-def api_rename_project(project_id: str, new_name: str) -> Dict:
+def api_rename_project(project_id: str, new_name: str) -> ApiResponse:
     """重命名项目."""
     client = _get_client()
     return client.rename_project(project_id, new_name)
 
 
-def api_remove_project(project_id: str, mode: str = "archive") -> Dict:
+def api_remove_project(project_id: str, mode: str = "archive") -> ApiResponse:
     """删除或归档项目."""
     client = _get_client()
     return client.remove_project(project_id=project_id, mode=mode)
 
 
-def api_list_groups(project_id: str) -> Dict:
+def api_list_groups(project_id: str) -> ApiResponse:
     """列出项目的所有分组."""
     client = _get_client()
     return client.list_groups(project_id)
@@ -82,7 +83,7 @@ def api_project_tags_info(
     view_mode: str = "summary",
     summary_pattern: str = "",
     tag_name_pattern: str = ""
-) -> Dict:
+) -> ApiResponse:
     """查询标签信息."""
     client = _get_client()
     return client.project_tags_info(
@@ -113,7 +114,7 @@ def api_project_get(
     created_before: str = "",
     updated_after: str = "",
     updated_before: str = ""
-) -> Dict:
+) -> ApiResponse:
     """获取项目信息或查询条目列表/详情."""
     client = _get_client()
     return client.project_get(
@@ -143,7 +144,7 @@ def api_project_add(
     severity: str = "medium",
     related: Union[str, Dict[str, List[str]], None] = "",
     tags: str = ""
-) -> Dict:
+) -> ApiResponse:
     """添加项目条目."""
     client = _get_client()
     return client.project_add(
@@ -168,7 +169,7 @@ def api_project_update(
     severity: Optional[str] = None,
     related: Optional[Union[str, Dict[str, List[str]]]] = None,
     tags: Optional[str] = None
-) -> Dict:
+) -> ApiResponse:
     """更新项目条目."""
     client = _get_client()
     return client.project_update(
@@ -184,7 +185,7 @@ def api_project_update(
     )
 
 
-def api_project_delete(project_id: str, group: str, item_id: str) -> Dict:
+def api_project_delete(project_id: str, group: str, item_id: str) -> ApiResponse:
     """删除项目条目."""
     client = _get_client()
     return client.project_delete(project_id=project_id, group=group, item_id=item_id)
@@ -197,7 +198,7 @@ def api_manage_item_tags(
     operation: str,
     tag: str = "",
     tags: str = ""
-) -> Dict:
+) -> ApiResponse:
     """管理条目标签."""
     client = _get_client()
     return client.manage_item_tags(
@@ -214,7 +215,7 @@ def api_manage_item_tags(
 # 标签管理 API 实现
 # ===================
 
-def api_tag_register(project_id: str, tag_name: str, summary: str, aliases: str = "") -> Dict:
+def api_tag_register(project_id: str, tag_name: str, summary: str, aliases: str = "") -> ApiResponse:
     """注册项目标签."""
     client = _get_client()
     return client.tag_register(
@@ -225,7 +226,7 @@ def api_tag_register(project_id: str, tag_name: str, summary: str, aliases: str 
     )
 
 
-def api_tag_update(project_id: str, tag_name: str, summary: str) -> Dict:
+def api_tag_update(project_id: str, tag_name: str, summary: str) -> ApiResponse:
     """更新标签."""
     client = _get_client()
     return client.tag_update(
@@ -235,7 +236,7 @@ def api_tag_update(project_id: str, tag_name: str, summary: str) -> Dict:
     )
 
 
-def api_tag_delete(project_id: str, tag_name: str, force: str = "false") -> Dict:
+def api_tag_delete(project_id: str, tag_name: str, force: str = "false") -> ApiResponse:
     """删除标签."""
     client = _get_client()
     return client.tag_delete(
@@ -245,7 +246,7 @@ def api_tag_delete(project_id: str, tag_name: str, force: str = "false") -> Dict
     )
 
 
-def api_tag_merge(project_id: str, old_tag: str, new_tag: str) -> Dict:
+def api_tag_merge(project_id: str, old_tag: str, new_tag: str) -> ApiResponse:
     """合并标签."""
     client = _get_client()
     return client.tag_merge(
@@ -259,7 +260,7 @@ def api_tag_merge(project_id: str, old_tag: str, new_tag: str) -> Dict:
 # 统计 API 实现
 # ===================
 
-def api_project_stats() -> Dict:
+def api_project_stats() -> ApiResponse:
     """获取全局统计信息."""
     client = _get_client()
     return client.project_stats()
@@ -270,7 +271,7 @@ def api_stats_summary(
     tool_name: str = "",
     project_id: str = "",
     date: str = ""
-) -> Dict:
+) -> ApiResponse:
     """获取统计摘要."""
     client = _get_client()
     return client.stats_summary(
@@ -281,7 +282,7 @@ def api_stats_summary(
     )
 
 
-def api_stats_cleanup(retention_days: int = 30) -> Dict:
+def api_stats_cleanup(retention_days: int = 30) -> ApiResponse:
     """清理过期统计数据."""
     client = _get_client()
     return client.stats_cleanup(retention_days=retention_days)
@@ -300,7 +301,7 @@ def api_create_custom_group(
     allowed_related_to: str = "",
     enable_status: bool = True,
     enable_severity: bool = False
-) -> Dict:
+) -> ApiResponse:
     """创建自定义组."""
     client = _get_client()
     return client.create_custom_group(
@@ -324,7 +325,7 @@ def api_update_group(
     allowed_related_to: str = None,
     enable_status: bool = None,
     enable_severity: bool = None
-) -> Dict:
+) -> ApiResponse:
     """更新组配置."""
     client = _get_client()
     return client.update_group(
@@ -339,19 +340,19 @@ def api_update_group(
     )
 
 
-def api_delete_custom_group(project_id: str, group_name: str) -> Dict:
+def api_delete_custom_group(project_id: str, group_name: str) -> ApiResponse:
     """删除自定义组."""
     client = _get_client()
     return client.delete_custom_group(project_id=project_id, group_name=group_name)
 
 
-def api_get_group_settings(project_id: str) -> Dict:
+def api_get_group_settings(project_id: str) -> ApiResponse:
     """获取组设置."""
     client = _get_client()
     return client.get_group_settings(project_id)
 
 
-def api_update_group_settings(project_id: str, default_related_rules: Dict = None) -> Dict:
+def api_update_group_settings(project_id: str, default_related_rules: Dict = None) -> ApiResponse:
     """更新组设置."""
     client = _get_client()
     return client.update_group_settings(

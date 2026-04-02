@@ -36,7 +36,7 @@ async def project_stats():
         project_data = _storage.get_project_data(pid)
         if project_data is None:
             continue
-        all_tags.extend(project_data["info"].get("tags", []))
+        all_tags.extend(project_data.get("info", {}).get("tags", []))
         total_features += len(project_data.get("features", []))
         for feature in project_data.get("features", []):
             status = feature.get("status", "pending")
@@ -63,7 +63,7 @@ async def project_stats():
         "top_note_tags": sorted(note_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     }
 
-    return ApiResponse(success=True, data=stats, message="获取统计成功").to_json()
+    return ApiResponse(success=True, data=stats, message="获取统计成功").to_dict()
 
 
 @router.get("/stats/summary")
@@ -79,12 +79,12 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
                 "first_called": result.get('first_called'), "last_called": result.get('last_called'),
                 "by_project": result.get("by_project", {}), "by_client": result.get("by_client", {}),
                 "by_ip": result.get("by_ip", {})
-            }, message=f"工具 '{tool_name}' 调用统计").to_json()
+            }, message=f"工具 '{tool_name}' 调用统计").to_dict()
         else:
             result = _stats_service.get_tool_stats()
             if not result["success"]:
                 raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计").to_json()
+            return ApiResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计").to_dict()
 
     elif type == "project" or type == "项目":
         if not project_id:
@@ -92,43 +92,43 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
         result = _stats_service.get_project_stats(project_id)
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计").to_json()
+        return ApiResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计").to_dict()
 
     elif type == "client" or type == "客户端":
         result = _stats_service.get_client_stats()
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计").to_json()
+        return ApiResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计").to_dict()
 
     elif type == "ip" or type == "IP":
         result = _stats_service.get_ip_stats()
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计").to_json()
+        return ApiResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计").to_dict()
 
     elif type == "daily" or type == "每日":
         if date:
             result = _stats_service.get_daily_stats(date)
             if not result["success"]:
                 raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计").to_json()
+            return ApiResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计").to_dict()
         else:
             result = _stats_service.get_daily_stats()
             if not result["success"]:
                 raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计").to_json()
+            return ApiResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计").to_dict()
 
     elif type == "full" or type == "完整":
         result = _stats_service.get_full_summary()
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计").to_json()
+        return ApiResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计").to_dict()
 
     else:
         result = _stats_service.get_full_summary()
         if not result["success"]:
             raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要").to_json()
+        return ApiResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要").to_dict()
 
 
 @router.delete("/stats/cleanup")
@@ -149,4 +149,4 @@ async def stats_cleanup(retention_days: int = 30):
         },
         "storage_before": result["before"],
         "storage_after": result["after"]
-    }, message="统计数据清理完成").to_json()
+    }, message="统计数据清理完成").to_dict()

@@ -55,9 +55,9 @@ async def create_custom_group(
         enable_status=enable_status,
         enable_severity=enable_severity,
     )
-    if result.get("success"):
-        return ApiResponse.success(message=result.get("message") or "操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/groups/{group_name}")
@@ -82,9 +82,9 @@ async def update_group(
         enable_status=enable_status,
         enable_severity=enable_severity,
     )
-    if result.get("success"):
-        return ApiResponse.success(message=result.get("message") or "操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/projects/{project_id}/groups/{group_name}")
@@ -94,9 +94,9 @@ async def delete_custom_group(
 ):
     """删除自定义组."""
     result = api_delete_custom_group(project_id, group_name)
-    if result.get("success"):
-        return ApiResponse.success(message=result.get("message") or "操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 # ===================
@@ -109,9 +109,9 @@ async def get_group_settings(
 ):
     """获取组设置."""
     result = api_get_group_settings(project_id)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/group-settings")
@@ -133,9 +133,9 @@ async def update_group_settings(
         project_id=project_id,
         default_related_rules=rules,
     )
-    if result.get("success"):
-        return ApiResponse.success(message=result.get("message") or "操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message=result.message or "操作成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 # ===================
@@ -188,9 +188,9 @@ async def list_group_items(
         kwargs["updated_before"] = updated_before
 
     result = api_project_get(**kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.get("/projects/{project_id}/{group}/{item_id}")
@@ -207,9 +207,9 @@ async def get_group_item(
         group_name=group,
         item_id=item_id,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=404, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=404, detail=result.error)
 
 
 @router.post("/projects/{project_id}/{group}")
@@ -243,9 +243,9 @@ async def create_group_item(
         kwargs["related"] = related
 
     result = api_project_add(**kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="条目创建成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="条目创建成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/{group}/{item_id}")
@@ -284,9 +284,9 @@ async def update_group_item(
         kwargs["related"] = related
 
     result = api_project_update(**kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="条目更新成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="条目更新成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/projects/{project_id}/{group}/{item_id}")
@@ -303,9 +303,9 @@ async def delete_group_item(
         group=group,
         item_id=item_id,
     )
-    if result.get("success"):
-        return ApiResponse.success(message="条目删除成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message="条目删除成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/{group}/{item_id}/tags")
@@ -333,6 +333,6 @@ async def manage_item_tags(
         kwargs["tag"] = tag
 
     result = api_manage_item_tags(**kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="标签操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="标签操作成功")
+    raise HTTPException(status_code=400, detail=result.error)

@@ -49,7 +49,7 @@ async def create_custom_group(
     group_configs["groups"] = groups
 
     if _storage.save_group_configs(project_id, group_configs):
-        return ApiResponse(success=True, message=f"自定义组 '{group_name}' 创建成功").to_json()
+        return ApiResponse(success=True, message=f"自定义组 '{group_name}' 创建成功").to_dict()
     raise HTTPException(status_code=400, detail="保存配置失败")
 
 
@@ -91,7 +91,7 @@ async def update_group(
     group_configs["groups"] = groups
 
     if _storage.save_group_configs(project_id, group_configs):
-        return ApiResponse(success=True, message=f"组 '{group_name}' 更新成功").to_json()
+        return ApiResponse(success=True, message=f"组 '{group_name}' 更新成功").to_dict()
     raise HTTPException(status_code=400, detail="保存配置失败")
 
 
@@ -111,7 +111,7 @@ async def delete_custom_group(project_id: str, group_name: str):
     group_configs["groups"] = groups
 
     if _storage.save_group_configs(project_id, group_configs):
-        return ApiResponse(success=True, message=f"自定义组 '{group_name}' 已删除").to_json()
+        return ApiResponse(success=True, message=f"自定义组 '{group_name}' 已删除").to_dict()
     raise HTTPException(status_code=400, detail="保存配置失败")
 
 
@@ -120,7 +120,7 @@ async def get_group_settings(project_id: str):
     """获取组设置."""
     group_configs = _storage.get_group_configs(project_id)
     settings = group_configs.get("group_settings", {})
-    return ApiResponse(success=True, data={"settings": settings, "group_settings": settings}).to_json()
+    return ApiResponse(success=True, data={"settings": settings, "group_settings": settings}).to_dict()
 
 
 @router.put("/groups/settings")
@@ -134,5 +134,5 @@ async def update_group_settings(project_id: str, default_related_rules: dict = N
         group_configs["group_settings"]["default_related_rules"] = default_related_rules
 
     if _storage.save_group_configs(project_id, group_configs):
-        return ApiResponse(success=True, message="组设置更新成功").to_json()
+        return ApiResponse(success=True, message="组设置更新成功").to_dict()
     raise HTTPException(status_code=400, detail="保存配置失败")

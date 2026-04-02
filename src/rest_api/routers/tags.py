@@ -37,9 +37,9 @@ async def list_tags(
         summary_pattern=summary_pattern,
         tag_name_pattern=tag_name_pattern,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.post("/tags")
@@ -56,9 +56,9 @@ async def register_tag(
         summary=summary,
         aliases=aliases,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="标签注册成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="标签注册成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/tags/merge")
@@ -73,9 +73,9 @@ async def merge_tags(
         old_tag=old_tag,
         new_tag=new_tag,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="标签合并成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="标签合并成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/tags/{tag_name}")
@@ -90,9 +90,9 @@ async def update_tag(
         tag_name=tag_name,
         summary=summary,
     )
-    if result.get("success"):
-        return ApiResponse.success(message="标签更新成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message="标签更新成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/tags/{tag_name}")
@@ -107,6 +107,6 @@ async def delete_tag(
         tag_name=tag_name,
         force=force,
     )
-    if result.get("success"):
-        return ApiResponse.success(message="标签删除成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message="标签删除成功")
+    raise HTTPException(status_code=400, detail=result.error)

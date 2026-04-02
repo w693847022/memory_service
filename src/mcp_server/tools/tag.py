@@ -1,6 +1,6 @@
 """MCP 标签管理工具模块.
 
-提供标签管理相关的 MCP 工具函数。
+提供标签管理相关的 MCP 工具函数。只做转发，不处理任何业务逻辑。
 """
 
 from typing import Optional
@@ -32,15 +32,13 @@ def tag_register(
         summary=summary,
         aliases=aliases
     )
-
-    data = {"project_id": project_id, "tag_name": tag_name, "tag_info": result.get("data", {}).get("tag_info", {})} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def tag_update(
     project_id: str,
     tag_name: str,
-    summary: Optional[str] = ""
+    summary: Optional[str] = None
 ) -> str:
     """更新已注册标签的语义信息.
 
@@ -56,11 +54,9 @@ def tag_update(
     result = client.tag_update(
         project_id=project_id,
         tag_name=tag_name,
-        summary=summary if summary else None
+        summary=summary
     )
-
-    data = {"project_id": project_id, "tag_name": tag_name, "updated": True} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def tag_delete(
@@ -84,9 +80,7 @@ def tag_delete(
         tag_name=tag_name,
         force=force
     )
-
-    data = {"project_id": project_id, "tag_name": tag_name, "force": force.lower() == "true", "deleted": True} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def tag_merge(
@@ -110,6 +104,4 @@ def tag_merge(
         old_tag=old_tag,
         new_tag=new_tag
     )
-
-    data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag, "merged": True} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)

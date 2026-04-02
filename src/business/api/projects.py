@@ -79,7 +79,7 @@ async def list_projects(
     if name_pattern:
         response_data["filters"] = {"name_pattern": name_pattern}
 
-    return ApiResponse(success=True, data=response_data).to_json()
+    return ApiResponse(success=True, data=response_data).to_dict()
 
 
 @router.post("/projects")
@@ -94,7 +94,7 @@ async def register_project(
     result = _project_service.register_project(name, path, summary, tag_list)
     if result["success"]:
         data = {k: v for k, v in result.items() if k not in ("success", "error", "message")}
-        return ApiResponse(success=True, data=data, message="项目注册成功").to_json()
+        return ApiResponse(success=True, data=data, message="项目注册成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -103,7 +103,7 @@ async def get_project(project_id: str):
     """获取项目详情."""
     result = _project_service.get_project(project_id)
     if result["success"]:
-        return ApiResponse(success=True, data=result.get("data")).to_json()
+        return ApiResponse(success=True, data=result.get("data")).to_dict()
     raise HTTPException(status_code=404, detail=result.get("error"))
 
 
@@ -112,7 +112,7 @@ async def rename_project(project_id: str, new_name: str):
     """重命名项目."""
     result = _project_service.project_rename(project_id, new_name)
     if result["success"]:
-        return ApiResponse(success=True, data=result, message="项目重命名成功").to_json()
+        return ApiResponse(success=True, data=result, message="项目重命名成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -122,7 +122,7 @@ async def remove_project(project_id: str, mode: str = "archive"):
     result = _project_service.remove_project(project_id, mode)
     if result["success"]:
         action = "归档" if mode == "archive" else "删除"
-        return ApiResponse(success=True, message=f"项目{action}成功").to_json()
+        return ApiResponse(success=True, message=f"项目{action}成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -131,7 +131,7 @@ async def list_groups(project_id: str):
     """列出项目的所有分组."""
     result = _project_service.list_groups(project_id)
     if result["success"]:
-        return ApiResponse(success=True, data=result.get("data")).to_json()
+        return ApiResponse(success=True, data=result.get("data")).to_dict()
     raise HTTPException(status_code=404, detail=result.get("error"))
 
 
@@ -190,7 +190,7 @@ async def project_tags_info(
     elif unregistered_only:
         result = _tag_service.list_unregistered_tags(project_id, group_name)
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])}
-        return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签").to_json()
+        return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签").to_dict()
     else:
         is_valid, error_msg = validate_group_name(group_name)
         if not is_valid:
@@ -229,7 +229,7 @@ async def project_tags_info(
             "tag_name_pattern": tag_name_pattern
         }
 
-    return ApiResponse(success=True, data=response_data, message=f"共 {pr.filtered_total} 个{msg_suffix}").to_json()
+    return ApiResponse(success=True, data=response_data, message=f"共 {pr.filtered_total} 个{msg_suffix}").to_dict()
 
 
 @router.get("/projects/{project_id}/items")
@@ -294,7 +294,7 @@ async def project_get(
                 note_content = _storage._load_note_content(project_id, item_id)
                 if note_content is not None:
                     item["content"] = note_content
-            return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功").to_json()
+            return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功").to_dict()
 
         filtered_items = items
         tag_list = parse_tags(tags) if tags else []
@@ -354,7 +354,7 @@ async def project_get(
                 "created_after": created_after, "created_before": created_before,
                 "updated_after": updated_after, "updated_before": updated_before,
             }
-        return ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目").to_json()
+        return ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目").to_dict()
 
     return ApiResponse(success=True, data={
         "project_id": project_id,
@@ -365,7 +365,7 @@ async def project_get(
             "fixes": {"count": len(data.get("fixes", []))},
             "standards": {"count": len(data.get("standards", []))}
         }
-    }, message="获取项目信息成功").to_json()
+    }, message="获取项目信息成功").to_dict()
 
 
 @router.post("/projects/{project_id}/items")
@@ -411,7 +411,7 @@ async def project_add(
             data["item"]["severity"] = severity
         if related_dict:
             data["item"]["related"] = related_dict
-        return ApiResponse(success=True, data=data, message=f"条目 '{result['item_id']}' 已添加").to_json()
+        return ApiResponse(success=True, data=data, message=f"条目 '{result['item_id']}' 已添加").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -450,7 +450,7 @@ async def project_update(
     )
 
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"]}, message=f"条目 '{item_id}' 已更新").to_json()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"]}, message=f"条目 '{item_id}' 已更新").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -465,7 +465,7 @@ async def project_delete(project_id: str, group: str, item_id: str):
 
     result = _project_service.delete_item(project_id=project_id, group=group, item_id=item_id)
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "deleted": True}, message=f"条目 '{item_id}' 已删除").to_json()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "deleted": True}, message=f"条目 '{item_id}' 已删除").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -488,19 +488,19 @@ async def manage_item_tags(
             raise HTTPException(status_code=400, detail="operation='set' 时 tags 参数不能为空")
         tag_list = [t.strip() for t in tags.split(",")]
         result = _project_service.update_item(project_id, group_name, item_id, tags=tag_list)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)}).to_json()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)}).to_dict()
 
     elif operation == "add" or operation == "添加":
         if not tag:
             raise HTTPException(status_code=400, detail="operation='add' 时 tag 参数不能为空")
         result = _tag_service.add_item_tag(project_id, group_name, item_id, tag)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])}).to_json()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])}).to_dict()
 
     elif operation == "remove" or operation == "移除":
         if not tag:
             raise HTTPException(status_code=400, detail="operation='remove' 时 tag 参数不能为空")
         result = _tag_service.remove_item_tag(project_id, group_name, item_id, tag)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])}).to_json()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])}).to_dict()
 
     else:
         raise HTTPException(status_code=400, detail=f"无效的操作类型: {operation} (支持: set/add/remove)")

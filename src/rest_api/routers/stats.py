@@ -27,9 +27,9 @@ async def get_stats(
     else:
         result = api_project_stats()
 
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.get("/stats/summary")
@@ -51,9 +51,9 @@ async def get_stats_summary(
         kwargs["date"] = date
 
     result = api_stats_summary(**kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/stats/cleanup")
@@ -62,6 +62,6 @@ async def cleanup_stats(
 ):
     """清理过期统计数据."""
     result = api_stats_cleanup(retention_days=retention_days)
-    if result.get("success"):
-        return ApiResponse.success(message="统计数据清理成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(message="统计数据清理成功")
+    raise HTTPException(status_code=400, detail=result.error)

@@ -12,7 +12,13 @@ src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from common.response import ApiResponse
 from rest_api.main import app
+
+
+def _resp(d: dict) -> ApiResponse:
+    """将 dict 包装为 ApiResponse."""
+    return ApiResponse.from_dict(d)
 
 
 @pytest.fixture
@@ -26,36 +32,36 @@ def mock_mcp_client():
     """Mock business client."""
     mock_client = Mock()
     # 设置默认返回值
-    mock_client.project_get.return_value = {
+    mock_client.project_get.return_value = _resp({
         "success": True,
         "data": {"items": [], "total": 0}
-    }
-    mock_client.project_add.return_value = {
+    })
+    mock_client.project_add.return_value = _resp({
         "success": True,
         "data": {"id": "feat_new", "summary": "新功能"}
-    }
-    mock_client.project_update.return_value = {
+    })
+    mock_client.project_update.return_value = _resp({
         "success": True,
         "data": {"id": "feat_001", "summary": "更新后的摘要"}
-    }
-    mock_client.project_delete.return_value = {"success": True}
-    mock_client.manage_item_tags.return_value = {
+    })
+    mock_client.project_delete.return_value = _resp({"success": True})
+    mock_client.manage_item_tags.return_value = _resp({
         "success": True,
         "data": {"tags": ["api", "frontend"]}
-    }
-    mock_client.create_custom_group.return_value = {
+    })
+    mock_client.create_custom_group.return_value = _resp({
         "success": True,
         "message": "自定义组 'apis' 创建成功"
-    }
-    mock_client.update_group.return_value = {
+    })
+    mock_client.update_group.return_value = _resp({
         "success": True,
         "message": "自定义组 'apis' 更新成功"
-    }
-    mock_client.delete_custom_group.return_value = {
+    })
+    mock_client.delete_custom_group.return_value = _resp({
         "success": True,
         "message": "自定义组 'apis' 已删除"
-    }
-    mock_client.get_group_settings.return_value = {
+    })
+    mock_client.get_group_settings.return_value = _resp({
         "success": True,
         "data": {
             "settings": {
@@ -65,11 +71,11 @@ def mock_mcp_client():
                 }
             }
         }
-    }
-    mock_client.update_group_settings.return_value = {
+    })
+    mock_client.update_group_settings.return_value = _resp({
         "success": True,
         "message": "组设置更新成功"
-    }
+    })
     with patch("rest_api.business_client._get_client", return_value=mock_client):
         yield mock_client
 
@@ -79,7 +85,7 @@ class TestListGroupItems:
 
     def test_list_features_success(self, client, mock_mcp_client):
         """测试成功获取功能列表."""
-        mock_mcp_client.project_get.return_value = {
+        mock_mcp_client.project_get.return_value = _resp({
             "success": True,
             "data": {
                 "items": [
@@ -87,7 +93,7 @@ class TestListGroupItems:
                 ],
                 "total": 1
             }
-        }
+        })
 
         response = client.get("/api/projects/proj_001/features")
 
@@ -97,10 +103,10 @@ class TestListGroupItems:
 
     def test_list_notes_success(self, client, mock_mcp_client):
         """测试成功获取笔记列表."""
-        mock_mcp_client.project_get.return_value = {
+        mock_mcp_client.project_get.return_value = _resp({
             "success": True,
             "data": {"items": [], "total": 0}
-        }
+        })
 
         response = client.get("/api/projects/proj_001/notes")
 
@@ -108,10 +114,10 @@ class TestListGroupItems:
 
     def test_list_items_with_filters(self, client, mock_mcp_client):
         """测试带过滤条件获取列表."""
-        mock_mcp_client.project_get.return_value = {
+        mock_mcp_client.project_get.return_value = _resp({
             "success": True,
             "data": {"items": [], "total": 0}
-        }
+        })
 
         response = client.get(
             "/api/projects/proj_001/features?status=pending&page=1&size=10"
@@ -134,7 +140,7 @@ class TestGetGroupItem:
 
     def test_get_item_success(self, client, mock_mcp_client):
         """测试成功获取条目详情."""
-        mock_mcp_client.project_get.return_value = {
+        mock_mcp_client.project_get.return_value = _resp({
             "success": True,
             "data": {
                 "id": "feat_001",
@@ -142,7 +148,7 @@ class TestGetGroupItem:
                 "content": "详细内容",
                 "status": "pending"
             }
-        }
+        })
 
         response = client.get("/api/projects/proj_001/features/feat_001")
 
@@ -153,10 +159,10 @@ class TestGetGroupItem:
 
     def test_get_item_not_found(self, client, mock_mcp_client):
         """测试条目不存在."""
-        mock_mcp_client.project_get.return_value = {
+        mock_mcp_client.project_get.return_value = _resp({
             "success": False,
             "error": "条目不存在"
-        }
+        })
 
         response = client.get("/api/projects/proj_001/features/not_exist")
 
@@ -168,10 +174,10 @@ class TestCreateGroupItem:
 
     def test_create_feature_success(self, client, mock_mcp_client):
         """测试成功创建功能."""
-        mock_mcp_client.project_add.return_value = {
+        mock_mcp_client.project_add.return_value = _resp({
             "success": True,
             "data": {"id": "feat_new", "summary": "新功能"}
-        }
+        })
 
         response = client.post(
             "/api/projects/proj_001/features",
@@ -190,10 +196,10 @@ class TestCreateGroupItem:
 
     def test_create_note_success(self, client, mock_mcp_client):
         """测试成功创建笔记."""
-        mock_mcp_client.project_add.return_value = {
+        mock_mcp_client.project_add.return_value = _resp({
             "success": True,
             "data": {"id": "note_new", "summary": "新笔记"}
-        }
+        })
 
         response = client.post(
             "/api/projects/proj_001/notes",
@@ -218,10 +224,10 @@ class TestUpdateGroupItem:
 
     def test_update_item_success(self, client, mock_mcp_client):
         """测试成功更新条目."""
-        mock_mcp_client.project_update.return_value = {
+        mock_mcp_client.project_update.return_value = _resp({
             "success": True,
             "data": {"id": "feat_001", "summary": "更新后的摘要"}
-        }
+        })
 
         response = client.put(
             "/api/projects/proj_001/features/feat_001",
@@ -238,7 +244,7 @@ class TestDeleteGroupItem:
 
     def test_delete_item_success(self, client, mock_mcp_client):
         """测试成功删除条目."""
-        mock_mcp_client.project_delete.return_value = {"success": True}
+        mock_mcp_client.project_delete.return_value = _resp({"success": True})
 
         response = client.delete("/api/projects/proj_001/features/feat_001")
 
@@ -248,10 +254,10 @@ class TestDeleteGroupItem:
 
     def test_delete_item_error(self, client, mock_mcp_client):
         """测试删除失败."""
-        mock_mcp_client.project_delete.return_value = {
+        mock_mcp_client.project_delete.return_value = _resp({
             "success": False,
             "error": "删除失败"
-        }
+        })
 
         response = client.delete("/api/projects/proj_001/features/feat_001")
 
@@ -263,10 +269,10 @@ class TestManageItemTags:
 
     def test_set_tags_success(self, client, mock_mcp_client):
         """测试设置标签."""
-        mock_mcp_client.manage_item_tags.return_value = {
+        mock_mcp_client.manage_item_tags.return_value = _resp({
             "success": True,
             "data": {"tags": ["api", "frontend"]}
-        }
+        })
 
         response = client.put(
             "/api/projects/proj_001/features/feat_001/tags",
@@ -282,10 +288,10 @@ class TestManageItemTags:
 
     def test_add_tag_success(self, client, mock_mcp_client):
         """测试添加标签."""
-        mock_mcp_client.manage_item_tags.return_value = {
+        mock_mcp_client.manage_item_tags.return_value = _resp({
             "success": True,
             "data": {"tags": ["api", "new_tag"]}
-        }
+        })
 
         response = client.put(
             "/api/projects/proj_001/features/feat_001/tags",
@@ -299,10 +305,10 @@ class TestManageItemTags:
 
     def test_remove_tag_success(self, client, mock_mcp_client):
         """测试移除标签."""
-        mock_mcp_client.manage_item_tags.return_value = {
+        mock_mcp_client.manage_item_tags.return_value = _resp({
             "success": True,
             "data": {"tags": ["api"]}
-        }
+        })
 
         response = client.put(
             "/api/projects/proj_001/features/feat_001/tags",
@@ -322,10 +328,10 @@ class TestCreateCustomGroup:
         """测试成功创建自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.create_custom_group.return_value = {
+            mock_client.create_custom_group.return_value = _resp({
                 "success": True,
                 "message": "自定义组 'apis' 创建成功"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.post(
@@ -349,10 +355,10 @@ class TestCreateCustomGroup:
         """测试创建自定义组时保留字段冲突."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.create_custom_group.return_value = {
+            mock_client.create_custom_group.return_value = _resp({
                 "success": False,
                 "error": "组名 'id' 与系统配置字段冲突"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.post(
@@ -368,10 +374,10 @@ class TestCreateCustomGroup:
         """测试创建重复名称的自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.create_custom_group.return_value = {
+            mock_client.create_custom_group.return_value = _resp({
                 "success": False,
                 "error": "自定义组 'apis' 已存在"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.post(
@@ -390,10 +396,10 @@ class TestUpdateCustomGroup:
         """测试成功更新自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.update_group.return_value = {
+            mock_client.update_group.return_value = _resp({
                 "success": True,
                 "message": "自定义组 'apis' 更新成功"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.put(
@@ -412,10 +418,10 @@ class TestUpdateCustomGroup:
         """测试更新不存在的自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.update_group.return_value = {
+            mock_client.update_group.return_value = _resp({
                 "success": False,
                 "error": "组 'nonexistent' 不存在"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.put(
@@ -434,10 +440,10 @@ class TestDeleteCustomGroup:
         """测试成功删除自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.delete_custom_group.return_value = {
+            mock_client.delete_custom_group.return_value = _resp({
                 "success": True,
                 "message": "自定义组 'apis' 已删除"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.delete("/api/projects/proj_001/groups/apis")
@@ -450,10 +456,10 @@ class TestDeleteCustomGroup:
         """测试删除不存在的自定义组."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.delete_custom_group.return_value = {
+            mock_client.delete_custom_group.return_value = _resp({
                 "success": False,
                 "error": "自定义组 'nonexistent' 不存在"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.delete("/api/projects/proj_001/groups/nonexistent")
@@ -469,7 +475,7 @@ class TestGetGroupSettings:
         """测试成功获取组设置."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.get_group_settings.return_value = {
+            mock_client.get_group_settings.return_value = _resp({
                 "success": True,
                 "data": {
                     "settings": {
@@ -479,7 +485,7 @@ class TestGetGroupSettings:
                         }
                     }
                 }
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.get("/api/projects/proj_001/group-settings")
@@ -494,10 +500,10 @@ class TestGetGroupSettings:
         """测试获取组设置失败."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.get_group_settings.return_value = {
+            mock_client.get_group_settings.return_value = _resp({
                 "success": False,
                 "error": "项目不存在"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.get("/api/projects/proj_001/group-settings")
@@ -512,10 +518,10 @@ class TestUpdateGroupSettings:
         """测试成功更新组设置."""
         with patch("rest_api.business_client._get_client") as mock_get_client:
             mock_client = Mock()
-            mock_client.update_group_settings.return_value = {
+            mock_client.update_group_settings.return_value = _resp({
                 "success": True,
                 "message": "组设置更新成功"
-            }
+            })
             mock_get_client.return_value = mock_client
 
             response = client.put(

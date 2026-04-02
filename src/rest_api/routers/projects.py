@@ -37,9 +37,9 @@ async def list_projects(
         name_pattern=name_pattern,
         include_archived=include_archived,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.post("/projects")
@@ -56,9 +56,9 @@ async def register_project(
         summary=summary,
         tags=tags,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="项目注册成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="项目注册成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.get("/projects/{project_id}")
@@ -67,9 +67,9 @@ async def get_project(
 ):
     """获取项目详情."""
     result = api_get_project(project_id=project_id)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=404, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=404, detail=result.error)
 
 
 @router.put("/projects/{project_id}")
@@ -93,10 +93,10 @@ async def delete_project(
         project_id=project_id,
         mode=mode,
     )
-    if result.get("success"):
+    if result.success:
         action = "归档" if mode == "archive" else "删除"
-        return ApiResponse.success(message=f"项目{action}成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        return ApiResponse.success_resp(message=f"项目{action}成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/rename")
@@ -109,9 +109,9 @@ async def rename_project(
         project_id=project_id,
         new_name=new_name,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="项目重命名成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data, message="项目重命名成功")
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.get("/projects/{project_id}/groups")
@@ -120,9 +120,9 @@ async def list_project_groups(
 ):
     """获取项目的所有分组."""
     result = api_list_groups(project_id=project_id)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=404, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=404, detail=result.error)
 
 
 @router.get("/projects/{project_id}/tags")
@@ -141,6 +141,6 @@ async def list_project_tags(
         page=page,
         size=size,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return ApiResponse.success_resp(data=result.data)
+    raise HTTPException(status_code=400, detail=result.error)

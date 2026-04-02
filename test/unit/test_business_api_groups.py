@@ -91,7 +91,7 @@ class TestCreateCustomGroup:
             enable_severity=False
         )
 
-        data = json.loads(response)
+        data = response
         assert "success" in data
         assert data["success"] is True
         assert "apis" in data["message"]
@@ -139,7 +139,7 @@ class TestCreateCustomGroup:
             allowed_related_to=""
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
 
         # 验证 allowed_related_to 被正确解析为空列表
@@ -163,7 +163,7 @@ class TestUpdateGroup:
             allow_related=True
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         assert "custom_api" in data["message"]
 
@@ -214,7 +214,7 @@ class TestUpdateGroup:
             allowed_related_to="notes,features,standards"
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
 
         # 验证 allowed_related_to 被正确解析
@@ -233,7 +233,7 @@ class TestUpdateGroup:
             summary_max_bytes=200
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
 
         # 验证其他字段保持不变
@@ -258,7 +258,7 @@ class TestDeleteCustomGroup:
             group_name="custom_api"
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         assert "已删除" in data["message"]
 
@@ -330,7 +330,7 @@ class TestGetGroupSettings:
 
         response = await get_group_settings(project_id="proj_001")
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         assert "settings" in data["data"]
         assert "group_settings" in data["data"]
@@ -347,7 +347,7 @@ class TestGetGroupSettings:
 
         response = await get_group_settings(project_id="proj_001")
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         assert data["data"]["settings"] == {}
 
@@ -358,7 +358,7 @@ class TestGetGroupSettings:
 
         response = await get_group_settings(project_id="proj_001")
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         rules = data["data"]["settings"]["default_related_rules"]
         assert rules["features"] == ["notes"]
@@ -378,7 +378,7 @@ class TestUpdateGroupSettings:
             default_related_rules=new_rules
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
         assert "更新成功" in data["message"]
 
@@ -412,7 +412,7 @@ class TestUpdateGroupSettings:
             default_related_rules={}
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
 
         # 验证保存的值
@@ -431,7 +431,7 @@ class TestUpdateGroupSettings:
             default_related_rules=new_rules
         )
 
-        data = json.loads(response)
+        data = response
         assert data["success"] is True
 
         # 验证更新了现有配置

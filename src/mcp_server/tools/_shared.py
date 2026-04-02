@@ -32,15 +32,14 @@ def _parse_tags(tags_str: str) -> list:
 
 
 def _tool_response(result, success_data=None, success_message=None):
-    """构建工具响应."""
-    from business.models.response import ApiResponse
-    if result.get("success"):
-        msg = success_message or result.get("message", "操作成功")
-        return ApiResponse(success=True, data=success_data, message=msg).to_json()
-    return ApiResponse(success=False, error=result.get("error", "未知错误")).to_json()
+    """构建工具响应.
+
+    由于 business_client 已返回 ApiResponse 对象，直接返回其 JSON 格式。
+    """
+    return result.to_json()
 
 
 def _error_response(error):
     """构建错误响应."""
-    from business.models.response import ApiResponse
+    from common.response import ApiResponse
     return ApiResponse(success=False, error=error).to_json()

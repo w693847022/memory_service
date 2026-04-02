@@ -22,7 +22,6 @@ from .project import (
     project_remove,
     project_item_tag_manage,
     project_get,
-    project_stats,
 )
 
 from .tag import (
@@ -30,11 +29,6 @@ from .tag import (
     tag_update,
     tag_delete,
     tag_merge,
-)
-
-from .stats import (
-    stats_summary,
-    stats_cleanup,
 )
 
 __all__ = [
@@ -55,13 +49,9 @@ __all__ = [
     "project_remove",
     "project_item_tag_manage",
     "project_get",
-    "project_stats",
     # Tag
     "tag_register",
     "tag_update",
     "tag_delete",
     "tag_merge",
-    # Stats
-    "stats_summary",
-    "stats_cleanup",
 ]

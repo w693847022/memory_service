@@ -93,26 +93,7 @@ app.add_middleware(RequestTrackerMiddleware)
 # 统一响应格式
 # ===================
 
-class ApiResponse:
-    """统一 API 响应格式."""
-
-    @staticmethod
-    def success(data: Any = None, message: str = "Success") -> Dict[str, Any]:
-        return {
-            "success": True,
-            "data": data,
-            "message": message
-        }
-
-    @staticmethod
-    def error(error: str, status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR) -> JSONResponse:
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "success": False,
-                "error": error
-            }
-        )
+from common.response import ApiResponse
 
 
 # ===================
@@ -123,9 +104,9 @@ class ApiResponse:
 async def global_exception_handler(request: Request, exc: Exception):
     """全局异常处理."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return ApiResponse.error(
-        error=f"Internal server error: {str(exc)}",
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiResponse.error_resp(f"Internal server error: {str(exc)}")
     )
 
 
@@ -133,9 +114,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def value_error_handler(request: Request, exc: ValueError):
     """参数验证错误处理."""
     logger.warning(f"Validation error: {exc}")
-    return ApiResponse.error(
-        error=str(exc),
-        status_code=status.HTTP_400_BAD_REQUEST
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=ApiResponse.error_resp(str(exc))
     )
 
 
@@ -147,14 +128,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 @limiter.limit(os.getenv("RATE_LIMIT_HEALTH", "60/minute"))
 async def health_check(request: Request):
     """健康检查端点."""
-    return ApiResponse.success(data={"status": "healthy"})
+    return ApiResponse.success_resp(data={"status": "healthy"})
 
 
 @app.get("/", tags=["Root"])
 @limiter.limit("30/minute")
 async def root(request: Request):
     """根路径."""
-    return ApiResponse.success(data={
+    return ApiResponse.success_resp(data={
         "name": "Project Memory REST API",
         "version": "1.0.0",
         "docs": "/docs",

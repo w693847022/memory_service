@@ -7,7 +7,8 @@ WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    BUSINESS_PORT=8002
+    BUSINESS_PORT=8002 \
+    PYTHONPATH=/app/src
 
 # 复制 Business Server 依赖文件
 COPY requirements-business.txt .

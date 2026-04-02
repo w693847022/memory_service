@@ -290,35 +290,6 @@ Claude: [查询历史] 该问题有 3 次修复记录：
 - 有效期：24小时
 ```
 
-### 数据管理特性
-
-| 特性 | 说明 |
-|------|------|
-| **原子写入** | 使用临时目录 + 重命名确保数据一致性 |
-| **自动归档** | 格式迁移/项目重命名时，原数据自动备份到 `.archived/` |
-| **TTL 缓存** | 5分钟内存缓存，减少磁盘 I/O |
-| **格式兼容** | 支持旧格式（单文件）和新格式（目录+文件） |
-| **标签注册** | 标签需先注册才能使用，保证数据质量 |
-| **统计清理** | 30天自动清理过期统计数据 |
-
-#### 归档机制
-
-```
-# 归档目录作用
-.archived/ 目录用于在数据结构变更时自动备份原数据，确保数据安全。
-
-# 触发场景
-1. 项目重命名（project_rename）
-
-# 归档命名格式
-.archived/{时间戳}_{原文件名}
-例: .archived/20260320_143052_myproject.json
-
-# 重要说明
-- 重命名触发的归档,项目重命名成功后，归档文件会自动删除
-- 如需手动清理，可直接删除 .archived/ 目录内容
-```
-
 ---
 
 ## 安全提醒
@@ -335,15 +306,6 @@ Claude: [查询历史] 该问题有 3 次修复记录：
 ![Python](https://img.shields.io/badge/python-3.12+-green.svg)
 ![MCP](https://img.shields.io/badge/MCP-FastMCP-orange.svg)
 
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
 
 ## 许可
 

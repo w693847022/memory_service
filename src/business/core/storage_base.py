@@ -91,15 +91,33 @@ class ProjectStorage:
         return self.storage_dir / f"{project_id}.json"
 
     def _get_project_dir(self, project_id: str) -> Path:
-        """获取项目目录路径（新格式）.
+        """获取项目目录路径（按项目名称存储）.
 
         支持两种查找方式：
         1. 如果 project_id 是项目名称（目录名），直接使用
-        2. 如果 project_id 是 UUID，直接使用 UUID 作为目录名
+        2. 如果 project_id 是 UUID，查找对应的项目名称作为目录名
         """
         # 检查是否为 UUID 格式（简单判断：包含连字符且长度较长）
         if "-" in project_id and len(project_id) > 20:
-            # UUID 格式：目录直接以 UUID 命名
+            # UUID 格式：查找对应的项目名称
+            project_name = self._find_project_name_by_uuid(project_id)
+            if project_name:
+                name_dir = self.storage_dir / project_name
+                if name_dir.exists():
+                    return name_dir
+                # 名称目录不存在，检查 UUID 目录是否存在并迁移
+                uuid_dir = self.storage_dir / project_id
+                if uuid_dir.exists():
+                    # 自动迁移 UUID 目录到名称目录
+                    try:
+                        uuid_dir.rename(name_dir)
+                        return name_dir
+                    except OSError:
+                        # 迁移失败，返回原 UUID 目录
+                        return uuid_dir
+                # 新项目，使用名称目录
+                return name_dir
+            # 无法找到名称，使用 UUID 作为后备
             return self.storage_dir / project_id
 
         # 默认：直接使用 project_id 作为目录名（向后兼容）

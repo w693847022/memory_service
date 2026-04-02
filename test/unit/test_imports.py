@@ -46,9 +46,6 @@ def test_features_tools_imports():
             tag_update,
             tag_delete,
             tag_merge,
-            project_stats,
-            stats_summary,
-            stats_cleanup,
         )
 
         # 验证导入的工具函数都是可调用的
@@ -65,9 +62,6 @@ def test_features_tools_imports():
         assert callable(tag_update), "tag_update 应该可调用"
         assert callable(tag_delete), "tag_delete 应该可调用"
         assert callable(tag_merge), "tag_merge 应该可调用"
-        assert callable(project_stats), "project_stats 应该可调用"
-        assert callable(stats_summary), "stats_summary 应该可调用"
-        assert callable(stats_cleanup), "stats_cleanup 应该可调用"
 
         print("  ✓ mcp_server.tools 导入链路测试通过")
     finally:

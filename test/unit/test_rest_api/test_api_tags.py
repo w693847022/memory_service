@@ -12,7 +12,13 @@ src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from common.response import ApiResponse
 from rest_api.main import app
+
+
+def _resp(d: dict) -> ApiResponse:
+    """将 dict 包装为 ApiResponse."""
+    return ApiResponse.from_dict(d)
 
 
 @pytest.fixture
@@ -25,7 +31,7 @@ def client():
 def mock_mcp_client():
     """Mock business client."""
     mock_client = Mock()
-    mock_client.project_tags_info.return_value = {
+    mock_client.project_tags_info.return_value = _resp({
         "success": True,
         "data": {
             "tags": [
@@ -34,21 +40,21 @@ def mock_mcp_client():
             ],
             "total": 2
         }
-    }
-    mock_client.tag_register.return_value = {
+    })
+    mock_client.tag_register.return_value = _resp({
         "success": True,
         "data": {"tag": "new_tag", "summary": "新标签"}
-    }
-    mock_client.tag_update.return_value = {"success": True}
-    mock_client.tag_delete.return_value = {"success": True}
-    mock_client.tag_merge.return_value = {
+    })
+    mock_client.tag_update.return_value = _resp({"success": True})
+    mock_client.tag_delete.return_value = _resp({"success": True})
+    mock_client.tag_merge.return_value = _resp({
         "success": True,
         "data": {
             "old_tag": "old_api",
             "new_tag": "api",
             "migrated_count": 5
         }
-    }
+    })
     with patch("rest_api.business_client._get_client", return_value=mock_client):
         yield mock_client
 
@@ -58,7 +64,7 @@ class TestListTags:
 
     def test_list_tags_success(self, client, mock_mcp_client):
         """测试成功获取标签列表."""
-        mock_mcp_client.project_tags_info.return_value = {
+        mock_mcp_client.project_tags_info.return_value = _resp({
             "success": True,
             "data": {
                 "tags": [
@@ -67,7 +73,7 @@ class TestListTags:
                 ],
                 "total": 2
             }
-        }
+        })
 
         response = client.get(
             "/api/tags?project_id=proj_001&page=1&size=10"
@@ -80,10 +86,10 @@ class TestListTags:
 
     def test_list_tags_with_group_filter(self, client, mock_mcp_client):
         """测试按分组过滤标签."""
-        mock_mcp_client.project_tags_info.return_value = {
+        mock_mcp_client.project_tags_info.return_value = _resp({
             "success": True,
             "data": {"tags": [], "total": 0}
-        }
+        })
 
         response = client.get(
             "/api/tags?project_id=proj_001&group_name=features"
@@ -103,10 +109,10 @@ class TestRegisterTag:
 
     def test_register_tag_success(self, client, mock_mcp_client):
         """测试成功注册标签."""
-        mock_mcp_client.tag_register.return_value = {
+        mock_mcp_client.tag_register.return_value = _resp({
             "success": True,
             "data": {"tag": "new_tag", "summary": "新标签"}
-        }
+        })
 
         response = client.post(
             "/api/tags",
@@ -137,7 +143,7 @@ class TestUpdateTag:
 
     def test_update_tag_success(self, client, mock_mcp_client):
         """测试成功更新标签."""
-        mock_mcp_client.tag_update.return_value = {"success": True}
+        mock_mcp_client.tag_update.return_value = _resp({"success": True})
 
         response = client.put(
             "/api/tags/api",
@@ -157,7 +163,7 @@ class TestDeleteTag:
 
     def test_delete_tag_success(self, client, mock_mcp_client):
         """测试成功删除标签."""
-        mock_mcp_client.tag_delete.return_value = {"success": True}
+        mock_mcp_client.tag_delete.return_value = _resp({"success": True})
 
         response = client.delete(
             "/api/tags/old_tag?project_id=proj_001&force=false"
@@ -169,7 +175,7 @@ class TestDeleteTag:
 
     def test_delete_tag_force(self, client, mock_mcp_client):
         """测试强制删除标签."""
-        mock_mcp_client.tag_delete.return_value = {"success": True}
+        mock_mcp_client.tag_delete.return_value = _resp({"success": True})
 
         response = client.delete(
             "/api/tags/old_tag?project_id=proj_001&force=true"
@@ -183,14 +189,14 @@ class TestMergeTags:
 
     def test_merge_tags_success(self, client, mock_mcp_client):
         """测试成功合并标签."""
-        mock_mcp_client.tag_merge.return_value = {
+        mock_mcp_client.tag_merge.return_value = _resp({
             "success": True,
             "data": {
                 "old_tag": "old_api",
                 "new_tag": "api",
                 "migrated_count": 5
             }
-        }
+        })
 
         response = client.put(
             "/api/tags/merge",
@@ -208,10 +214,10 @@ class TestMergeTags:
 
     def test_merge_tags_error(self, client, mock_mcp_client):
         """测试合并标签失败."""
-        mock_mcp_client.tag_merge.return_value = {
+        mock_mcp_client.tag_merge.return_value = _resp({
             "success": False,
             "error": "目标标签不存在"
-        }
+        })
 
         response = client.put(
             "/api/tags/merge",

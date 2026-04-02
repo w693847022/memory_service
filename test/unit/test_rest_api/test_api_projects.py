@@ -12,6 +12,7 @@ src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from common.response import ApiResponse
 from rest_api.main import app
 
 
@@ -29,12 +30,17 @@ def mock_business_client():
         yield mock_client
 
 
+def _resp(d: dict) -> ApiResponse:
+    """将 dict 包装为 ApiResponse."""
+    return ApiResponse.from_dict(d)
+
+
 class TestProjectList:
     """测试项目列表 API."""
 
     def test_list_projects_success(self, client, mock_business_client):
         """测试成功获取项目列表."""
-        mock_business_client.project_list.return_value = {
+        mock_business_client.project_list.return_value = _resp({
             "success": True,
             "data": {
                 "projects": [
@@ -44,7 +50,7 @@ class TestProjectList:
                 "total": 2,
                 "page": 1
             }
-        }
+        })
 
         response = client.get("/api/projects?page=1&size=10")
 
@@ -56,10 +62,10 @@ class TestProjectList:
 
     def test_list_projects_with_filters(self, client, mock_business_client):
         """测试带过滤条件获取项目列表."""
-        mock_business_client.project_list.return_value = {
+        mock_business_client.project_list.return_value = _resp({
             "success": True,
             "data": {"projects": [], "total": 0}
-        }
+        })
 
         response = client.get(
             "/api/projects?name_pattern=test&view_mode=detail"
@@ -70,10 +76,10 @@ class TestProjectList:
 
     def test_list_projects_mcp_error(self, client, mock_business_client):
         """测试 business client 调用错误."""
-        mock_business_client.project_list.return_value = {
+        mock_business_client.project_list.return_value = _resp({
             "success": False,
             "error": "Business client 连接失败"
-        }
+        })
 
         response = client.get("/api/projects")
 
@@ -87,10 +93,10 @@ class TestRegisterProject:
 
     def test_register_project_success(self, client, mock_business_client):
         """测试成功注册项目."""
-        mock_business_client.register_project.return_value = {
+        mock_business_client.register_project.return_value = _resp({
             "success": True,
             "data": {"id": "proj_new", "name": "新项目"}
-        }
+        })
 
         response = client.post(
             "/api/projects",
@@ -119,14 +125,14 @@ class TestGetProject:
 
     def test_get_project_success(self, client, mock_business_client):
         """测试成功获取项目详情."""
-        mock_business_client.get_project.return_value = {
+        mock_business_client.get_project.return_value = _resp({
             "success": True,
             "data": {
                 "id": "proj_001",
                 "name": "项目A",
                 "info": {"description": "测试项目"}
             }
-        }
+        })
 
         response = client.get("/api/projects/proj_001")
 
@@ -137,10 +143,10 @@ class TestGetProject:
 
     def test_get_project_not_found(self, client, mock_business_client):
         """测试项目不存在."""
-        mock_business_client.get_project.return_value = {
+        mock_business_client.get_project.return_value = _resp({
             "success": False,
             "error": "项目不存在"
-        }
+        })
 
         response = client.get("/api/projects/not_exist")
 
@@ -167,9 +173,9 @@ class TestDeleteProject:
 
     def test_delete_project_archive(self, client, mock_business_client):
         """测试归档项目."""
-        mock_business_client.remove_project.return_value = {
+        mock_business_client.remove_project.return_value = _resp({
             "success": True
-        }
+        })
 
         response = client.delete(
             "/api/projects/proj_001?mode=archive"
@@ -181,9 +187,9 @@ class TestDeleteProject:
 
     def test_delete_project_permanent(self, client, mock_business_client):
         """测试永久删除项目."""
-        mock_business_client.remove_project.return_value = {
+        mock_business_client.remove_project.return_value = _resp({
             "success": True
-        }
+        })
 
         response = client.delete(
             "/api/projects/proj_001?mode=delete"
@@ -197,10 +203,10 @@ class TestRenameProject:
 
     def test_rename_project_success(self, client, mock_business_client):
         """测试成功重命名项目."""
-        mock_business_client.rename_project.return_value = {
+        mock_business_client.rename_project.return_value = _resp({
             "success": True,
             "data": {"old_name": "旧名称", "new_name": "新名称"}
-        }
+        })
 
         response = client.put(
             "/api/projects/proj_001/rename",
@@ -218,12 +224,12 @@ class TestProjectGroups:
 
     def test_list_groups_success(self, client, mock_business_client):
         """测试成功获取分组列表."""
-        mock_business_client.list_groups.return_value = {
+        mock_business_client.list_groups.return_value = _resp({
             "success": True,
             "data": {
                 "groups": ["features", "notes", "fixes", "standards"]
             }
-        }
+        })
 
         response = client.get("/api/projects/proj_001/groups")
 
@@ -238,7 +244,7 @@ class TestProjectTags:
 
     def test_list_tags_success(self, client, mock_business_client):
         """测试成功获取标签列表."""
-        mock_business_client.project_tags_info.return_value = {
+        mock_business_client.project_tags_info.return_value = _resp({
             "success": True,
             "data": {
                 "tags": [
@@ -246,7 +252,7 @@ class TestProjectTags:
                     {"tag": "frontend", "summary": "前端相关"}
                 ]
             }
-        }
+        })
 
         response = client.get("/api/projects/proj_001/tags")
 

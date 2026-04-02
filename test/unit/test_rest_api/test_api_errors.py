@@ -12,7 +12,13 @@ src_dir = Path(__file__).parent.parent.parent.parent / "src"
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
+from common.response import ApiResponse
 from rest_api.main import app
+
+
+def _resp(d: dict) -> ApiResponse:
+    """将 dict 包装为 ApiResponse."""
+    return ApiResponse.from_dict(d)
 
 
 @pytest.fixture
@@ -50,10 +56,10 @@ class TestErrorHandling:
     def test_mcp_connection_error(self, mock_get_client, client):
         """测试 MCP 连接错误."""
         mock_client = Mock()
-        mock_client.project_list.return_value = {
+        mock_client.project_list.return_value = _resp({
             "success": False,
             "error": "MCP 连接失败"
-        }
+        })
         mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
@@ -67,10 +73,10 @@ class TestErrorHandling:
     def test_mcp_timeout_error(self, mock_get_client, client):
         """测试 MCP 超时错误."""
         mock_client = Mock()
-        mock_client.project_list.return_value = {
+        mock_client.project_list.return_value = _resp({
             "success": False,
             "error": "MCP tool execution timeout"
-        }
+        })
         mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
@@ -81,10 +87,10 @@ class TestErrorHandling:
     def test_invalid_response_format(self, mock_get_client, client):
         """测试无效响应格式."""
         mock_client = Mock()
-        mock_client.project_list.return_value = {
+        mock_client.project_list.return_value = _resp({
             "success": False,
             "error": "Invalid JSON response"
-        }
+        })
         mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
@@ -141,10 +147,10 @@ class TestApiResponseFormat:
     def test_success_response_format(self, mock_get_client, client):
         """测试成功响应格式."""
         mock_client = Mock()
-        mock_client.project_list.return_value = {
+        mock_client.project_list.return_value = _resp({
             "success": True,
             "data": {"test": "data"}
-        }
+        })
         mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")
@@ -159,10 +165,10 @@ class TestApiResponseFormat:
     def test_error_response_format(self, mock_get_client, client):
         """测试错误响应格式."""
         mock_client = Mock()
-        mock_client.project_list.return_value = {
+        mock_client.project_list.return_value = _resp({
             "success": False,
             "error": "测试错误"
-        }
+        })
         mock_get_client.return_value = mock_client
 
         response = client.get("/api/projects")

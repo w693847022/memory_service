@@ -1,3 +1,4 @@
+name: memory-system
 services:
   # ===================
   # Business Server (业务逻辑核心)
@@ -45,6 +46,7 @@ services:
     ports:
       - "${MCP_PORT:-8000}:8000"
     environment:
+      - HOME=${HOME:-/home/wrs}
       - MCP_TRANSPORT=${MCP_TRANSPORT:-streamable-http}
       - MCP_HOST=${MCP_HOST:-0.0.0.0}
       - MCP_PORT=${MCP_PORT:-8000}

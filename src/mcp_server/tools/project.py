@@ -1,16 +1,12 @@
 """MCP 项目管理工具模块.
 
-提供项目管理相关的 MCP 工具函数。
+提供项目管理相关的 MCP 工具函数。只做转发，不处理任何业务逻辑。
 """
 
-from typing import Optional, Dict, List, Union
+from typing import Optional, Union, Dict, List
 
-from ._shared import _get_client, _tool_response, _error_response, _parse_tags
+from ._shared import _get_client, _tool_response
 
-
-# ===================
-# Project Memory Tools
-# ===================
 
 def project_register(name: str, path: str = "", summary: str = "", tags: str = "") -> str:
     """注册一个新项目.
@@ -26,9 +22,6 @@ def project_register(name: str, path: str = "", summary: str = "", tags: str = "
     """
     client = _get_client()
     result = client.register_project(name=name, path=path, summary=summary, tags=tags)
-    if result.get("success"):
-        data = result.get("data")
-        return _tool_response(result, data if data else None)
     return _tool_response(result)
 
 
@@ -44,8 +37,7 @@ def project_rename(project_id: str, new_name: str) -> str:
     """
     client = _get_client()
     result = client.rename_project(project_id, new_name)
-    data = {"old_name": result.get("old_name"), "new_name": result.get("new_name")} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def project_list(
@@ -67,21 +59,6 @@ def project_list(
     Returns:
         JSON 格式的项目列表
     """
-    from business.core.utils import validate_view_mode, validate_regex_pattern, resolve_default_size, paginate, apply_view_mode
-
-    # 验证 view_mode 参数
-    is_valid, error_msg = validate_view_mode(view_mode)
-    if not is_valid:
-        return _error_response(error_msg)
-
-    # 验证 name_pattern 正则有效性
-    name_regex, error_msg = validate_regex_pattern(name_pattern, "name_pattern")
-    if error_msg:
-        return _error_response(error_msg)
-
-    # 根据 view_mode 设置 size 默认值
-    size = resolve_default_size(size, view_mode)
-
     client = _get_client()
     result = client.project_list(
         view_mode=view_mode,
@@ -90,45 +67,7 @@ def project_list(
         name_pattern=name_pattern,
         include_archived=include_archived
     )
-
-    if not result.get("success"):
-        return _tool_response(result)
-
-    data = result.get("data", {})
-    projects = data.get("projects", [])
-    total = data.get("total", 0)
-
-    # name_pattern 过滤
-    if name_regex:
-        projects = [p for p in projects if name_regex.search(p.get("name", ""))]
-
-    # 分页处理
-    pr, err = paginate(projects, page, size)
-    if err:
-        return _error_response(err)
-    assert pr is not None
-    projects, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
-
-    # view_mode 字段过滤
-    filtered_projects = apply_view_mode(projects, view_mode, ["id", "name", "summary", "tags", "status"])
-    if view_mode == "summary":
-        for p in filtered_projects:
-            if p.get("status") is None:
-                p["status"] = "active"
-
-    response_data = {
-        "total": total,
-        "filtered_total": filtered_total,
-        "projects": filtered_projects
-    }
-
-    if pagination_meta:
-        response_data.update(pagination_meta)
-
-    if name_pattern:
-        response_data["filters"] = {"name_pattern": name_pattern}
-
-    return _tool_response({"success": True}, response_data, f"共 {filtered_total} 个项目")
+    return _tool_response(result)
 
 
 def project_groups_list(project_id: str) -> str:
@@ -142,16 +81,7 @@ def project_groups_list(project_id: str) -> str:
     """
     client = _get_client()
     result = client.list_groups(project_id)
-
-    if not result.get("success"):
-        return _tool_response(result)
-
-    data = result.get("data", {})
-    response_data = {
-        "project_id": project_id,
-        "groups": data.get("groups", [])
-    }
-    return _tool_response(result, response_data, "获取分组成功")
+    return _tool_response(result)
 
 
 def project_tags_info(
@@ -181,23 +111,6 @@ def project_tags_info(
     Returns:
         JSON 格式的标签信息
     """
-    from business.core.utils import validate_view_mode, validate_regex_pattern, resolve_default_size, apply_view_mode
-
-    # 统一参数验证
-    is_valid, error_msg = validate_view_mode(view_mode)
-    if not is_valid:
-        return _error_response(error_msg)
-
-    summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
-    if error_msg:
-        return _error_response(error_msg)
-
-    tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
-    if error_msg:
-        return _error_response(error_msg)
-
-    size = resolve_default_size(size, view_mode)
-
     client = _get_client()
     result = client.project_tags_info(
         project_id=project_id,
@@ -210,26 +123,7 @@ def project_tags_info(
         summary_pattern=summary_pattern,
         tag_name_pattern=tag_name_pattern
     )
-
-    if not result.get("success"):
-        return _tool_response(result)
-
-    data = result.get("data", {})
-
-    # 标签列表需要正则过滤
-    if summary_regex or tag_name_regex:
-        tags_list = data.get("tags", [])
-        filtered = []
-        for tag_item in tags_list:
-            if summary_regex and not summary_regex.search(tag_item.get("summary", "")):
-                continue
-            if tag_name_regex and not tag_name_regex.search(tag_item.get("tag", "")):
-                continue
-            filtered.append(tag_item)
-        data["tags"] = filtered
-        data["filtered_total"] = len(filtered)
-
-    return _tool_response(result, data, result.get("message", "操作成功"))
+    return _tool_response(result)
 
 
 def project_add(
@@ -239,7 +133,7 @@ def project_add(
     summary: str = "",
     status: Optional[str] = None,
     severity: str = "medium",
-    related: Union[str, Dict[str, List[str]], None] = "",
+    related: str = "",
     tags: str = ""
 ) -> str:
     """添加项目条目（统一接口）.
@@ -268,10 +162,6 @@ def project_add(
         related=related,
         tags=tags
     )
-
-    if result.get("success"):
-        data = result.get("data")
-        return _tool_response(result, data)
     return _tool_response(result)
 
 
@@ -314,10 +204,6 @@ def project_update(
         related=related,
         tags=tags
     )
-
-    if result.get("success"):
-        data = result.get("data")
-        return _tool_response(result, data)
     return _tool_response(result)
 
 
@@ -336,20 +222,9 @@ def project_delete(
     Returns:
         JSON 格式的操作结果
     """
-    from business.core.groups import validate_group_name
-
-    # 验证 group 有效性
-    is_valid, error_msg = validate_group_name(group)
-    if not is_valid:
-        return _error_response(error_msg)
-
-    if not item_id:
-        return _error_response("item_id 参数不能为空")
-
     client = _get_client()
     result = client.project_delete(project_id=project_id, group=group, item_id=item_id)
-    data = {"project_id": project_id, "group": group, "item_id": item_id, "deleted": True} if result.get("success") else None
-    return _tool_response(result, data)
+    return _tool_response(result)
 
 
 def project_remove(
@@ -367,9 +242,6 @@ def project_remove(
     """
     client = _get_client()
     result = client.remove_project(project_id=project_id, mode=mode)
-    if result.get("success"):
-        data = {"project_id": project_id, "mode": mode}
-        return _tool_response(result, data, result.get("message", "操作成功"))
     return _tool_response(result)
 
 
@@ -394,12 +266,6 @@ def project_item_tag_manage(
     Returns:
         JSON 格式的操作结果
     """
-    from business.core.groups import validate_group_name
-
-    is_valid, error_msg = validate_group_name(group_name)
-    if not is_valid:
-        return _error_response(error_msg)
-
     client = _get_client()
     result = client.manage_item_tags(
         project_id=project_id,
@@ -409,7 +275,7 @@ def project_item_tag_manage(
         tag=tag,
         tags=tags
     )
-    return _tool_response(result, result.get("data"))
+    return _tool_response(result)
 
 
 def project_get(
@@ -454,36 +320,6 @@ def project_get(
     Returns:
         JSON 格式的项目信息、条目列表或单个条目详情
     """
-    from business.core.utils import validate_view_mode, validate_regex_pattern, resolve_default_size, apply_view_mode
-    from business.core.groups import validate_group_name, is_group_with_status
-
-    # 验证 view_mode 参数
-    is_valid, error_msg = validate_view_mode(view_mode)
-    if not is_valid:
-        return _error_response(error_msg)
-
-    # 验证 summary_pattern 正则有效性
-    summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
-    if error_msg:
-        return _error_response(error_msg)
-
-    # 验证时间范围参数格式 (YYYY-MM-DD)
-    from datetime import datetime
-    for param_name, param_val in [
-        ("created_after", created_after),
-        ("created_before", created_before),
-        ("updated_after", updated_after),
-        ("updated_before", updated_before),
-    ]:
-        if param_val:
-            try:
-                datetime.strptime(param_val, "%Y-%m-%d")
-            except ValueError:
-                return _error_response(f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
-
-    # 根据 view_mode 设置 size 默认值
-    size = resolve_default_size(size, view_mode)
-
     client = _get_client()
     result = client.project_get(
         project_id=project_id,
@@ -501,68 +337,4 @@ def project_get(
         updated_after=updated_after,
         updated_before=updated_before
     )
-
-    if not result.get("success"):
-        return _tool_response(result)
-
-    data = result.get("data", {})
-
-    # 如果指定了 group_name 但没有 item_id，需要额外过滤
-    if group_name and not item_id:
-        is_valid, error_msg = validate_group_name(group_name)
-        if not is_valid:
-            return _error_response(error_msg)
-
-        items = data.get("items", [])
-
-        # tags 过滤：OR 逻辑
-        tag_list = _parse_tags(tags) if tags else []
-
-        # 应用过滤条件
-        if is_group_with_status(group_name):
-            if status:
-                items = [f for f in items if f.get("status") == status]
-            if severity:
-                items = [f for f in items if f.get("severity") == severity]
-
-        if tag_list:
-            items = [f for f in items if any(tag in f.get("tags", []) for tag in tag_list)]
-
-        # summary 正则过滤 + 时间范围过滤
-        if summary_regex or created_after or created_before or updated_after or updated_before:
-            new_filtered = []
-            for item in items:
-                if summary_regex and not summary_regex.search(item.get("summary", "")):
-                    continue
-                created = (item.get("created_at") or "")[:10]
-                if created_after and created < created_after:
-                    continue
-                if created_before and created > created_before:
-                    continue
-                updated = (item.get("updated_at") or "")[:10]
-                if updated_after and (not updated or updated < updated_after):
-                    continue
-                if updated_before and (not updated or updated > updated_before):
-                    continue
-                new_filtered.append(item)
-            items = new_filtered
-
-        # 更新过滤后的数据
-        data["items"] = items
-        data["filtered_total"] = len(items)
-
-    return _tool_response(result, data, result.get("message", "操作成功"))
-
-
-def project_stats() -> str:
-    """获取全局统计信息.
-
-    Returns:
-        JSON 格式的统计数据
-    """
-    client = _get_client()
-    result = client.project_stats()
-    if result.get("success"):
-        data = result.get("data", {})
-        return _tool_response(result, data, "获取统计成功")
     return _tool_response(result)

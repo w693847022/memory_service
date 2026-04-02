@@ -16,17 +16,15 @@ if str(src_dir) not in sys.path:
 
 from mcp.server.fastmcp import FastMCP
 
-# 导入业务层配置
-from business.core.config import parse_args
-from business.core.utils import track_calls
+# 导入通用配置
+from common.config import parse_args
 
 # 导入 MCP 工具
 from .tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,
     project_add, project_update, project_delete, project_remove, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
-    project_get, project_stats,
-    stats_summary, stats_cleanup,
+    project_get,
 )
 
 # 导入版本信息
@@ -58,32 +56,27 @@ def _get_server():
         )
 
         # Register Tools
-        _server.tool()(track_calls(project_register))
-        _server.tool()(track_calls(project_rename))
-        _server.tool()(track_calls(project_list))
-        _server.tool()(track_calls(project_groups_list))
-        _server.tool()(track_calls(project_tags_info))
+        _server.tool()(project_register)
+        _server.tool()(project_rename)
+        _server.tool()(project_list)
+        _server.tool()(project_groups_list)
+        _server.tool()(project_tags_info)
 
         # CRUD Tools
-        _server.tool()(track_calls(project_add))
-        _server.tool()(track_calls(project_update))
-        _server.tool()(track_calls(project_delete))
-        _server.tool()(track_calls(project_remove))
-        _server.tool()(track_calls(project_item_tag_manage))
+        _server.tool()(project_add)
+        _server.tool()(project_update)
+        _server.tool()(project_delete)
+        _server.tool()(project_remove)
+        _server.tool()(project_item_tag_manage)
 
         # Tag Management Tools
-        _server.tool()(track_calls(tag_register))
-        _server.tool()(track_calls(tag_update))
-        _server.tool()(track_calls(tag_delete))
-        _server.tool()(track_calls(tag_merge))
+        _server.tool()(tag_register)
+        _server.tool()(tag_update)
+        _server.tool()(tag_delete)
+        _server.tool()(tag_merge)
 
         # Query Tools
-        _server.tool()(track_calls(project_get))
-        _server.tool()(track_calls(project_stats))
-
-        # Statistics Tools
-        _server.tool()(track_calls(stats_summary))
-        _server.tool()(track_calls(stats_cleanup))
+        _server.tool()(project_get)
 
     return _server
 
