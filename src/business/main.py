@@ -4,6 +4,7 @@
 端口: 8002
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -17,6 +18,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # 设置存储目录
 storage_dir = os.environ.get("MCP_STORAGE_DIR", os.path.join(os.path.expanduser("~"), ".project_memory_ai"))
+
+# ===================
+# 日志配置（支持滚动删除）
+# ===================
+# 从环境变量读取配置，使用默认值
+log_level = os.getenv("BUSINESS_LOG_LEVEL", "INFO")
+log_dir = os.getenv("LOG_DIR", "/app/logs")
+max_bytes = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 默认 10MB
+backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5"))  # 默认保留 5 个文件
+
+from common.logging_config import setup_logging
+setup_logging(
+    service_name="business",
+    log_level=log_level,
+    log_dir=log_dir,
+    max_bytes=max_bytes,
+    backup_count=backup_count,
+)
+logger = logging.getLogger(__name__)
 
 # 导入 business 层服务
 from business.storage import Storage
@@ -88,6 +108,6 @@ app.include_router(groups_router)
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("BUSINESS_PORT", 8002))
-    print(f"启动 Business API 服务...")
-    print(f"监听地址: 0.0.0.0:{port}")
+    logger.info(f"启动 Business API 服务...")
+    logger.info(f"监听地址: 0.0.0.0:{port}")
     uvicorn.run(app, host="0.0.0.0", port=port)

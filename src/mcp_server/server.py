@@ -44,6 +44,23 @@ def _get_server():
         # 在服务器初始化前解析参数
         args = parse_args()
 
+        # 配置日志（支持滚动删除）
+        import os
+        from common.logging_config import setup_logging
+
+        log_level = os.getenv("MCP_LOG_LEVEL", args.log_level.upper())
+        log_dir = os.getenv("LOG_DIR", "/app/logs")
+        max_bytes = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 默认 10MB
+        backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5"))  # 默认保留 5 个文件
+
+        setup_logging(
+            service_name="mcp",
+            log_level=log_level,
+            log_dir=log_dir,
+            max_bytes=max_bytes,
+            backup_count=backup_count,
+        )
+
         # 创建 MCP 服务器实例
         _server = FastMCP(
             name="project-memory-mcp",

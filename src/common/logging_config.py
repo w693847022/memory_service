@@ -1,4 +1,4 @@
-"""日志配置模块 - 支持滚动删除."""
+"""日志配置模块 - 支持滚动删除，支持多服务."""
 
 import logging
 import logging.handlers
@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def setup_logging(
+    service_name: str,
     log_level: str = "INFO",
     log_dir: str = "/app/logs",
     max_bytes: int = 10 * 1024 * 1024,  # 10MB
@@ -16,10 +17,14 @@ def setup_logging(
     """配置日志滚动删除.
 
     Args:
+        service_name: 服务名称 (用于创建子目录和日志文件名)
         log_level: 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        log_dir: 日志目录
+        log_dir: 日志根目录
         max_bytes: 单个日志文件最大大小（字节）
         backup_count: 保留的旧日志文件数量
+
+    Returns:
+        Path: 日志文件目录路径，如果文件日志未启用则返回 None
     """
     # 日志格式
     log_format = logging.Formatter(
@@ -37,13 +42,16 @@ def setup_logging(
     root_logger.addHandler(console_handler)
 
     # 尝试添加文件处理器（可能因权限失败）
-    log_path = Path(log_dir)
+    service_log_dir = Path(log_dir) / service_name
     file_handler_added = False
 
     try:
-        log_path.mkdir(parents=True, exist_ok=True)
+        # 创建服务日志子目录
+        service_log_dir.mkdir(parents=True, exist_ok=True)
+        log_file = service_log_dir / f"{service_name}.log"
+
         file_handler = logging.handlers.RotatingFileHandler(
-            filename=log_path / "fastapi.log",
+            filename=log_file,
             maxBytes=max_bytes,
             backupCount=backup_count,
             encoding='utf-8',
@@ -54,11 +62,12 @@ def setup_logging(
     except (PermissionError, OSError) as e:
         root_logger.warning(f"无法创建文件日志处理器: {e}，仅使用控制台日志")
 
-    # 配置 Uvicorn 日志
-    logging.getLogger("uvicorn").setLevel(logging.INFO)
-    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    # 配置 Uvicorn 日志（仅 FastAPI 服务需要）
+    if service_name == "fastapi":
+        logging.getLogger("uvicorn").setLevel(logging.INFO)
+        logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
-    return log_path if file_handler_added else None
+    return service_log_dir if file_handler_added else None
 
 
 def get_request_id(record: logging.LogRecord) -> str:

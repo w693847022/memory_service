@@ -20,8 +20,8 @@ RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --defa
 # 复制项目文件
 COPY src/ ./src/
 
-# 创建数据目录
-RUN mkdir -p /app/.project_memory_ai
+# 创建数据目录和日志目录
+RUN mkdir -p /app/.project_memory_ai /app/logs
 
 # 暴露端口
 EXPOSE 8002

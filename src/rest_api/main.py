@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .mcp_client import get_mcp_client
 from .middleware import RequestTrackerMiddleware
-from .logging_config import setup_logging
+from common.logging_config import setup_logging
 
 # ===================
 # 日志配置（支持滚动删除）
@@ -26,6 +26,7 @@ max_bytes = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 默认 10M
 backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5"))  # 默认保留 5 个文件
 
 setup_logging(
+    service_name="fastapi",
     log_level=log_level,
     log_dir=log_dir,
     max_bytes=max_bytes,

@@ -15,8 +15,9 @@ COPY requirements-fastapi.txt .
 RUN pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 && \
     pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple --default-timeout=100 -r requirements-fastapi.txt
 
-# 复制项目文件（FastAPI 只需要 rest_api 模块）
+# 复制项目文件（FastAPI 需要 rest_api 和 common 模块）
 COPY src/rest_api/ ./src/rest_api/
+COPY src/common/ ./src/common/
 
 # 创建必要目录并设置权限
 RUN mkdir -p /app/.project_memory_ai /app/logs && \
