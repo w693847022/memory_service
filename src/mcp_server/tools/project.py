@@ -192,6 +192,10 @@ def project_update(
     Returns:
         JSON 格式的操作结果
     """
+    import json
+    # 如果 related 是字典，转换为 JSON 字符串
+    related_str = json.dumps(related) if isinstance(related, dict) else related
+
     client = _get_client()
     result = client.project_update(
         project_id=project_id,
@@ -201,7 +205,7 @@ def project_update(
         summary=summary,
         status=status,
         severity=severity,
-        related=related,
+        related=related_str,
         tags=tags
     )
     return _tool_response(result)

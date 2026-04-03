@@ -260,13 +260,14 @@ class BusinessApiClient:
         tags: Optional[str] = None
     ) -> ApiResponse:
         """更新项目条目."""
+        import json
         # group 作为查询参数，其他作为 JSON 请求体
         data = {
             "content": content,
             "summary": summary,
             "status": status,
             "severity": severity,
-            "related": related,
+            "related": json.dumps(related) if isinstance(related, dict) else related,
             "tags": tags
         }
         # 移除 None 值

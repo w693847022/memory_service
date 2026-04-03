@@ -397,12 +397,13 @@ class ProjectService:
                 return {"success": False, "error": error_msg}
 
         # 验证 related
+        related_dict = None
         if related is not None:
             is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        return {"success": True}
+        return {"success": True, "related_dict": related_dict}
 
     def add_item(
         self,
