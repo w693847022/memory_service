@@ -7,6 +7,7 @@ from business.core.groups import (
     validate_group_name,
     is_group_with_status,
     UnifiedGroupConfig,
+    CONTENT_SEPARATE_GROUPS,
 )
 from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode, parse_tags, validate_date, filter_tags_by_regex
 from business.models.response import ApiResponse
@@ -290,10 +291,10 @@ async def project_get(
                     break
             if not item:
                 raise HTTPException(status_code=404, detail=f"在分组 '{group_name}' 中找不到条目 '{item_id}'")
-            if group_name == "notes":
-                note_content = _storage._load_note_content(project_id, item_id)
-                if note_content is not None:
-                    item["content"] = note_content
+            if group_name in CONTENT_SEPARATE_GROUPS:
+                item_content = _storage._load_item_content(project_id, group_name, item_id)
+                if item_content is not None:
+                    item["content"] = item_content
             return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功").to_dict()
 
         filtered_items = items
@@ -422,8 +423,8 @@ async def project_update(
     group: str,
     content: str = Body(None),
     summary: str = Body(None),
-    status: str = None,
-    severity: str = None,
+    status: str = Body(None),
+    severity: str = Body(None),
     related: str = Body(None),
     tags: str = Body(None)
 ):

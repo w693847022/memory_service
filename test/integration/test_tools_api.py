@@ -10,7 +10,6 @@ import tempfile
 import shutil
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
@@ -47,8 +46,8 @@ class ToolsApiTest:
 
     def call_with_stats(self, func, *args, **kwargs):
         """调用函数，自动 patch call_stats."""
-        with patch("features.instances.call_stats"):
-            return func(*args, **kwargs)
+        # 实际上不需要 patch call_stats，因为测试环境隔离
+        return func(*args, **kwargs)
 
     def run_all_tests(self):
         """运行所有接口测试."""
@@ -82,6 +81,10 @@ class ToolsApiTest:
 
             # 6. project_update
             self.test_project_update()
+            print()
+
+            # 6.5. project_update status/severity
+            self.test_project_update_status_severity()
             print()
 
             # 7. project_delete
@@ -148,7 +151,7 @@ class ToolsApiTest:
         """测试 project_register 接口."""
         print("测试: project_register...")
 
-        from api.tools import project_register
+        from mcp_server.tools import project_register
 
         result = self.call_with_stats(project_register, name="测试项目", path="/tmp/test", summary="测试摘要", tags="api,test")
         resp = self.parse_response(result)
@@ -162,7 +165,7 @@ class ToolsApiTest:
         """测试 project_list 接口."""
         print("测试: project_list...")
 
-        from api.tools import project_list, project_register
+        from mcp_server.tools import project_list, project_register
 
         # 注册额外项目
         self.call_with_stats(project_register, name="项目A", path="/tmp/a", tags="a")
@@ -179,7 +182,7 @@ class ToolsApiTest:
         """测试 project_get 接口."""
         print("测试: project_get...")
 
-        from api.tools import project_get, project_add
+        from mcp_server.tools import project_get, project_add
 
         # 添加数据
         self.call_with_stats(project_add, self.project_id, group="features", content="功能内容", summary="功能摘要", status="pending", tags="api")
@@ -200,7 +203,7 @@ class ToolsApiTest:
         """测试 project_groups_list 接口."""
         print("测试: project_groups_list...")
 
-        from api.tools import project_groups_list
+        from mcp_server.tools import project_groups_list
 
         result = self.call_with_stats(project_groups_list, self.project_id)
         resp = self.parse_response(result)
@@ -213,7 +216,7 @@ class ToolsApiTest:
         """测试 project_add 接口 (features/fixes/notes/standards)."""
         print("测试: project_add...")
 
-        from api.tools import project_add, tag_register
+        from mcp_server.tools import project_add, tag_register
 
         # 先注册所有需要的标签
         for tag in ["api", "bug", "idea", "style"]:
@@ -247,7 +250,7 @@ class ToolsApiTest:
         """测试 project_update 接口."""
         print("测试: project_update...")
 
-        from api.tools import project_update
+        from mcp_server.tools import project_update
 
         result = self.call_with_stats(project_update, self.project_id, group="features", item_id=self.feature_id, summary="更新后的摘要", status="completed")
         resp = self.parse_response(result)
@@ -259,7 +262,7 @@ class ToolsApiTest:
         """测试 project_delete 接口."""
         print("测试: project_delete...")
 
-        from api.tools import project_delete
+        from mcp_server.tools import project_delete
 
         result = self.call_with_stats(project_delete, self.project_id, group="features", item_id=self.feature_id)
         resp = self.parse_response(result)
@@ -272,7 +275,7 @@ class ToolsApiTest:
         """测试 tag_register 接口."""
         print("测试: tag_register...")
 
-        from api.tools import tag_register
+        from mcp_server.tools import tag_register
 
         result = self.call_with_stats(tag_register, self.project_id, tag_name="newtag", summary="新标签描述", aliases="nt,new")
         resp = self.parse_response(result)
@@ -284,7 +287,7 @@ class ToolsApiTest:
         """测试 tag_update 接口."""
         print("测试: tag_update...")
 
-        from api.tools import tag_register, tag_update
+        from mcp_server.tools import tag_register, tag_update
 
         self.call_with_stats(tag_register, self.project_id, tag_name="updatetag", summary="原始描述")
         result = self.call_with_stats(tag_update, self.project_id, tag_name="updatetag", summary="更新后的描述")
@@ -297,7 +300,7 @@ class ToolsApiTest:
         """测试 tag_delete 接口."""
         print("测试: tag_delete...")
 
-        from api.tools import tag_register, tag_delete
+        from mcp_server.tools import tag_register, tag_delete
 
         self.call_with_stats(tag_register, self.project_id, tag_name="deletetag", summary="删除标签")
         result = self.call_with_stats(tag_delete, self.project_id, tag_name="deletetag")
@@ -310,7 +313,7 @@ class ToolsApiTest:
         """测试 tag_merge 接口."""
         print("测试: tag_merge...")
 
-        from api.tools import tag_register, tag_merge
+        from mcp_server.tools import tag_register, tag_merge
 
         self.call_with_stats(tag_register, self.project_id, tag_name="oldtag", summary="旧标签")
         result = self.call_with_stats(tag_merge, self.project_id, old_tag="oldtag", new_tag="newtag")
@@ -323,7 +326,7 @@ class ToolsApiTest:
         """测试 project_item_tag_manage 接口."""
         print("测试: project_item_tag_manage...")
 
-        from api.tools import project_item_tag_manage, tag_register, project_add
+        from mcp_server.tools import project_item_tag_manage, tag_register, project_add
 
         # 先注册需要的标签
         for tag in ["added", "updated"]:
@@ -356,7 +359,7 @@ class ToolsApiTest:
         """测试 project_tags_info 接口."""
         print("测试: project_tags_info...")
 
-        from api.tools import project_tags_info, tag_register
+        from mcp_server.tools import project_tags_info, tag_register
 
         self.call_with_stats(tag_register, self.project_id, tag_name="infotag", summary="信息标签")
 
@@ -374,7 +377,7 @@ class ToolsApiTest:
         """测试 project_rename 接口."""
         print("测试: project_rename...")
 
-        from api.tools import project_rename
+        from mcp_server.tools import project_rename
 
         result = self.call_with_stats(project_rename, self.project_id, new_name="新项目名")
         resp = self.parse_response(result)
@@ -386,7 +389,7 @@ class ToolsApiTest:
         """测试 project_stats 接口."""
         print("测试: project_stats...")
 
-        from api.tools import project_stats
+        from mcp_server.tools import project_stats
 
         result = self.call_with_stats(project_stats)
         resp = self.parse_response(result)
@@ -398,7 +401,7 @@ class ToolsApiTest:
         """测试 stats_summary 接口."""
         print("测试: stats_summary...")
 
-        from api.tools import stats_summary
+        from mcp_server.tools import stats_summary
 
         # 测试无类型（获取所有）
         result = self.call_with_stats(stats_summary)
@@ -416,13 +419,94 @@ class ToolsApiTest:
         """测试 stats_cleanup 接口."""
         print("测试: stats_cleanup...")
 
-        from api.tools import stats_cleanup
+        from mcp_server.tools import stats_cleanup
 
         result = self.call_with_stats(stats_cleanup, retention_days=7)
         resp = self.parse_response(result)
 
         assert resp["success"], f"清理统计失败: {resp}"
         print(f"  ✓ stats_cleanup 测试通过")
+
+    def test_project_update_status_severity(self):
+        """测试 project_update 接口的 status 和 severity 参数更新."""
+        print("测试: project_update status/severity...")
+
+        from mcp_server.tools import project_add, project_update, project_get
+
+        # 1. 创建一个 fix 类型的条目（需要 severity）
+        result = self.call_with_stats(
+            project_add,
+            self.project_id,
+            group="fixes",
+            content="修复内容",
+            summary="修复摘要",
+            severity="high",
+            tags="bug,fix"
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"添加 fix 失败: {resp}"
+        fix_id = resp["data"]["item_id"]
+
+        # 2. 验证初始状态
+        result = self.call_with_stats(
+            project_get,
+            self.project_id,
+            group="fixes",
+            item_id=fix_id
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"获取 fix 失败: {resp}"
+        assert resp["data"]["item"]["status"] == "pending", f"初始状态应为 pending: {resp['data']['item']}"
+        assert resp["data"]["item"]["severity"] == "high", f"初始严重程度应为 high: {resp['data']['item']}"
+
+        # 3. 只更新 status
+        result = self.call_with_stats(
+            project_update,
+            self.project_id,
+            group="fixes",
+            item_id=fix_id,
+            status="in_progress"
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"更新 status 失败: {resp}"
+
+        # 4. 验证 status 已更新，severity 未改变
+        result = self.call_with_stats(
+            project_get,
+            self.project_id,
+            group="fixes",
+            item_id=fix_id
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"获取更新后的 fix 失败: {resp}"
+        assert resp["data"]["item"]["status"] == "in_progress", f"status 应为 in_progress: {resp['data']['item']}"
+        assert resp["data"]["item"]["severity"] == "high", f"severity 应保持 high: {resp['data']['item']}"
+
+        # 5. 同时更新 status 和 severity
+        result = self.call_with_stats(
+            project_update,
+            self.project_id,
+            group="fixes",
+            item_id=fix_id,
+            status="completed",
+            severity="low"
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"更新 status 和 severity 失败: {resp}"
+
+        # 6. 验证两个字段都已更新
+        result = self.call_with_stats(
+            project_get,
+            self.project_id,
+            group="fixes",
+            item_id=fix_id
+        )
+        resp = self.parse_response(result)
+        assert resp["success"], f"获取最终状态失败: {resp}"
+        assert resp["data"]["item"]["status"] == "completed", f"status 应为 completed: {resp['data']['item']}"
+        assert resp["data"]["item"]["severity"] == "low", f"severity 应为 low: {resp['data']['item']}"
+
+        print(f"  ✓ project_update status/severity 测试通过")
 
 
 def run_all_tests():
