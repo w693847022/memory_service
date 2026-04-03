@@ -127,27 +127,19 @@ class ProjectStorage:
         """获取 project.json 文件路径（新格式）."""
         return self._get_project_dir(project_id) / "project.json"
 
-    def _get_notes_dir(self, project_id: str) -> Path:
-        """获取 notes 目录路径."""
-        notes_dir = self._get_project_dir(project_id) / "notes"
-        notes_dir.mkdir(parents=True, exist_ok=True)
-        return notes_dir
+    def _get_group_content_dir(self, project_id: str, group_name: str) -> Path:
+        """获取组的 content 目录路径."""
+        content_dir = self._get_project_dir(project_id) / group_name
+        content_dir.mkdir(parents=True, exist_ok=True)
+        return content_dir
 
-    def _get_note_content_path(self, project_id: str, note_id: str) -> Path:
-        """获取单个 note 的 .md 文件路径."""
-        return self._get_notes_dir(project_id) / f"{note_id}.md"
+    def _get_item_content_path(self, project_id: str, group_name: str, item_id: str) -> Path:
+        """获取单个条目的 .md 文件路径."""
+        return self._get_group_content_dir(project_id, group_name) / f"{item_id}.md"
 
-    def _load_note_content(self, project_id: str, note_id: str) -> Optional[str]:
-        """加载单个 note 的 content.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-
-        Returns:
-            content 字符串，如果文件不存在则返回 None
-        """
-        content_path = self._get_note_content_path(project_id, note_id)
+    def _load_item_content(self, project_id: str, group_name: str, item_id: str) -> Optional[str]:
+        """加载单个条目的 content."""
+        content_path = self._get_item_content_path(project_id, group_name, item_id)
         if content_path.exists():
             try:
                 return content_path.read_text(encoding="utf-8")
@@ -155,21 +147,22 @@ class ProjectStorage:
                 return None
         return None
 
-    def _save_note_content(self, project_id: str, note_id: str, content: str) -> bool:
-        """保存单个 note 的 content.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-            content: 内容字符串
-
-        Returns:
-            是否保存成功
-        """
+    def _save_item_content(self, project_id: str, group_name: str, item_id: str, content: str) -> bool:
+        """保存单个条目的 content."""
         try:
-            content_path = self._get_note_content_path(project_id, note_id)
+            content_path = self._get_item_content_path(project_id, group_name, item_id)
             content_path.parent.mkdir(parents=True, exist_ok=True)
             content_path.write_text(content, encoding="utf-8")
+            return True
+        except IOError:
+            return False
+
+    def _delete_item_content(self, project_id: str, group_name: str, item_id: str) -> bool:
+        """删除单个条目的 content 文件."""
+        try:
+            content_path = self._get_item_content_path(project_id, group_name, item_id)
+            if content_path.exists():
+                content_path.unlink()
             return True
         except IOError:
             return False
@@ -178,7 +171,7 @@ class ProjectStorage:
         """迁移单个项目的存储结构（旧格式 -> 新格式）.
 
         旧格式: ~/.project_memory_ai/{project_id}.json
-        新格式: ~/.project_memory_ai/{project_id}/project.json + notes/*.md
+        新格式: ~/.project_memory_ai/{project_id}/project.json + {group}/*.md
 
         使用安全迁移流程：新建目录→拷贝数据→归档原文件
 
@@ -208,14 +201,15 @@ class ProjectStorage:
             with open(old_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
 
-            # 2. 迁移 notes content 到独立 .md 文件
-            notes = data.get("notes", [])
+            # 2. 迁移所有默认组的 content 到独立 .md 文件
+            from business.core.groups import CONTENT_SEPARATE_GROUPS
             migrated_count = 0
-            for note in notes:
-                if "content" in note and note["content"]:
-                    if self._save_note_content(project_id, note["id"], note["content"]):
-                        del note["content"]
-                        migrated_count += 1
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                for item in data.get(group_name, []):
+                    if "content" in item and item["content"]:
+                        if self._save_item_content(project_id, group_name, item["id"], item["content"]):
+                            del item["content"]
+                            migrated_count += 1
 
             # 3. 创建临时目录并保存新的 project.json
             temp_dir.mkdir(parents=True, exist_ok=True)
@@ -223,11 +217,12 @@ class ProjectStorage:
             with open(temp_json_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            # 4. 拷贝 notes 目录（如果存在）
-            temp_notes_dir = temp_dir / "notes"
-            new_notes_dir = new_dir / "notes"
-            if new_notes_dir.exists():
-                shutil.copytree(new_notes_dir, temp_notes_dir, copy_function=shutil.copy2)
+            # 4. 拷贝已有组的 content 目录（如果存在）
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                existing_dir = new_dir / group_name
+                if existing_dir.exists():
+                    temp_group_dir = temp_dir / group_name
+                    shutil.copytree(existing_dir, temp_group_dir, copy_function=shutil.copy2)
 
             # 5. 将临时目录移动到最终位置
             temp_dir.rename(new_dir)
@@ -285,9 +280,20 @@ class ProjectStorage:
                 for note in data.get("notes", []):
                     if "summary" not in note:
                         note["summary"] = ""
-                    # 新格式不包含 content 字段，确保不存在
-                    if "content" in note:
-                        del note["content"]
+
+                # 兼容旧格式：将内联 content 迁移到独立文件
+                from business.core.groups import CONTENT_SEPARATE_GROUPS
+                need_save = False
+                for group_name in CONTENT_SEPARATE_GROUPS:
+                    for item in data.get(group_name, []):
+                        if "content" in item and item["content"]:
+                            self._save_item_content(project_id, group_name, item["id"], item["content"])
+                            del item["content"]
+                            need_save = True
+                if need_save:
+                    project_json_path = self._get_project_json_path(project_id)
+                    with open(project_json_path, "w", encoding="utf-8") as f:
+                        json.dump(data, f, ensure_ascii=False, indent=2)
 
                 # 向后兼容：为没有tag_registry的项目添加空注册表
                 if "tag_registry" not in data:
@@ -308,23 +314,26 @@ class ProjectStorage:
     def _save_project(self, project_id: str, project_data: Dict[str, Any]) -> bool:
         """保存单个项目数据（使用 write-through 缓存策略）.
 
-        注意：notes 的 content 字段不写入 JSON，而是单独保存为 .md 文件
+        注意：所有默认组的 content 字段不写入 JSON，而是单独保存为 .md 文件
         """
         try:
             # 确保项目目录存在
             project_dir = self._get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
 
-            # 确保新格式的 notes 目录存在
-            self._get_notes_dir(project_id)
+            # 确保所有默认组的 content 目录存在
+            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                self._get_group_content_dir(project_id, group_name)
 
-            # 复制数据，移除 notes 中的 content 字段
+            # 复制数据，移除所有默认组中的 content 字段
             save_data = project_data.copy()
-            if "notes" in save_data:
-                save_data["notes"] = [
-                    {k: v for k, v in note.items() if k != "content"}
-                    for note in save_data["notes"]
-                ]
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                if group_name in save_data:
+                    save_data[group_name] = [
+                        {k: v for k, v in item.items() if k != "content"}
+                        for item in save_data[group_name]
+                    ]
 
             # 保存 project.json
             project_json_path = self._get_project_json_path(project_id)

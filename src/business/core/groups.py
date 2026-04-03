@@ -147,7 +147,7 @@ class GroupSettings:
 # 默认内置组配置（用于初始化 JSON 存储）
 DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
     "features": {
-        "content_max_bytes": 240,
+        "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
         "allowed_related_to": ["notes"],
@@ -159,7 +159,7 @@ DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
     },
     "fixes": {
-        "content_max_bytes": 240,
+        "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
         "allowed_related_to": ["features", "notes"],
@@ -171,8 +171,8 @@ DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
     },
     "notes": {
-        "content_max_bytes": 3000,
-        "summary_max_bytes": 150,
+        "content_max_bytes": 4000,
+        "summary_max_bytes": 90,
         "allow_related": False,
         "allowed_related_to": [],
         "enable_status": False,
@@ -183,7 +183,7 @@ DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
     },
     "standards": {
-        "content_max_bytes": 240,
+        "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
         "allowed_related_to": ["notes"],
@@ -195,6 +195,9 @@ DEFAULT_GROUP_CONFIGS: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
     },
 }
+
+# 使用独立文件存储 content 的默认组
+CONTENT_SEPARATE_GROUPS = {"features", "fixes", "notes", "standards"}
 
 # 默认关联规则
 DEFAULT_RELATED_RULES: Dict[str, List[str]] = {
@@ -359,8 +362,6 @@ def validate_content_length(content: str, group_name: str, config: Optional[Unif
 
         if content_bytes > max_bytes:
             msg = f"内容过长：{content_bytes} 字节，最大允许 {max_bytes} 字节"
-            if group_name in ("features", "fixes"):
-                msg += "。如果无法简化，建议建立 note 与之关联"
             return False, msg, content_bytes
         return True, None, content_bytes
 
@@ -399,8 +400,6 @@ def validate_summary_length(summary: str, group_name: str, config: Optional[Unif
 
         if summary_bytes > max_bytes:
             msg = f"摘要过长：{summary_bytes} 字节，最大允许 {max_bytes} 字节"
-            if group_name in ("features", "fixes"):
-                msg += "。如果无法简化，建议建立 note 与之关联"
             return False, msg, summary_bytes
         return True, None, summary_bytes
 

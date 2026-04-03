@@ -12,6 +12,7 @@ from business.core.groups import (
     validate_content_length, validate_summary_length,
     get_group_config, validate_related, get_all_groups,
     UnifiedGroupConfig, DEFAULT_RELATED_RULES,
+    CONTENT_SEPARATE_GROUPS,
 )
 from business.models.item import Item, ItemRelated
 
@@ -476,9 +477,9 @@ class ProjectService:
 
         # 保存
         if self.storage.save_project_data(project_id, project_data):
-            # 对于 notes 分组，保存 content 到独立文件
-            if group == "notes":
-                self.storage.save_note_content(project_id, item_id, content)
+            # 保存 content 到独立文件
+            if group in CONTENT_SEPARATE_GROUPS:
+                self.storage.save_item_content(project_id, group, item_id, content)
 
             return {
                 "success": True,
@@ -571,9 +572,9 @@ class ProjectService:
 
         # 保存
         if self.storage.save_project_data(project_id, project_data):
-            # 对于 notes 分组，更新独立文件
-            if group == "notes" and content is not None:
-                self.storage.save_note_content(project_id, item_id, content)
+            # 更新独立 content 文件
+            if group in CONTENT_SEPARATE_GROUPS and content is not None:
+                self.storage.save_item_content(project_id, group, item_id, content)
 
             return {
                 "success": True,
@@ -633,6 +634,10 @@ class ProjectService:
 
         # 保存
         if self.storage.save_project_data(project_id, project_data):
+            # 删除独立的内容文件
+            if group in CONTENT_SEPARATE_GROUPS:
+                self.storage.delete_item_content(project_id, group, item_id)
+
             return {
                 "success": True,
                 "project_id": project_id,

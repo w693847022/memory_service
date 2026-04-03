@@ -182,30 +182,17 @@ class Storage(ProjectStorage):
         """
         return self._save_group_configs(project_id, configs)
 
-    def get_note_content(self, project_id: str, note_id: str) -> Optional[str]:
-        """获取笔记内容.
+    def get_item_content(self, project_id: str, group_name: str, item_id: str) -> Optional[str]:
+        """获取条目内容."""
+        return self._load_item_content(project_id, group_name, item_id)
 
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
+    def save_item_content(self, project_id: str, group_name: str, item_id: str, content: str) -> bool:
+        """保存条目内容."""
+        return self._save_item_content(project_id, group_name, item_id, content)
 
-        Returns:
-            笔记内容
-        """
-        return self._load_note_content(project_id, note_id)
-
-    def save_note_content(self, project_id: str, note_id: str, content: str) -> bool:
-        """保存笔记内容.
-
-        Args:
-            project_id: 项目ID
-            note_id: 笔记ID
-            content: 内容
-
-        Returns:
-            是否保存成功
-        """
-        return self._save_note_content(project_id, note_id, content)
+    def delete_item_content(self, project_id: str, group_name: str, item_id: str) -> bool:
+        """删除条目内容文件."""
+        return self._delete_item_content(project_id, group_name, item_id)
 
     def generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Dict] = None) -> str:
         """生成条目ID.

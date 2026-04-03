@@ -87,8 +87,8 @@ def test_content_validation():
     valid, msg, _ = validate_content_length("短内容", "features")
     assert valid, f"短内容应该有效: {msg}"
 
-    # 测试过长内容 (features: 80 tokens = ~240 chars)
-    long_content = "a" * 300
+    # 测试过长内容 (features: 4000 bytes limit)
+    long_content = "a" * 4500
     valid, msg, _ = validate_content_length(long_content, "features")
     assert not valid, "过长内容应该无效"
 
