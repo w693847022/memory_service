@@ -19,6 +19,9 @@ from cachetools import TTLCache
 import threading
 from datetime import datetime, timedelta
 
+# 导入乐观锁管理器
+from business.core.lock_manager import OptimisticLockManager, LockGranularity
+
 # TTL 缓存配置
 CACHE_TTL_SECONDS = 300
 CACHE_MAX_SIZE = 50
@@ -62,12 +65,11 @@ class ProjectStorage:
             timer=time.time
         )
 
-        # 项目级锁字典（用于并发控制）
-        self._project_locks: Dict[str, threading.Lock] = {}
-        self._locks_lock = threading.Lock()  # 保护 project_locks 字典的锁
+        # 使用四层乐观锁管理器（替代原有的项目级锁）
+        self.lock_manager = OptimisticLockManager()
 
     def _get_project_lock(self, project_id: str) -> threading.Lock:
-        """获取项目级锁（双重检查锁定）.
+        """获取项目级锁（兼容方法，委托给 OptimisticLockManager）.
 
         Args:
             project_id: 项目ID
@@ -75,14 +77,8 @@ class ProjectStorage:
         Returns:
             该项目的专用锁对象
         """
-        lock = self._project_locks.get(project_id)
-        if lock is None:
-            with self._locks_lock:
-                lock = self._project_locks.get(project_id)
-                if lock is None:
-                    lock = threading.Lock()
-                    self._project_locks[project_id] = lock
-        return lock
+        key = self.lock_manager._make_project_key(project_id)
+        return self.lock_manager._get_or_create_lock(key, LockGranularity.PROJECT)
 
     def _cleanup_project_lock(self, project_id: str) -> None:
         """清理已删除项目的锁，防止内存泄漏.
@@ -90,8 +86,7 @@ class ProjectStorage:
         Args:
             project_id: 被删除的项目ID
         """
-        with self._locks_lock:
-            self._project_locks.pop(project_id, None)
+        self.lock_manager.cleanup_project_locks(project_id)
 
     def _load_metadata(self) -> Dict[str, Any]:
         """加载元数据文件."""
@@ -941,10 +936,10 @@ class ProjectStorage:
         expected_version: Optional[int],
         updates: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """原子性地更新条目（带版本检查的 CAS 操作）.
+        """原子性地更新条目（带版本检查的 CAS 操作，使用条目级锁）.
 
         这是一个原子操作，等效于：
-        1. 获取项目级锁
+        1. 获取条目级锁（非阻塞）
         2. 重新加载最新的项目数据
         3. 检查条目版本是否匹配
         4. 如果匹配，更新数据并递增版本
@@ -960,14 +955,21 @@ class ProjectStorage:
         Returns:
             操作结果 {"success": bool, "version": int, ...}
         """
-        lock = self._get_project_lock(project_id)
-        with lock:
+        # 使用条目级锁上下文管理器（非阻塞）
+        with self.lock_manager.acquire_item(project_id, group, item_id) as lock_result:
+            if not lock_result.acquired:
+                # 锁获取失败，返回并发冲突
+                return {
+                    "success": False,
+                    "error": "concurrent_update",
+                    "retryable": True,
+                    "message": f"条目 '{item_id}' 正在被其他操作修改"
+                }
+
             # 1. 重新加载最新数据（确保是最新的）
-            # 直接从缓存获取或从磁盘加载（当前已在锁保护下，不需要再次获取锁）
             project_data = self._project_data_cache.get(project_id)
             if project_data is None:
                 # 缓存未命中，需要从磁盘加载
-                # 不调用 _load_project（它会再次获取锁），直接加载
                 new_json_path = self._get_project_json_path(project_id)
                 old_path = self._get_project_path(project_id)
 

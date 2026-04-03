@@ -96,6 +96,18 @@ async def register_project(
     if result["success"]:
         data = {k: v for k, v in result.items() if k not in ("success", "error", "message")}
         return ApiResponse(success=True, data=data, message="项目注册成功").to_dict()
+
+    # 处理并发冲突
+    error = result.get("error")
+    if error in ("version_conflict", "concurrent_update"):
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail={
+                "error": error,
+                "message": result.get("message", "项目已被其他操作修改，请刷新后重试"),
+                "retryable": True
+            }
+        )
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -413,6 +425,18 @@ async def project_add(
         if related_dict:
             data["item"]["related"] = related_dict
         return ApiResponse(success=True, data=data, message=f"条目 '{result['item_id']}' 已添加").to_dict()
+
+    # 处理并发冲突
+    error = result.get("error")
+    if error in ("version_conflict", "concurrent_update"):
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail={
+                "error": error,
+                "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
+                "retryable": True
+            }
+        )
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -455,14 +479,20 @@ async def project_update(
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"], "version": result.get("version")}, message=f"条目 '{item_id}' 已更新").to_dict()
 
-    # 处理版本冲突
-    if result.get("error") == "version_conflict":
-        raise HTTPException(status_code=409, detail={
-            "error": "version_conflict",
-            "message": result.get("message"),
-            "current_version": result.get("current_version"),
-            "expected_version": result.get("expected_version")
-        })
+    # 处理并发冲突
+    error = result.get("error")
+    if error in ("version_conflict", "concurrent_update"):
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail={
+                "error": error,
+                "message": result.get("message", "数据已被其他操作修改，请刷新后重试"),
+                "current_version": result.get("current_version"),
+                "expected_version": result.get("expected_version"),
+                "retryable": True,
+                "current_item": result.get("current_item") or result.get("old_item")
+            }
+        )
 
     raise HTTPException(status_code=400, detail=result.get("error"))
 
@@ -479,6 +509,18 @@ async def project_delete(project_id: str, group: str, item_id: str):
     result = _project_service.delete_item(project_id=project_id, group=group, item_id=item_id)
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "deleted": True}, message=f"条目 '{item_id}' 已删除").to_dict()
+
+    # 处理并发冲突
+    error = result.get("error")
+    if error in ("version_conflict", "concurrent_update"):
+        raise HTTPException(
+            status_code=409,  # Conflict
+            detail={
+                "error": error,
+                "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
+                "retryable": True
+            }
+        )
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
