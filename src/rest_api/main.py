@@ -12,9 +12,9 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .mcp_client import get_mcp_client
 from .middleware import RequestTrackerMiddleware
 from common.logging_config import setup_logging
+from clients.business_async_client import get_business_async_client, close_business_async_client
 
 # ===================
 # 日志配置（支持滚动删除）
@@ -43,8 +43,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """应用生命周期管理."""
     logger.info("FastAPI 应用启动")
+    # 初始化异步客户端
+    app.state.async_client = await get_business_async_client()
+    logger.info("异步客户端已初始化")
     yield
     logger.info("FastAPI 应用关闭")
+    # 关闭异步客户端
+    await close_business_async_client()
+    logger.info("异步客户端已关闭")
 
 
 # ===================
