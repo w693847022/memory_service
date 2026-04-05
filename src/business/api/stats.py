@@ -22,8 +22,9 @@ router = APIRouter(prefix="/api", tags=["stats"])
 @router.get("/stats")
 async def project_stats():
     """获取全局统计信息."""
-    _storage.refresh_projects_cache()
-    total_projects = len(_storage.list_all_projects())
+    await _storage.refresh_projects_cache()
+    all_projects = await _storage.list_all_projects()
+    total_projects = len(all_projects)
 
     all_tags = []
     feature_stats = {"pending": 0, "in_progress": 0, "completed": 0}
@@ -32,8 +33,8 @@ async def project_stats():
     feature_tag_counts = {}
     note_tag_counts = {}
 
-    for pid in _storage.list_all_projects().keys():
-        project_data = _storage.get_project_data(pid)
+    for pid in all_projects.keys():
+        project_data = await _storage.get_project_data(pid)
         if project_data is None:
             continue
         all_tags.extend(project_data.get("info", {}).get("tags", []))

@@ -77,7 +77,7 @@ class TestMcpProjectTools:
         # 先注册项目
         register_result = mcp_client.call_tool(
             "project_register",
-            name="旧名称"
+            name="旧名称_mcp"
         )
         project_id = register_result["data"]["project_id"]
 
@@ -85,14 +85,14 @@ class TestMcpProjectTools:
         result = mcp_client.call_tool(
             "project_rename",
             project_id=project_id,
-            new_name="新名称"
+            new_name="新名称_mcp"
         )
 
         assert result["success"] is True
 
         # 验证重命名成功
         get_result = mcp_client.call_tool("project_get", project_id=project_id)
-        assert get_result["data"]["info"]["name"] == "新名称"
+        assert get_result["data"]["info"]["name"] == "新名称_mcp"
 
     def test_project_remove(self, mcp_client: McpClient):
         """测试 project_remove 工具."""

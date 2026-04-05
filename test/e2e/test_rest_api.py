@@ -70,21 +70,19 @@ class TestRestProjects:
         """测试重命名项目."""
         # 先注册项目
         register_result = rest_client.post("/api/projects", params={
-            "name": "旧名称"
+            "name": "rest_rename_old"
         })
         project_id = register_result["data"]["project_id"]
 
         # 重命名
         result = rest_client.put(
             f"/api/projects/{project_id}/rename",
-            params={"new_name": "新名称"}
+            params={"new_name": "rest_rename_new"}
         )
 
-        assert result["success"] is True
-
-        # 验证重命名成功
+        assert result["success"] is True        # 验证重命名成功
         get_result = rest_client.get(f"/api/projects/{project_id}")
-        assert get_result["data"]["info"]["name"] == "新名称"
+        assert get_result["data"]["info"]["name"] == "rest_rename_new"
 
     def test_delete_project(self, rest_client: RestClient):
         """测试删除项目."""

@@ -10,10 +10,11 @@
 
 import pytest
 import json
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, AsyncMock
 from fastapi import HTTPException
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 # 添加 src 目录到路径
 src_dir = Path(__file__).parent.parent.parent / "src"
@@ -34,20 +35,45 @@ from business.api.groups import (
 @pytest.fixture
 def mock_storage():
     """创建 Mock Storage 服务."""
+    from unittest.mock import Mock, AsyncMock
+
+    # 创建异步上下文管理器
+    @asynccontextmanager
+    async def _async_context_manager(*args, **kwargs):
+        yield
+
     mock = Mock()
-    mock.get_group_configs.return_value = {
+    # 模拟异步方法
+    mock.get_group_configs = AsyncMock(return_value={
         "groups": {},
         "group_settings": {}
-    }
-    mock.save_group_configs.return_value = True
+    })
+    mock.save_group_configs = AsyncMock(return_value=True)
+
+    # 模拟 barrier 对象及其异步上下文管理器方法
+    mock_barrier = Mock()
+    mock_barrier.group_create = Mock(return_value=_async_context_manager())
+    mock_barrier.group_update = Mock(return_value=_async_context_manager())
+    mock_barrier.group_delete = Mock(return_value=_async_context_manager())
+    mock_barrier.group_settings = Mock(return_value=_async_context_manager())
+    mock.barrier = mock_barrier
+
     return mock
 
 
 @pytest.fixture
 def mock_storage_with_groups():
     """创建带有预置组配置的 Mock Storage 服务."""
+    from unittest.mock import Mock, AsyncMock
+
+    # 创建异步上下文管理器
+    @asynccontextmanager
+    async def _async_context_manager(*args, **kwargs):
+        yield
+
     mock = Mock()
-    mock.get_group_configs.return_value = {
+    # 模拟异步方法
+    mock.get_group_configs = AsyncMock(return_value={
         "groups": {
             "custom_api": {
                 "content_max_bytes": 240,
@@ -67,8 +93,17 @@ def mock_storage_with_groups():
                 "features": ["notes"]
             }
         }
-    }
-    mock.save_group_configs.return_value = True
+    })
+    mock.save_group_configs = AsyncMock(return_value=True)
+
+    # 模拟 barrier 对象及其异步上下文管理器方法
+    mock_barrier = Mock()
+    mock_barrier.group_create = Mock(return_value=_async_context_manager())
+    mock_barrier.group_update = Mock(return_value=_async_context_manager())
+    mock_barrier.group_delete = Mock(return_value=_async_context_manager())
+    mock_barrier.group_settings = Mock(return_value=_async_context_manager())
+    mock.barrier = mock_barrier
+
     return mock
 
 
@@ -115,7 +150,7 @@ class TestCreateCustomGroup:
     @pytest.mark.asyncio
     async def test_create_custom_group_save_failure(self, mock_storage):
         """测试保存配置失败."""
-        mock_storage.save_group_configs.return_value = False
+        mock_storage.save_group_configs = AsyncMock(return_value=False)
         init_services(mock_storage)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -190,7 +225,7 @@ class TestUpdateGroup:
     @pytest.mark.asyncio
     async def test_update_group_save_failure(self, mock_storage_with_groups):
         """测试保存配置失败."""
-        mock_storage_with_groups.save_group_configs.return_value = False
+        mock_storage_with_groups.save_group_configs = AsyncMock(return_value=False)
         init_services(mock_storage_with_groups)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -290,10 +325,10 @@ class TestDeleteCustomGroup:
         这是设计行为：内置组通过不同机制管理。
         """
         init_services(mock_storage)
-        mock_storage.get_group_configs.return_value = {
+        mock_storage.get_group_configs = AsyncMock(return_value={
             "groups": {},
             "group_settings": {}
-        }
+        })
 
         with pytest.raises(HTTPException) as exc_info:
             await delete_custom_group(
@@ -307,7 +342,7 @@ class TestDeleteCustomGroup:
     @pytest.mark.asyncio
     async def test_delete_custom_group_save_failure(self, mock_storage_with_groups):
         """测试保存配置失败."""
-        mock_storage_with_groups.save_group_configs.return_value = False
+        mock_storage_with_groups.save_group_configs = AsyncMock(return_value=False)
         init_services(mock_storage_with_groups)
 
         with pytest.raises(HTTPException) as exc_info:
@@ -339,10 +374,10 @@ class TestGetGroupSettings:
     @pytest.mark.asyncio
     async def test_get_group_settings_empty(self, mock_storage):
         """测试获取空的组设置."""
-        mock_storage.get_group_configs.return_value = {
+        mock_storage.get_group_configs = AsyncMock(return_value={
             "groups": {},
             "group_settings": {}
-        }
+        })
         init_services(mock_storage)
 
         response = await get_group_settings(project_id="proj_001")
@@ -390,7 +425,7 @@ class TestUpdateGroupSettings:
     @pytest.mark.asyncio
     async def test_update_group_settings_save_failure(self, mock_storage):
         """测试保存配置失败."""
-        mock_storage.save_group_configs.return_value = False
+        mock_storage.save_group_configs = AsyncMock(return_value=False)
         init_services(mock_storage)
 
         with pytest.raises(HTTPException) as exc_info:

@@ -3,13 +3,8 @@
 提供统一的数据存储接口，整合项目存储和统计存储功能。
 """
 
-import json
-import time
-import threading
-from datetime import datetime, timedelta, date
 from pathlib import Path
 from typing import Optional, Dict, Any, Union, List
-from cachetools import TTLCache
 
 from business.core.storage_base import ProjectStorage
 from business.call_stats import CallStats
@@ -53,248 +48,114 @@ class Storage(ProjectStorage):
         client: str = "unknown",
         ip: str = "local"
     ) -> bool:
-        """记录接口调用.
-
-        Args:
-            tool_name: 工具名称
-            project_id: 项目ID（可选）
-            client: 客户端标识
-            ip: IP地址
-
-        Returns:
-            是否记录成功
-        """
+        """记录接口调用."""
         return self._stats.record_call(tool_name, project_id, client, ip)
 
     def _get_tool_stats(self, tool_name: Optional[str] = None) -> Dict[str, Any]:
-        """获取工具统计.
-
-        Args:
-            tool_name: 工具名称
-
-        Returns:
-            统计数据
-        """
+        """获取工具统计."""
         return self._stats.get_tool_stats(tool_name)
 
     def _get_project_stats(self, project_id: str) -> Dict[str, Any]:
-        """获取项目统计.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            项目统计数据
-        """
+        """获取项目统计."""
         return self._stats.get_project_stats(project_id)
 
     def _get_client_stats(self) -> Dict[str, Any]:
-        """获取客户端统计.
-
-        Returns:
-            客户端统计数据
-        """
+        """获取客户端统计."""
         return self._stats.get_client_stats()
 
     def _get_ip_stats(self) -> Dict[str, Any]:
-        """获取IP统计.
-
-        Returns:
-            IP统计数据
-        """
+        """获取IP统计."""
         return self._stats.get_ip_stats()
 
     def _get_daily_stats(self, date: Optional[str] = None) -> Dict[str, Any]:
-        """获取每日统计.
-
-        Args:
-            date: 日期字符串
-
-        Returns:
-            每日统计数据
-        """
+        """获取每日统计."""
         return self._stats.get_daily_stats(date)
 
     def _get_full_summary(self) -> Dict[str, Any]:
-        """获取完整统计摘要.
-
-        Returns:
-            完整统计数据
-        """
+        """获取完整统计摘要."""
         return self._stats.get_full_summary()
 
     def _cleanup_stats(self, retention_days: Optional[int] = None) -> Dict[str, Any]:
-        """清理统计数据.
-
-        Args:
-            retention_days: 保留天数
-
-        Returns:
-            清理结果
-        """
+        """清理统计数据."""
         return self._stats.cleanup_stats(retention_days)
 
-    # ==================== 项目数据访问方法 ====================
+    # ==================== 项目数据访问方法（异步）====================
 
-    def get_project_data(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """获取项目数据.
+    async def get_project_data(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """获取项目数据."""
+        return await self._load_project(project_id)
 
-        Args:
-            project_id: 项目ID
+    async def save_project_data(self, project_id: str, project_data: Dict[str, Any]) -> bool:
+        """保存项目数据."""
+        return await self._save_project(project_id, project_data)
 
-        Returns:
-            项目数据字典，不存在返回 None
-        """
-        return self._load_project(project_id)
+    async def get_group_configs(self, project_id: str) -> Dict[str, Any]:
+        """获取组配置."""
+        return await self._load_group_configs(project_id)
 
-    def save_project_data(self, project_id: str, project_data: Dict[str, Any]) -> bool:
-        """保存项目数据.
+    async def save_group_configs(self, project_id: str, configs: Dict[str, Any]) -> bool:
+        """保存组配置."""
+        return await self._save_group_configs(project_id, configs)
 
-        Args:
-            project_id: 项目ID
-            project_data: 项目数据
-
-        Returns:
-            是否保存成功
-        """
-        return self._save_project(project_id, project_data)
-
-    def get_group_configs(self, project_id: str) -> Dict[str, Any]:
-        """获取组配置.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            组配置字典
-        """
-        return self._load_group_configs(project_id)
-
-    def save_group_configs(self, project_id: str, configs: Dict[str, Any]) -> bool:
-        """保存组配置.
-
-        Args:
-            project_id: 项目ID
-            configs: 组配置
-
-        Returns:
-            是否保存成功
-        """
-        return self._save_group_configs(project_id, configs)
-
-    def get_item_content(self, project_id: str, group_name: str, item_id: str) -> Optional[str]:
+    async def get_item_content(self, project_id: str, group_name: str, item_id: str) -> Optional[str]:
         """获取条目内容."""
-        return self._load_item_content(project_id, group_name, item_id)
+        return await self._load_item_content(project_id, group_name, item_id)
 
-    def save_item_content(self, project_id: str, group_name: str, item_id: str, content: str) -> bool:
+    async def save_item_content(self, project_id: str, group_name: str, item_id: str, content: str) -> bool:
         """保存条目内容."""
-        return self._save_item_content(project_id, group_name, item_id, content)
+        return await self._save_item_content(project_id, group_name, item_id, content)
 
     def delete_item_content(self, project_id: str, group_name: str, item_id: str) -> bool:
         """删除条目内容文件."""
         return self._delete_item_content(project_id, group_name, item_id)
 
     def generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Dict] = None) -> str:
-        """生成条目ID.
-
-        Args:
-            prefix: ID前缀
-            project_id: 项目ID
-            project_data: 已加载的项目数据（避免重复加载）
-
-        Returns:
-            唯一ID
-        """
+        """生成条目ID."""
         return self._generate_item_id(prefix, project_id, project_data)
 
     def generate_timestamps(self) -> Dict[str, str]:
-        """生成时间戳.
-
-        Returns:
-            包含 created_at 和 updated_at 的字典
-        """
+        """生成时间戳."""
         return self._generate_timestamps()
 
     def update_timestamp(self, item: Dict[str, Any]) -> None:
-        """更新条目时间戳.
-
-        Args:
-            item: 条目字典
-        """
+        """更新条目时间戳."""
         self._update_timestamp(item)
 
     def is_valid_uuid(self, id_str: str) -> bool:
-        """验证UUID.
-
-        Args:
-            id_str: 字符串
-
-        Returns:
-            是否为有效UUID
-        """
+        """验证UUID."""
         return self._is_valid_uuid(id_str)
 
-    # ==================== 项目列表和搜索 ====================
+    # ==================== 项目列表和搜索（异步）====================
 
-    def list_all_projects(self) -> Dict[str, str]:
-        """获取所有项目缓存.
-
-        Returns:
-            项目ID到名称的映射
-        """
-        self._refresh_projects_cache()
+    async def list_all_projects(self) -> Dict[str, str]:
+        """获取所有项目缓存."""
+        await self._refresh_projects_cache()
         return self._projects_cache.copy()
 
-    def refresh_projects_cache(self) -> None:
+    async def refresh_projects_cache(self) -> None:
         """刷新项目缓存."""
-        self._refresh_projects_cache()
+        await self._refresh_projects_cache()
 
-    # ==================== 归档相关 ====================
+    # ==================== 归档相关（异步）====================
 
-    def archive_project(self, project_id: str) -> Dict[str, Any]:
-        """归档项目.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            操作结果
-        """
-        result = self._compress_and_archive_project(project_id)
-        # 归档成功后清理项目锁，防止内存泄漏
+    async def archive_project(self, project_id: str) -> Dict[str, Any]:
+        """归档项目."""
+        result = await self._compress_and_archive_project(project_id)
         if result.get("success"):
-            self._cleanup_project_lock(project_id)
+            self._barrier.remove_project_barriers(project_id)
         return result
 
-    def is_archived(self, project_id: str) -> bool:
-        """检查项目是否已归档.
+    async def is_archived(self, project_id: str) -> bool:
+        """检查项目是否已归档."""
+        return await self._is_project_archived(project_id)
 
-        Args:
-            project_id: 项目ID
+    async def get_archived_projects(self) -> List[Dict[str, Any]]:
+        """获取归档项目列表."""
+        return await self._get_archived_projects()
 
-        Returns:
-            是否已归档
-        """
-        return self._is_project_archived(project_id)
-
-    def get_archived_projects(self) -> List[Dict[str, Any]]:
-        """获取归档项目列表.
-
-        Returns:
-            归档项目元数据列表
-        """
-        return self._get_archived_projects()
-
-    def delete_archived_project(self, project_id: str) -> bool:
-        """删除归档项目.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            是否删除成功
-        """
-        return self._delete_archived_project(project_id)
+    async def delete_archived_project(self, project_id: str) -> bool:
+        """删除归档项目."""
+        return await self._delete_archived_project(project_id)
 
     # ==================== 目录迁移 ====================
 
@@ -304,25 +165,9 @@ class Storage(ProjectStorage):
         new_path: Path,
         project_name: Optional[str] = None
     ) -> Dict[str, Any]:
-        """安全迁移项目目录.
-
-        Args:
-            old_path: 原目录
-            new_path: 新目录
-            project_name: 项目名称
-
-        Returns:
-            操作结果
-        """
+        """安全迁移项目目录."""
         return self._safe_migrate_project_dir(old_path, new_path, project_name)
 
     def delete_archive_file(self, archived_path: Optional[str]) -> bool:
-        """删除归档文件.
-
-        Args:
-            archived_path: 归档文件路径
-
-        Returns:
-            是否删除成功
-        """
+        """删除归档文件."""
         return self._delete_archive_file(archived_path)

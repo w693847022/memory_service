@@ -200,7 +200,7 @@ class McpClient:
         """
         self.server_url = server_url.rstrip("/")
         self._request_id = 0
-        self._client = httpx.Client(timeout=30.0)
+        self._client = httpx.Client(timeout=120.0)
 
     def _get_request_id(self) -> int:
         """获取下一个请求 ID."""
