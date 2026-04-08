@@ -12,6 +12,7 @@ import tarfile
 import time
 import re
 import shutil
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Union
@@ -40,9 +41,9 @@ class ProjectStorage:
             barrier_manager: 阻挡位管理器实例
         """
         if storage_dir is None:
-            storage_dir = Path.home() / ".project_memory_ai"
-        else:
-            storage_dir = Path(storage_dir)
+            # 优先使用环境变量，否则使用 Path.home()
+            storage_dir = os.environ.get("MCP_STORAGE_DIR", Path.home() / ".project_memory_ai")
+        storage_dir = Path(storage_dir)
 
         self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -91,8 +92,9 @@ class ProjectStorage:
         v.setdefault("tag_registry", 1)
         for group_name in KNOWN_GROUPS:
             v.setdefault(group_name, 1)
-        if "_group_configs" in data:
-            data["_group_configs"].setdefault("_v", 1)
+        if "_group_configs" in data and data["_group_configs"] is not None:
+            if isinstance(data["_group_configs"], dict):
+                data["_group_configs"].setdefault("_v", 1)
 
     def _get_project_path(self, project_id: str) -> Path:
         """获取项目文件路径（向后兼容旧格式）."""
@@ -123,8 +125,16 @@ class ProjectStorage:
         return self.storage_dir / project_id
 
     def _get_project_json_path(self, project_id: str) -> Path:
-        """获取 project.json 文件路径."""
-        return self._get_project_dir(project_id) / "project.json"
+        """获取 _project.json 文件路径（向后兼容，指向 _project.json）."""
+        return self._get_project_dir(project_id) / "_project.json"
+
+    def _get_tags_json_path(self, project_id: str) -> Path:
+        """获取 _tags.json 文件路径."""
+        return self._get_project_dir(project_id) / "_tags.json"
+
+    def _get_group_index_path(self, project_id: str, group_name: str) -> Path:
+        """获取分组的 _index.json 文件路径."""
+        return self._get_project_dir(project_id) / group_name / "_index.json"
 
     def _get_group_content_dir(self, project_id: str, group_name: str) -> Path:
         """获取组的 content 目录路径."""
@@ -159,12 +169,84 @@ class ProjectStorage:
             return False
         try:
             self.metadata["total_projects"] = len(self._projects_cache)
-            async with self._barrier.io_operation():
-                async with aiofiles.open(self.metadata_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(self.metadata, ensure_ascii=False, indent=2))
+            async with aiofiles.open(self.metadata_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(self.metadata, ensure_ascii=False, indent=2))
             return True
         except IOError:
             return False
+
+    # ==================== 拆分文件读写方法 ====================
+
+    async def _load_project_meta(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """加载项目元信息（_project.json）."""
+        meta_path = self._get_project_json_path(project_id)
+        if meta_path.exists():
+            try:
+                async with aiofiles.open(meta_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                return json.loads(content)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return None
+
+    async def _save_project_meta(self, project_id: str, meta_data: Dict[str, Any]) -> bool:
+        """保存项目元信息（_project.json）."""
+        try:
+            meta_path = self._get_project_json_path(project_id)
+            meta_path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(meta_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(meta_data, ensure_ascii=False, indent=2))
+            return True
+        except IOError:
+            return False
+
+    async def _load_tags_index(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """加载标签索引（_tags.json）."""
+        tags_path = self._get_tags_json_path(project_id)
+        if tags_path.exists():
+            try:
+                async with aiofiles.open(tags_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                return json.loads(content)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {"_version": 1, "tags": {}}
+
+    async def _save_tags_index(self, project_id: str, tags_data: Dict[str, Any]) -> bool:
+        """保存标签索引（_tags.json）."""
+        try:
+            tags_path = self._get_tags_json_path(project_id)
+            tags_path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(tags_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(tags_data, ensure_ascii=False, indent=2))
+            return True
+        except IOError:
+            return False
+
+    async def _load_group_index(self, project_id: str, group_name: str) -> Optional[Dict[str, Any]]:
+        """加载分组索引（{group}/_index.json）."""
+        index_path = self._get_group_index_path(project_id, group_name)
+        if index_path.exists():
+            try:
+                async with aiofiles.open(index_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                return json.loads(content)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {"_version": 1, "items": []}
+
+    async def _save_group_index(self, project_id: str, group_name: str, index_data: Dict[str, Any]) -> bool:
+        """保存分组索引（{group}/_index.json）."""
+        try:
+            index_path = self._get_group_index_path(project_id, group_name)
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            async with aiofiles.open(index_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(index_data, ensure_ascii=False, indent=2))
+            return True
+        except IOError:
+            return False
+
+    # ==================== 条目 content 读写 ====================
 
     async def _load_item_content(self, project_id: str, group_name: str, item_id: str) -> Optional[str]:
         """加载单个条目的 content."""
@@ -182,9 +264,8 @@ class ProjectStorage:
         try:
             content_path = self._get_item_content_path(project_id, group_name, item_id)
             content_path.parent.mkdir(parents=True, exist_ok=True)
-            async with self._barrier.io_operation():
-                async with aiofiles.open(content_path, "w", encoding="utf-8") as f:
-                    await f.write(content)
+            async with aiofiles.open(content_path, "w", encoding="utf-8") as f:
+                await f.write(content)
             return True
         except IOError:
             return False
@@ -199,12 +280,13 @@ class ProjectStorage:
         except IOError:
             return False
 
+
     async def _migrate_project_storage(self, project_id: str) -> bool:
         """迁移单个项目的存储结构（旧格式 -> 新格式）.
 
         使用安全迁移流程：新建目录→拷贝数据→归档原文件
         """
-        old_path = self.storage_dir / f"{project_id}.json"
+        old_path = self._get_project_path(project_id)
 
         if not old_path.exists():
             return True
@@ -234,9 +316,8 @@ class ProjectStorage:
             # 3. 创建临时目录并保存新的 project.json
             temp_dir.mkdir(parents=True, exist_ok=True)
             temp_json_path = temp_dir / "project.json"
-            async with self._barrier.io_operation():
-                async with aiofiles.open(temp_json_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+            async with aiofiles.open(temp_json_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(data, ensure_ascii=False, indent=2))
 
             # 4. 拷贝已有组的 content 目录
             for group_name in CONTENT_SEPARATE_GROUPS:
@@ -269,105 +350,188 @@ class ProjectStorage:
             return False
 
     async def _load_project(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """加载单个项目数据（带向后兼容和缓存）."""
+        """加载单个项目数据（支持拆分文件格式）.
+
+        支持的格式：
+        - 新拆分格式：_project.json, _tags.json, {group}/_index.json
+        - 旧目录格式：project.json（需要手动迁移）
+        """
         # 快速路径：多级缓存查询
         cached_data = self._cache.get(project_id)
         if cached_data is not None:
             return cached_data
 
-        # 从磁盘加载
-        new_json_path = self._get_project_json_path(project_id)
-        old_path = self._get_project_path(project_id)
-
-        project_path = None
-        if new_json_path.exists():
-            project_path = new_json_path
-        elif old_path.exists():
-            if await self._migrate_project_storage(project_id):
-                project_path = new_json_path
-            else:
-                project_path = old_path
-
-        if project_path and project_path.exists():
-            try:
-                async with aiofiles.open(project_path, "r", encoding="utf-8") as f:
+        # 加载拆分格式
+        project_json_path = self._get_project_json_path(project_id)
+        if project_json_path.exists():
+            data = await self._load_split_format(project_id)
+        else:
+            # 检查旧格式：项目目录下的 project.json
+            project_dir = self._get_project_dir(project_id)
+            old_project_json = project_dir / "project.json"
+            if old_project_json.exists():
+                # 加载旧格式（不自动迁移）
+                async with aiofiles.open(old_project_json, "r", encoding="utf-8") as f:
                     content = await f.read()
                 data = json.loads(content)
-
-                # 向后兼容处理
-                for note in data.get("notes", []):
-                    if "summary" not in note:
-                        note["summary"] = ""
-
-                # 兼容旧格式：将内联 content 迁移到独立文件
-                from business.core.groups import CONTENT_SEPARATE_GROUPS
-                need_save = False
-                for group_name in CONTENT_SEPARATE_GROUPS:
-                    for item in data.get(group_name, []):
-                        if "content" in item and item["content"]:
-                            await self._save_item_content(project_id, group_name, item["id"], item["content"])
-                            del item["content"]
-                            need_save = True
-                if need_save:
-                    project_json_path = self._get_project_json_path(project_id)
-                    async with self._barrier.io_operation():
-                        async with aiofiles.open(project_json_path, "w", encoding="utf-8") as f:
-                            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-
-                if "tag_registry" not in data:
-                    data["tag_registry"] = {}
-
-                if "fixes" not in data:
-                    data["fixes"] = []
-
-                # 版本控制迁移
-                migrated = self._migrate_to_version_control(project_id, data)
-                if migrated:
-                    project_json_path = self._get_project_json_path(project_id)
-                    async with self._barrier.io_operation():
-                        async with aiofiles.open(project_json_path, "w", encoding="utf-8") as f:
-                            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-
-                # 补全版本结构
-                self._ensure_versions(data)
-
-                # 存入多级缓存
-                self._cache.set(project_id, data, CacheLevel.L2_WARM)
-
-                return data
-            except (json.JSONDecodeError, IOError):
+            else:
                 return None
-        return None
+
+        if data is None:
+            return None
+
+        # 向后兼容处理
+        for note in data.get("notes", []):
+            if "summary" not in note:
+                note["summary"] = ""
+
+        # 兼容旧格式：将内联 content 迁移到独立文件
+        from business.core.groups import CONTENT_SEPARATE_GROUPS
+        need_save = False
+        for group_name in CONTENT_SEPARATE_GROUPS:
+            for item in data.get(group_name, []):
+                if "content" in item and item["content"]:
+                    await self._save_item_content(project_id, group_name, item["id"], item["content"])
+                    del item["content"]
+                    need_save = True
+        if need_save:
+            await self._save_project(project_id, data)
+
+        if "tag_registry" not in data:
+            data["tag_registry"] = {}
+
+        if "fixes" not in data:
+            data["fixes"] = []
+
+        # 版本控制迁移
+        migrated = self._migrate_to_version_control(project_id, data)
+        if migrated:
+            await self._save_project(project_id, data)
+
+        # 补全版本结构
+        self._ensure_versions(data)
+
+        # 存入多级缓存
+        self._cache.set(project_id, data, CacheLevel.L2_WARM)
+
+        return data
+
+    async def _load_split_format(self, project_id: str) -> Optional[Dict[str, Any]]:
+        """加载拆分格式的项目数据."""
+        try:
+            # 1. 加载 _project.json
+            meta_data = await self._load_project_meta(project_id)
+            if meta_data is None:
+                return None
+
+            # 2. 加载 _tags.json
+            tags_data = await self._load_tags_index(project_id)
+            if tags_data is None:
+                tags_data = {"_version": 1, "tags": {}}
+
+            # 3. 加载各分组的 _index.json
+            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            groups_data = {}
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                index_data = await self._load_group_index(project_id, group_name)
+                if index_data is None:
+                    groups_data[group_name] = []
+                else:
+                    groups_data[group_name] = index_data.get("items", [])
+
+            # 4. 合并为向后兼容的格式
+            merged_data = {
+                "id": meta_data.get("id"),
+                "name": meta_data.get("name"),
+                "info": meta_data.get("info", {}),
+                "tag_registry": tags_data.get("tags", {}),
+                "_version": meta_data.get("_version", 1),
+                "_versions": meta_data.get("_versions", {}),
+                "_group_configs": meta_data.get("_group_configs"),
+            }
+
+            # 合并各组数据
+            merged_data.update(groups_data)
+
+            return merged_data
+
+        except (json.JSONDecodeError, IOError):
+            return None
+
 
     async def _save_project(self, project_id: str, project_data: Dict[str, Any]) -> bool:
-        """保存单个项目数据（write-through 缓存）.
+        """保存单个项目数据到拆分文件格式（write-through 缓存）.
+
+        拆分格式：
+        - _project.json: 元数据（id, name, info, _version, _versions, _group_configs）
+        - _tags.json: 标签注册表
+        - {group}/_index.json: 各分组的条目索引（不含 content）
+        - {group}/{item_id}.md: 条目的 content 内容
 
         注意：所有默认组的 content 字段不写入 JSON，而是单独保存为 .md 文件
         """
         try:
+            from business.core.groups import CONTENT_SEPARATE_GROUPS
+
             # 确保项目目录存在
             project_dir = self._get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
 
             # 确保所有默认组的 content 目录存在
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
             for group_name in CONTENT_SEPARATE_GROUPS:
                 self._get_group_content_dir(project_id, group_name)
 
-            # 复制数据，移除所有默认组中的 content 字段
-            save_data = project_data.copy()
-            for group_name in CONTENT_SEPARATE_GROUPS:
-                if group_name in save_data:
-                    save_data[group_name] = [
-                        {k: v for k, v in item.items() if k != "content"}
-                        for item in save_data[group_name]
-                    ]
+            # 1. 保存元数据到 _project.json
+            meta_data = {
+                "id": project_data.get("id"),
+                "name": project_data.get("name"),
+                "info": project_data.get("info", {}),
+                "_version": project_data.get("_version", 1),
+                "_versions": project_data.get("_versions", {}),
+                "_group_configs": project_data.get("_group_configs"),
+            }
 
-            # 保存 project.json
-            project_json_path = self._get_project_json_path(project_id)
-            async with self._barrier.io_operation():
-                async with aiofiles.open(project_json_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(save_data, ensure_ascii=False, indent=2))
+            # 提取项目名称和ID到 info（如果缺失）
+            if "info" in meta_data and meta_data["info"]:
+                if not meta_data["info"].get("id") and meta_data["id"]:
+                    meta_data["info"]["id"] = meta_data["id"]
+                if not meta_data["info"].get("name") and meta_data["name"]:
+                    meta_data["info"]["name"] = meta_data["name"]
+
+            if not await self._save_project_meta(project_id, meta_data):
+                return False
+
+            # 2. 保存标签到 _tags.json
+            tags_data = {
+                "_version": project_data.get("_versions", {}).get("tag_registry", 1),
+                "tags": project_data.get("tag_registry", {})
+            }
+            if not await self._save_tags_index(project_id, tags_data):
+                return False
+
+            # 3. 保存各分组的 _index.json
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                items = project_data.get(group_name, [])
+
+                # 获取分组版本号
+                group_version = project_data.get("_versions", {}).get(group_name, 1)
+
+                index_data = {
+                    "_version": group_version,
+                    "items": []
+                }
+
+                for item in items:
+                    # 提取除 content 外的所有字段
+                    item_summary = {k: v for k, v in item.items() if k != "content"}
+                    index_data["items"].append(item_summary)
+
+                    # 如果有 content，保存到独立文件
+                    if "content" in item and item["content"]:
+                        await self._save_item_content(project_id, group_name, item["id"], item["content"])
+
+                if not await self._save_group_index(project_id, group_name, index_data):
+                    return False
 
             # 更新多级缓存 (write-through)
             self._cache.set(project_id, project_data, CacheLevel.L2_WARM)
@@ -422,9 +586,8 @@ class ProjectStorage:
 
             save_configs = self._serialize_group_configs(configs)
 
-            async with self._barrier.io_operation():
-                async with aiofiles.open(config_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(save_configs, ensure_ascii=False, indent=2))
+            async with aiofiles.open(config_path, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(save_configs, ensure_ascii=False, indent=2))
             return True
         except IOError:
             return False
@@ -465,10 +628,15 @@ class ProjectStorage:
                     if uuid_val:
                         self._uuid_to_name_cache[uuid_val] = name
 
-        # 检查新格式：目录下的 project.json
+        # 检查新格式：目录下的 _project.json 或 project.json（向后兼容）
         for project_dir in self.storage_dir.iterdir():
             if project_dir.is_dir():
-                project_json = project_dir / "project.json"
+                # 优先检查新格式的 _project.json
+                project_json = project_dir / "_project.json"
+                if not project_json.exists():
+                    # 向后兼容：检查旧格式的 project.json
+                    project_json = project_dir / "project.json"
+
                 if project_json.exists():
                     project_name = project_dir.name
                     project_data = await self._load_project(project_name)
@@ -609,9 +777,8 @@ class ProjectStorage:
                 "archived_at": datetime.now().isoformat(),
                 "archive_file": archive_file.name
             }
-            async with self._barrier.io_operation():
-                async with aiofiles.open(meta_file, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(meta_data, ensure_ascii=False, indent=2))
+            async with aiofiles.open(meta_file, "w", encoding="utf-8") as f:
+                await f.write(json.dumps(meta_data, ensure_ascii=False, indent=2))
 
             shutil.rmtree(project_dir)
 

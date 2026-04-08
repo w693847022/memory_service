@@ -5,6 +5,7 @@
 """
 
 import json
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -38,9 +39,9 @@ class CallStats:
             storage_dir: 存储目录路径，默认为 ~/.project_memory_ai/
         """
         if storage_dir is None:
-            storage_dir = Path.home() / ".project_memory_ai"
-        else:
-            storage_dir = Path(storage_dir)
+            # 优先使用环境变量，否则使用 Path.home()
+            storage_dir = os.environ.get("MCP_STORAGE_DIR", Path.home() / ".project_memory_ai")
+        storage_dir = Path(storage_dir)
 
         self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)

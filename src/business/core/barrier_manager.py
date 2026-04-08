@@ -114,7 +114,6 @@ class BarrierManager:
 
     def __init__(self) -> None:
         self._B1: asyncio.Lock = asyncio.Lock()  # 全局服务级
-        self._io_lock: asyncio.Lock = asyncio.Lock()  # 全局 IO 锁
         self._projects: Dict[str, ProjectBarriers] = {}
 
     def _get_pb(self, project_id: str) -> ProjectBarriers:
@@ -128,14 +127,6 @@ class BarrierManager:
         pb = self._projects.pop(project_id, None)
         if pb:
             pb.cleanup_all()
-
-    # ==================== IO 操作锁 ====================
-
-    @asynccontextmanager
-    async def io_operation(self):
-        """IO 操作锁 - 保护文件写入."""
-        async with self._io_lock:
-            yield
 
     # ==================== 服务级操作 (B1) ====================
 
