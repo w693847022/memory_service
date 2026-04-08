@@ -1,66 +1,143 @@
-# 多项目本地记忆 MCP 服务器
+# AI Memory MCP - Project Local Memory Server
 
-**[English Version](README_EN.md)**
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.12+-green.svg)](https://www.python.org/)
+[![MCP](https://img.shields.io/badge/MCP-FastMCP-orange.svg)](https://modelcontextprotocol.io/)
+[![Version](https://img.shields.io/badge/version-v1.0.0-brightgreen.svg)](VERSION)
 
-## 项目简介
-
-**AI Memory MCP** 是一个为 Claude Code 提供持久化项目记忆的 MCP 服务器。它让 AI 能够跨会话记住你的项目开发历程，包括功能规划、Bug 修复、开发笔记等关键信息，成为你开发过程中的"第二大脑"。
-
-与传统的笔记工具不同，本项目专为 AI 交互设计，将记忆内容结构化存储，支持智能标签系统和关联查询，让 Claude 能够快速理解项目上下文并提供精准帮助。
-
----
-
-## 主要功能
-
-### 记录内容
-
-| 分组 | 用途 | 记录内容 |
-|------|------|----------|
-| **Features (功能)** | 功能规划与跟踪 | 待开发功能、开发中功能、已完成功能 |
-| **Fixes (修复)** | Bug 修复记录 | 问题描述、严重程度、解决方案 |
-| **Notes (笔记)** | 开发知识沉淀 | 技术决策、调试过程、踩坑经验 |
-| **Standards (规范)** | 项目规范约束 | 代码规范、命名约定、架构原则 |
-
-### 记录关联
-
-```
-┌─────────────────┐
-│   Features      │ ─┐
-│   (功能列表)     │  │ 关联
-└─────────────────┘  │
-                     ├─→ Notes (笔记)
-┌─────────────────┐  │    (记录开发过程/决策原因)
-│   Fixes         │ ─┘
-│   (Bug修复)      │
-└─────────────────┘
-```
-
-- **Feature ↔ Note**: 功能开发时可关联相关笔记（如设计决策、参考文档）
-- **Fix ↔ Note**: Bug 修复时可关联排查过程
-- **Fix ↔ Feature**: Bug 修复可关联到具体功能模块
-- **标签系统**: 所有条目支持多标签，便于跨维度查询
+**[中文版](README_CN.md)**
 
 ---
 
-## 快速部署（Docker）
+## Project Overview
 
-### 1. 启动服务
+**AI Memory MCP** is an MCP server specifically designed for Claude Code to provide persistent project memory. It enables AI to remember your project development journey across sessions, including feature planning, bug fixes, development notes, code standards, and other critical information - acting as your "second brain" during development.
+
+### Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Structured Memory** | Categorizes project info into Features, Fixes, Notes, and Standards |
+| **Smart Associations** | Links between entries to build complete project knowledge graph |
+| **Tag System** | Powerful tag management for cross-dimensional queries and experience reuse |
+| **Three-Tier Architecture** | Separated MCP Server, FastAPI Server, and Business Server for easy scaling |
+| **Fully Async** | High-performance async architecture supporting concurrent access |
+| **Docker Deployment** | One-click containerized deployment with persistent data storage |
+
+---
+
+## System Architecture
+
+The project uses a three-tier architecture with clear responsibilities:
+
+```
+┌─────────────────┐     ┌─────────────────┐
+│   MCP Clients   │     │   Web Clients   │
+│  (Claude Code)  │     │   (Browser)     │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐
+│   MCP Server    │     │  FastAPI Server │
+│   (mcp_server)  │     │   (rest_api)    │
+│  - SSE/HTTP     │     │  - RESTful API  │
+└────────┬────────┘     └────────┬────────┘
+         │                       │
+         └───────────┬───────────┘
+                     ▼
+         ┌─────────────────────┐
+         │   Business Server   │
+         │   (business)        │
+         │  - Core business    │
+         │  - Data storage     │
+         │  - Tag system       │
+         └─────────────────────┘
+```
+
+### Directory Structure
+
+```
+ai_memory_mcp/
+├── src/
+│   ├── business/      # Business logic layer (core)
+│   ├── mcp_server/    # MCP server layer
+│   ├── rest_api/      # FastAPI REST API layer
+│   ├── clients/       # Client modules
+│   └── common/        # Common modules
+├── docker/            # Docker deployment files
+├── test/              # Test files (unit/integration/e2e/performance)
+├── scripts/           # Utility scripts
+├── examples/          # Example code (agents/skills)
+├── docs/              # Documentation
+├── config/            # Configuration files
+├── run_mcp.py         # MCP startup script
+├── start_business.py  # Business service startup script
+└── start_fastapi.py   # FastAPI startup script
+```
+
+---
+
+## Quick Start
+
+### Method 1: Docker Deployment (Recommended)
 
 ```bash
-# 启动 Docker 容器（默认端口 8000）
-cd docker && ./manage.sh start
+# 1. Enter Docker directory
+cd docker
 
-# 查看状态
+# 2. Start service (default port 8000)
+./manage.sh start
+
+# 3. Check status
 ./manage.sh status
 
-# 停止服务
+# 4. Stop service
 ./manage.sh stop
+
+# 5. View logs
+docker logs -f ai-memory-mcp
 ```
 
-### 2. Claude Code 配置
+### Method 2: Local Development
 
-编辑 Claude Code 配置文件，添加远程 MCP 服务器：
+```bash
+# 1. Create Conda environment
+conda create -n ai_memory_mcp python=3.12
+conda activate ai_memory_mcp
 
+# 2. Install dependencies
+pip install -r requirements.txt
+
+# 3. Start business service
+python start_business.py
+
+# 4. Start MCP server (new terminal)
+python run_mcp.py
+
+# 5. Start FastAPI service (optional, new terminal)
+python start_fastapi.py
+```
+
+### Claude Code Configuration
+
+Edit Claude Code configuration file and add MCP server:
+
+**Local Mode**:
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "python",
+      "args": ["/path/to/ai_memory_mcp/run_mcp.py"],
+      "env": {
+        "PYTHONPATH": "/path/to/ai_memory_mcp/src"
+      }
+    }
+  }
+}
+```
+
+**Docker Mode**:
 ```json
 {
   "mcpServers": {
@@ -72,241 +149,236 @@ cd docker && ./manage.sh start
 }
 ```
 
-### 3. 验证安装
+### Verify Installation
 
-在 Claude Code 中测试：
+Test in Claude Code:
 
 ```
-请使用 MCP [memory] 列出所有项目
-```
-
----
-
-## 具体使用场景
-
-### 场景一：开发便利性 - 跨会话记忆
-
-**问题**: 你今天让 Claude 帮忙写了一个用户认证模块，三天后回来继续开发，但忘了之前的实现细节。
-
-**传统方式**:
-```
-你: 我之前写了个用户登录，是什么方式来着？
-Claude: 我不知道之前的内容，需要你重新描述...
-```
-
-**使用 Memory MCP**:
-```
-你: 继续开发用户认证功能
-Claude: [查询记忆] 我看到你之前用 JWT 实现了用户登录，
-        使用 RS256 算法，token 存储在 localStorage。
-        要继续开发密码重置功能吗？
+Please use MCP [memory] to list all projects
 ```
 
 ---
 
-### 场景二：上下文管理 - 新人快速上手
+## Core Features
 
-**问题**: 新接手一个项目，代码里有 `handleAuth()` 函数，但不知道为什么要这样写。
+### Memory Content Categories
 
-**传统方式**:
+| Category | Purpose | Record Content |
+|----------|---------|----------------|
+| **Features** | Feature planning & tracking | Pending, in-progress, and completed features |
+| **Fixes** | Bug fix records | Issue descriptions, severity levels, solutions |
+| **Notes** | Development knowledge | Technical decisions, debugging processes, lessons learned |
+| **Standards** | Project standards | Code conventions, naming conventions, architectural principles |
+
+### Memory Association System
+
 ```
-你: 这个 handleAuth 为什么要检查三个条件？
-Claude: 我不太清楚项目背景，需要你解释...
+┌─────────────────┐
+│   Features      │ ─┐
+│   (Feature List)│  │ Associated
+└─────────────────┘  │
+                     ├─→ Notes (Notes)
+┌─────────────────┐  │    (Record development process/decision rationale)
+│   Fixes         │ ─┘
+│   (Bug Fixes)   │
+└─────────────────┘
 ```
 
-**使用 Memory MCP**:
-```
-你: handleAuth 函数的逻辑有点复杂
-Claude: [查询记忆] 根据 note_20260315_002，
-        这里需要检查三个条件是因为：
-        1. 处理老用户迁移时的 token 格式差异
-        2. 兼容移动端特殊认证流程
-        3. 防止重放攻击
-```
+- **Feature ↔ Note**: Features can link to related notes (design decisions, reference docs)
+- **Fix ↔ Note**: Bug fixes can link to troubleshooting processes
+- **Fix ↔ Feature**: Bug fixes can link to specific feature modules
+- **Tag System**: All entries support multi-tagging for cross-dimensional queries
 
 ---
 
-### 场景三：多项目信息获取 - 跨项目经验复用
+## MCP Tools List
 
-**问题**: 你在项目 A 中解决了一个棘手的并发问题，现在项目 B 遇到类似问题。
+### Project Management
 
-**传统方式**:
-```
-你: 我之前在另一个项目解决过类似问题...具体怎么做的来着？
-Claude: 我无法访问其他项目的信息...
-```
+| Tool | Function |
+|------|----------|
+| `project_register` | Register new project |
+| `project_list` | List all projects |
+| `project_get` | Get project info or query entries |
+| `project_rename` | Rename project |
+| `project_remove` | Archive or delete project |
 
-**使用 Memory MCP**:
-```
-你: 项目 B 出现了并发冲突问题
-Claude: [跨项目查询] 我发现你在项目 A 中
-        用标签 "concurrency" 记录过类似问题的解决方案：
+### Entry Management
 
-        fix_20260310_001: 使用乐观锁 + 重试机制解决
-        note_20260310_001: 详细记录了实现代码和注意事项
+| Tool | Function |
+|------|----------|
+| `project_add` | Add new entry (features/fixes/notes/standards) |
+| `project_update` | Update entry content |
+| `project_delete` | Delete entry |
 
-        要在项目 B 中应用相同的方案吗？
-```
+### Tag System
+
+| Tool | Function |
+|------|----------|
+| `tag_register` | Register new tag (define semantics) |
+| `tag_update` | Update tag semantics |
+| `tag_delete` | Delete tag |
+| `tag_merge` | Merge tags |
+| `project_tags_info` | Query tag information |
+| `project_item_tag_manage` | Manage entry tags |
+
+### Query Features
+
+- Filter by status (pending/in_progress/completed)
+- Filter by severity (critical/high/medium/low)
+- Filter by tags
+- Filter by creation/update time
+- Regex match on summary
+- Paginated queries
 
 ---
 
-### 场景四：规范约束 - AI 自动遵守项目约定
+## Use Case Examples
 
-**问题**: 你的项目有特定的代码规范（如：异步函数必须加 `_async` 后缀），但 Claude 不知道。
+### Scenario 1: Continue Development Across Sessions
 
-**使用 Memory MCP**:
+**Context**: Implemented API authentication middleware last week, continuing development today.
+
 ```
-你: 写一个用户获取函数
-Claude: [查询规范] 根据 standards 中的命名规范，
-        异步函数需要加 _async 后缀。我将创建：
+You: Continue improving API authentication, add refresh token mechanism
 
-        def get_user_async(user_id: int) -> User:
+Claude: [Query memory] Found project records:
+        - feat_20260401: JWT authentication implemented using FastAPI Security
+        - note_20260401: Key stored at /secrets/jwt_key.pem
+        - standards_20260315: Auth-related functions need @auth_required decorator
+
+        Based on existing implementation, here's the refresh token design...
+```
+
+### Scenario 2: Reuse Solved Experience
+
+**Context**: New project encounters a Docker networking issue you solved before.
+
+```
+You: Services can't communicate after Docker Compose starts
+
+Claude: [Cross-project query] Found similar issue in project web-dashboard:
+        - fix_20260310: Docker network communication failure
+        - Solution: Use custom network network_mode: bridge
+        - note_20260310: Need to explicitly declare networks in docker-compose.yml
+
+        Generated same configuration for new project...
+```
+
+### Scenario 3: Follow Project Conventions
+
+**Context**: Make AI generate code following team standards.
+
+```
+You: Implement user order query endpoint
+
+Claude: [Query standards] According to project standards:
+        - All endpoints return wrapped Result<T> format
+        - Pagination uses PageRequest(page, size)
+        - Async functions must include _async suffix
+
+        Generated code:
+
+        async def get_orders_async(req: PageRequest) -> Result[List[Order]]:
             ...
 ```
 
 ---
 
-### 场景五：Bug 修复追踪 - 关联分析
+## Data Storage
 
-**问题**: 某个 Bug 反复出现，想了解历史修复记录。
+### Storage Location
 
-**使用 Memory MCP**:
-```
-你: 登录接口又报错了
-Claude: [查询历史] 该问题有 3 次修复记录：
+Docker Mode: Persistent volume inside container at `/var/lib/project_memory_ai/`
 
-        fix_20260301_001: Token 过期问题 (严重: high)
-        fix_20260308_002: 时区处理错误 (严重: medium)
-        fix_20260315_003: 并发竞态条件 (严重: critical)
-                        ↑ 关联 feature_auth_002
+Local Mode: `data/` directory in project root
 
-        本次错误可能是...建议检查...
-```
-
----
-
-## 数据存储与管理
-
-### 目录结构
-
-所有数据存储在服务器容器内的持久化卷中：
+### Data Directory Structure
 
 ```
 /var/lib/project_memory_ai/
-├── _metadata.json           # 全局元数据（项目列表、统计）
-├── _stats.json              # 接口调用统计
+├── _metadata.json              # Global metadata (project list, statistics)
+├── _stats.json                 # API call statistics
 │
-├── project_a/               # 项目A目录（项目名称）
-│   ├── project.json         # 项目数据（features/fixes/standards元信息）
-│   └── notes/               # 笔记内容（独立md文件）
-│       ├── note_20260320_001.md
-│       └── note_20260320_002.md
+├── project_a/                  # ProjectA directory (project name)
+│   ├── _project.json           # Project metadata (id, name, info, _version)
+│   ├── _tags.json              # Tag registry (tag -> description, aliases)
+│   ├── _group_configs.json     # Group configurations (optional)
+│   │
+│   ├── features/               # Features group
+│   │   ├── _index.json         # Feature index (id -> summary, status, tags...)
+│   │   ├── feat_20260408_001.json  # Feature details
+│   │   └── feat_20260408_002.json
+│   │
+│   ├── fixes/                  # Bug fixes group (same structure as features)
+│   ├── notes/                  # Notes group (same structure as features)
+│   └── standards/              # Standards group (same structure as features)
 │
-├── project_b/               # 项目B目录
-│   ├── project.json
-│   └── notes/
+├── project_b/                  # ProjectB directory
 │
-└── .archived/               # 已归档的旧数据
-    └── 20260320_123456_project_a.json
-```
-
-### 数据结构
-
-#### project.json 格式
-
-```json
-{
-  "id": "proj_xxxxx",                    // 项目 UUID
-  "info": {
-    "name": "项目名称",                   // 项目显示名称
-    "path": "/path/to/project",          // 项目路径
-    "description": "项目描述",
-    "created_at": "2026-03-20T10:00:00",
-    "updated_at": "2026-03-20T15:30:00",
-    "tags": ["python", "web"]            // 项目级标签
-  },
-  "features": [                          // 功能列表
-    {
-      "id": "feat_20260320_001",
-      "description": "实现用户登录",
-      "status": "completed",             // pending/in_progress/completed
-      "note_id": "note_20260320_001",    // 关联笔记
-      "tags": ["auth", "frontend"],
-      "created_at": "2026-03-20T10:00:00",
-      "updated_at": "2026-03-20T14:00:00"
-    }
-  ],
-  "fixes": [                             // Bug修复记录
-    {
-      "id": "fix_20260320_001",
-      "description": "修复登录接口认证错误",
-      "status": "completed",
-      "severity": "critical",            // critical/high/medium/low
-      "related_feature": "feat_20260320_001",  // 关联功能
-      "note_id": "note_20260320_002",
-      "tags": ["auth", "bug"],
-      "created_at": "2026-03-20T12:00:00",
-      "updated_at": "2026-03-20T13:00:00"
-    }
-  ],
-  "notes": [                             // 笔记元信息（不含内容）
-    {
-      "id": "note_20260320_001",
-      "description": "JWT登录实现方案",
-      "tags": ["auth", "design"],
-      "created_at": "2026-03-20T10:30:00",
-      "updated_at": "2026-03-20T10:30:00"
-    }
-  ],
-  "standards": [                         // 项目规范
-    {
-      "id": "std_20260320_001",
-      "description": "命名规范",
-      "content": "异步函数必须加 _async 后缀",
-      "tags": ["naming", "style"],
-      "created_at": "2026-03-20T09:00:00",
-      "updated_at": "2026-03-20T09:00:00"
-    }
-  ],
-  "tag_registry": {                      // 标签注册表
-    "auth": {
-      "description": "认证相关",
-      "created_at": "2026-03-20T10:00:00",
-      "usage_count": 5,
-      "aliases": ["authentication"]
-    }
-  }
-}
-```
-
-#### 笔记内容文件
-
-```
-# notes/note_20260320_001.md
-登录功能使用 JWT 实现...
-
-- 算法：RS256
-- Token存储：localStorage
-- 有效期：24小时
+└── .archived/                  # Archived projects
+    ├── 20260408_123456_project_a.tar.gz
+    └── 20260408_123456_project_a.meta.json
 ```
 
 ---
 
-## 安全提醒
+## Development Guide
 
-> 当前版本未实现多人协作的数据安全管理机制。
+### Requirements
 
-- 考虑后续更新
+- Python 3.12+
+- Conda (recommended)
+- Docker (for containerized deployment)
+
+### Running Tests
+
+```bash
+# Use test script
+./scripts/run_tests.sh
+
+# Or manually run
+pytest test/ -v --cov=src/business --cov-report=html
+```
+
+### Code Standards
+
+- Use `black` for code formatting
+- Use `ruff` for code linting
+- Use `mypy` for type checking
 
 ---
 
-## 项目徽章
+## Project Status
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.12+-green.svg)
-![MCP](https://img.shields.io/badge/MCP-FastMCP-orange.svg)
+| Project | Version | Dev Branch | Main Branch |
+|---------|---------|------------|-------------|
+| ai_memory_mcp | v1.0.0 | dev | main |
 
+### Development Statistics
 
-## 许可
+- Features: 63
+- Notes: 125
+- Fixes: 24
+- Standards: 18
+- Tags: 59
 
-MIT License
+---
+
+## Contributing
+
+Contributions welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) file for details.
+
+---
+
+## Related Links
+
+- [MCP Protocol Specification](https://modelcontextprotocol.io/)
+- [Claude Code Documentation](https://code.anthropic.com/)
+- [FastMCP Documentation](https://github.com/jlowin/fastmcp)

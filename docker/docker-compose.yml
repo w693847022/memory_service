@@ -12,6 +12,15 @@ services:
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "${BUSINESS_PORT:-8002}:8002"
+    # CPU: 1.0 = 100000 / 100000
+    cpu_quota: 100000
+    cpu_period: 100000
+    mem_limit: 1g
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - PYTHONUNBUFFERED=1
       - MCP_STORAGE_DIR=${MCP_STORAGE_DIR:-/app/.project_memory_ai}
@@ -50,6 +59,15 @@ services:
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "${MCP_PORT:-8000}:8000"
+    # CPU: 0.2 = 20000 / 100000
+    cpu_quota: 20000
+    cpu_period: 100000
+    mem_limit: 200m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - HOME=${HOME:-/home/wrs}
       - MCP_TRANSPORT=${MCP_TRANSPORT:-streamable-http}
@@ -89,6 +107,15 @@ services:
     user: "${USER_ID:-1000}:${GROUP_ID:-1000}"
     ports:
       - "${FASTAPI_PORT:-8001}:8001"
+    # CPU: 0.2 = 20000 / 100000
+    cpu_quota: 20000
+    cpu_period: 100000
+    mem_limit: 200m
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - PYTHONUNBUFFERED=1
       # HTTP 调用 business 层
