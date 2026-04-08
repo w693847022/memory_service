@@ -311,7 +311,7 @@ def project_get(
     Args:
         project_id: 项目ID
         group_name: 分组名称 (可选)
-        item_id: 条目ID (可选): 查询单个条目时指定
+        item_id: 条目ID (可选): 查询单个条目时指定 ID格式为:{group}_xxx_xx
         status: 状态过滤 (可选)
         severity: 严重程度过滤 (可选)
         tags: 标签过滤 (可选)

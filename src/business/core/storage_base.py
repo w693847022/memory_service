@@ -19,6 +19,7 @@ from cachetools import TTLCache
 import aiofiles
 
 from business.core.barrier_manager import BarrierManager
+from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 
 # TTL 缓存配置
 CACHE_TTL_SECONDS = 300
@@ -57,12 +58,10 @@ class ProjectStorage:
         # 项目列表缓存 (ID -> Name)
         self._projects_cache: Dict[str, str] = {}
 
-        # 项目数据缓存 (ID -> Full Project Data) with TTL
-        self._project_data_cache = TTLCache(
-            maxsize=CACHE_MAX_SIZE,
-            ttl=CACHE_TTL_SECONDS,
-            timer=time.time
-        )
+        # 多级缓存系统
+        self._cache = SmartCache(config=CacheConfig())
+        # 兼容性：保留原有接口
+        self._project_data_cache = self._cache.l2_cache
 
         # UUID -> 项目名称映射缓存 (用于反向查找)
         self._uuid_to_name_cache = TTLCache(
@@ -271,8 +270,8 @@ class ProjectStorage:
 
     async def _load_project(self, project_id: str) -> Optional[Dict[str, Any]]:
         """加载单个项目数据（带向后兼容和缓存）."""
-        # 快速路径：缓存命中
-        cached_data = self._project_data_cache.get(project_id)
+        # 快速路径：多级缓存查询
+        cached_data = self._cache.get(project_id)
         if cached_data is not None:
             return cached_data
 
@@ -332,8 +331,8 @@ class ProjectStorage:
                 # 补全版本结构
                 self._ensure_versions(data)
 
-                # 存入缓存
-                self._project_data_cache[project_id] = data
+                # 存入多级缓存
+                self._cache.set(project_id, data, CacheLevel.L2_WARM)
 
                 return data
             except (json.JSONDecodeError, IOError):
@@ -370,8 +369,8 @@ class ProjectStorage:
                 async with aiofiles.open(project_json_path, "w", encoding="utf-8") as f:
                     await f.write(json.dumps(save_data, ensure_ascii=False, indent=2))
 
-            # 更新缓存 (write-through)
-            self._project_data_cache[project_id] = project_data
+            # 更新多级缓存 (write-through)
+            self._cache.set(project_id, project_data, CacheLevel.L2_WARM)
 
             return True
         except IOError:
@@ -773,3 +772,22 @@ class ProjectStorage:
     def barrier(self) -> BarrierManager:
         """获取阻挡位管理器."""
         return self._barrier
+
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """获取缓存统计信息.
+
+        Returns:
+            包含缓存统计的字典
+        """
+        stats = self._cache.get_stats()
+        return {
+            "hit_rate": f"{stats.hit_rate:.2%}",
+            "l1_hits": stats.l1_hits,
+            "l2_hits": stats.l2_hits,
+            "l3_hits": stats.l3_hits,
+            "total_misses": stats.l1_misses + stats.l2_misses + stats.l3_misses,
+            "promotions": stats.promotions,
+            "l1_size": len(self._cache.l1_cache),
+            "l2_size": len(self._cache.l2_cache),
+            "l3_size": len(self._cache.l3_cache),
+        }

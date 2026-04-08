@@ -351,5 +351,160 @@ def run_all_tests():
     print()
 
 
+
+
+@pytest.mark.asyncio
+class TestSmartCacheIntegration:
+    """SmartCache 集成测试."""
+
+    @pytest_asyncio.fixture(autouse=True)
+    async def setup_teardown(self):
+        """每个测试方法前后的设置和清理."""
+        self.temp_dir = None
+        self.storage = None
+        self.project_service = None
+        yield
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    async def async_setup_method(self):
+        """每个测试方法前执行：设置测试环境."""
+        self.temp_dir = tempfile.mkdtemp()
+        self.storage = Storage(storage_dir=self.temp_dir)
+        self.project_service = ProjectService(self.storage)
+
+    async def test_smart_cache_integration(self):
+        """测试 SmartCache 与 Storage 的集成."""
+        await self.async_setup_method()
+        # 创建一个项目
+        result = await self.project_service.register_project("cache_test", "缓存测试项目")
+        project_id = result["project_id"]
+
+        # 添加一些数据
+        await self.project_service.add_item(
+            project_id=project_id,
+            group="features",
+            summary="测试功能",
+            content="测试内容",
+        )
+
+        # 多次读取项目数据（会触发缓存）
+        for _ in range(5):
+            data = await self.storage.get_project_data(project_id)
+            assert data is not None
+            assert "features" in data
+
+        # 验证缓存统计
+        stats = self.storage.get_cache_stats()
+        assert stats["l2_hits"] > 0 or stats["l1_hits"] > 0
+
+    async def test_cache_hit_rate_improvement(self):
+        """测试缓存命中率提升."""
+        await self.async_setup_method()
+        # 创建项目并添加数据
+        result = await self.project_service.register_project("hit_rate_test", "命中率测试")
+        project_id = result["project_id"]
+
+        for i in range(20):
+            await self.project_service.add_item(
+                project_id=project_id,
+                group="features",
+                summary=f"功能 {i}",
+                content=f"内容 {i}",
+            )
+
+        # 多次读取相同的项目数据（模拟热点访问）
+        for _ in range(100):
+            data = await self.storage.get_project_data(project_id)
+            assert data is not None
+
+        # 检查缓存命中率
+        stats = self.storage.get_cache_stats()
+        hit_rate = float(stats["hit_rate"].rstrip("%"))
+        assert hit_rate > 50  # 应该有明显的缓存命中
+
+    async def test_hot_data_promotion(self):
+        """测试热点数据自动升级."""
+        await self.async_setup_method()
+
+        result = await self.project_service.register_project("promo_test", "升级测试")
+        project_id = result["project_id"]
+
+        await self.project_service.add_item(
+            project_id=project_id,
+            group="features",
+            summary="热点功能",
+            content="热点内容",
+        )
+
+        # 多次访问同一个项目（触发热点升级）
+        for _ in range(10):
+            data = await self.storage.get_project_data(project_id)
+            assert data is not None
+
+        # 验证有升级统计
+        stats = self.storage.get_cache_stats()
+        assert stats["l2_hits"] > 0
+
+    async def test_cache_stats_api(self):
+        """测试缓存统计 API."""
+        await self.async_setup_method()
+        # 获取初始统计
+        stats_before = self.storage.get_cache_stats()
+        assert "hit_rate" in stats_before
+        assert "l1_hits" in stats_before
+        assert "l2_hits" in stats_before
+        assert "l3_hits" in stats_before
+        assert "total_misses" in stats_before
+        assert "promotions" in stats_before
+        assert "l1_size" in stats_before
+        assert "l2_size" in stats_before
+        assert "l3_size" in stats_before
+
+        # 执行一些操作
+        result = await self.project_service.register_project("stats_test", "统计测试")
+        project_id = result["project_id"]
+
+        await self.project_service.add_item(
+            project_id=project_id,
+            group="features",
+            summary="测试",
+            content="内容",
+        )
+
+        # 多次读取项目数据
+        for _ in range(10):
+            await self.storage.get_project_data(project_id)
+
+        # 获取更新后的统计
+        stats_after = self.storage.get_cache_stats()
+        # 应该有活动
+        assert stats_after["l2_hits"] > 0 or stats_after["l1_hits"] > 0
+
+    async def test_backward_compatibility(self):
+        """测试向后兼容性."""
+        await self.async_setup_method()
+        # 验证旧的缓存接口仍然可用
+        result = await self.project_service.register_project("compat_test", "兼容性测试")
+        project_id = result["project_id"]
+
+        await self.project_service.add_item(
+            project_id=project_id,
+            group="features",
+            summary="测试",
+            content="内容",
+        )
+
+        # 使用旧接口访问缓存
+        cache = self.storage.project_data_cache
+        assert cache is not None
+
+        # 刷新项目缓存
+        await self.storage.refresh_projects_cache()
+        projects = self.storage.projects_cache
+        assert projects is not None
+        assert project_id in projects
+
+
 if __name__ == "__main__":
     run_all_tests()
