@@ -73,9 +73,9 @@ class TestApiIntegration:
         project_id = result["project_id"]
 
         # 注册标签
-        await self.tag_service.register_tag(project_id, "urgent", "紧急任务")
-        await self.tag_service.register_tag(project_id, "bug", "Bug相关")
-        await self.tag_service.register_tag(project_id, "api", "API相关")
+        await self.tag_service.register_tag(project_id, "urgent", "紧急且高优先级的任务")
+        await self.tag_service.register_tag(project_id, "bug", "程序错误和缺陷修复相关")
+        await self.tag_service.register_tag(project_id, "api", "应用程序接口开发相关")
 
         # 添加带标签的功能（使用 add_item 统一接口）
         await self.project_service.add_item(
@@ -112,7 +112,7 @@ class TestApiIntegration:
         project_id = result["project_id"]
 
         # 注册标签
-        result = await self.tag_service.register_tag(project_id, "backend", "后端相关")
+        result = await self.tag_service.register_tag(project_id, "backend", "后端服务器端开发相关")
         assert result["success"], f"注册标签失败: {result}"
 
         # 查询标签信息 (使用 get_project 中的 tag_registry)

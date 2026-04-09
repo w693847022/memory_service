@@ -19,6 +19,7 @@ from typing import Optional, Dict, List, Any, Union
 from cachetools import TTLCache
 import aiofiles
 
+from src.models import ProjectData, GroupIndex
 from business.core.barrier_decorator import BarrierManager, get_barrier_manager
 from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 
@@ -355,6 +356,9 @@ class ProjectStorage:
         支持的格式：
         - 新拆分格式：_project.json, _tags.json, {group}/_index.json
         - 旧目录格式：project.json（需要手动迁移）
+
+        Returns:
+            项目数据字典（内部使用），如果需要 ProjectData 模型，使用 get_project_data()
         """
         # 快速路径：多级缓存查询
         cached_data = self._cache.get(project_id)
@@ -415,6 +419,55 @@ class ProjectStorage:
         self._cache.set(project_id, data, CacheLevel.L2_WARM)
 
         return data
+
+    async def get_project_data(self, project_id: str) -> Optional[ProjectData]:
+        """获取项目数据并转换为 ProjectData 模型.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            ProjectData 模型实例，如果项目不存在则返回 None
+        """
+        data_dict = await self._load_project(project_id)
+        if data_dict is None:
+            return None
+
+        # 转换为 ProjectData 模型
+        try:
+            # 构建元数据
+            metadata = {
+                "id": data_dict.get("id"),
+                "name": data_dict.get("name"),
+                **data_dict.get("info", {})
+            }
+
+            # 构建分组索引
+            groups = {}
+            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                items = data_dict.get(group_name, [])
+                groups[group_name] = GroupIndex(items=[item.get("id") for item in items])
+
+            # 构建标签注册表
+            tags = data_dict.get("tag_registry", {})
+
+            # 构建配置
+            config = {
+                "_version": data_dict.get("_version", 1),
+                "_versions": data_dict.get("_versions", {}),
+                "_group_configs": data_dict.get("_group_configs")
+            }
+
+            return ProjectData(
+                metadata=metadata,
+                groups=groups,
+                tags=tags,
+                config=config
+            )
+        except Exception as e:
+            # 如果转换失败，返回 None
+            return None
 
     async def _load_split_format(self, project_id: str) -> Optional[Dict[str, Any]]:
         """加载拆分格式的项目数据."""
@@ -593,7 +646,7 @@ class ProjectStorage:
             return False
 
     def _serialize_group_configs(self, configs: Dict[str, Any]) -> Dict[str, Any]:
-        """将组配置中的 dataclass 转换为字典."""
+        """将组配置中的 dataclass/Pydantic 模型转换为字典."""
         from business.core.groups import UnifiedGroupConfig
 
         result = {}
@@ -603,6 +656,9 @@ class ProjectStorage:
                 for group_name, group_config in value.items():
                     if isinstance(group_config, UnifiedGroupConfig):
                         result[key][group_name] = group_config.to_dict()
+                    elif hasattr(group_config, 'model_dump'):
+                        # Pydantic 模型
+                        result[key][group_name] = group_config.model_dump()
                     elif isinstance(group_config, dict):
                         result[key][group_name] = group_config
             elif isinstance(value, dict):
@@ -614,7 +670,11 @@ class ProjectStorage:
     async def _refresh_projects_cache(self):
         """刷新项目缓存（支持新旧格式）."""
         self._projects_cache = {}
-        self._uuid_to_name_cache = {}
+        self._uuid_to_name_cache = TTLCache(
+            maxsize=CACHE_MAX_SIZE,
+            ttl=CACHE_TTL_SECONDS,
+            timer=time.time
+        )
 
         # 检查旧格式：*.json 文件
         for file_path in self.storage_dir.glob("*.json"):
@@ -926,7 +986,7 @@ class ProjectStorage:
         return self._projects_cache
 
     @property
-    def project_data_cache(self):
+    def project_data_cache(self) -> Union[TTLCache, Dict[str, Any]]:
         """获取项目数据缓存."""
         return self._project_data_cache
 

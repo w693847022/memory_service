@@ -82,7 +82,7 @@ class TestDrainCompleteMechanism:
 
         # 步骤1: 注册一个测试标签
         await self.tag_service.register_tag(
-            project_id, "test_tag", "测试标签"
+            project_id, "test_tag", "排空机制测试专用标签"
         )
         print("  ✓ 注册标签: test_tag")
 
@@ -376,7 +376,7 @@ class TestDrainCompleteMechanism:
         tag_result = await self.tag_service.register_tag(
             project_id=project_id,
             tag_name="concurrent_tag",
-            summary="并发测试标签"
+            summary="并发删除操作测试标签"
         )
         assert tag_result["success"]
         print(f"  ✓ 注册标签: concurrent_tag")
@@ -457,7 +457,7 @@ class TestDrainCompleteMechanism:
         await self.tag_service.register_tag(
             project_id=project_id,
             tag_name="delete_during_tag",
-            summary="测试标签"
+            summary="删除期间操作测试标签"
         )
         print(f"  ✓ 注册标签: delete_during_tag")
 

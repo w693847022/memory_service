@@ -52,14 +52,14 @@ class TestVersionControl:
         # 准备测试数据
         project_id = "test_project"
         group = "features"
-        item_id = "feat_001"
+        item_id = "feat_20260409_1"
 
         # 创建一个版本为2的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
-            "_v": 2,
+            "version": 2,
             "tags": ["test"],
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
@@ -94,14 +94,14 @@ class TestVersionControl:
         """测试正确版本号的更新."""
         project_id = "test_project"
         group = "features"
-        item_id = "feat_001"
+        item_id = "feat_20260409_1"
 
         # 创建一个版本为2的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
-            "_v": 2,
+            "version": 2,
             "tags": ["test"],
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
@@ -138,13 +138,13 @@ class TestVersionControl:
         """测试不进行版本检查的更新."""
         project_id = "test_project"
         group = "features"
-        item_id = "feat_001"
+        item_id = "feat_20260409_1"
 
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
-            "_v": 2,
+            "version": 2,
             "tags": ["test"],
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
@@ -179,13 +179,14 @@ class TestVersionControl:
         """测试没有版本字段的条目初始化为版本1."""
         project_id = "test_project"
         group = "features"
-        item_id = "feat_001"
+        item_id = "feat_20260409_1"
 
         # 创建没有版本字段的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
+            "version": 1,
             "tags": ["test"],
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()

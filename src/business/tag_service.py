@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
+from src.models import TagInfo, TagRegistry
 from business.core.groups import get_all_groups
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
@@ -125,13 +126,17 @@ class TagService:
                 "tag_info": tag_registry[tag_name]
             }
 
+        # 使用 TagInfo 模型进行验证
+        tag_info = TagInfo(
+            name=tag_name,
+            summary=summary,
+            aliases=aliases or [],
+            usage_count=0
+        )
+
         # 注册新标签
-        tag_registry[tag_name] = {
-            "summary": summary,
-            "created_at": datetime.now().isoformat(),
-            "usage_count": 0,
-            "aliases": aliases or []
-        }
+        tag_registry[tag_name] = tag_info.model_dump()
+        tag_registry[tag_name]["created_at"] = datetime.now().isoformat()
 
         project_data["tag_registry"] = tag_registry
         project_data["info"]["updated_at"] = datetime.now().isoformat()
@@ -142,11 +147,13 @@ class TagService:
         project_data["_version"] = project_data.get("_version", 0) + 1
 
         if await self.storage.save_project_data(project_id, project_data):
+            # 使用 TagInfo 模型验证并返回
+            registered_tag = TagInfo.model_validate(tag_registry[tag_name])
             return {
                 "success": True,
                 "message": f"标签 '{tag_name}' 已成功注册",
                 "tag_name": tag_name,
-                "tag_info": tag_registry[tag_name]
+                "tag_info": registered_tag.model_dump()
             }
 
         return {"success": False, "error": "保存数据失败"}
@@ -203,10 +210,12 @@ class TagService:
         project_data["_version"] = project_data.get("_version", 0) + 1
 
         if await self.storage.save_project_data(project_id, project_data):
+            # 使用 TagInfo 模型验证并返回
+            updated_tag = TagInfo.model_validate(tag_registry[tag_name])
             return {
                 "success": True,
                 "message": f"标签 '{tag_name}' 已更新",
-                "tag_info": tag_registry[tag_name]
+                "tag_info": updated_tag.model_dump()
             }
 
         return {"success": False, "error": "保存数据失败"}

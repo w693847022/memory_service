@@ -294,7 +294,7 @@ class TestConcurrentOperations:
             await self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=tag,
-                summary=f"测试标签 {tag}"
+                summary=f"并发测试标签{tag.replace('concurrent_tag', '')}"
             )
 
         # 并发添加多个标签到同一条目
@@ -353,7 +353,10 @@ class TestConcurrentOperations:
             await self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=tag,
-                summary=f"测试标签 {tag}"
+                summary=f"测试标签一号" if tag == "concurrent_tag1" else
+                        f"测试标签二号" if tag == "concurrent_tag2" else
+                        f"测试标签三号" if tag == "concurrent_tag3" else
+                        f"测试用标签"
             )
 
         # 先添加一个测试条目，带有初始标签
@@ -443,12 +446,12 @@ class TestConcurrentOperations:
         await self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="concurrent_tag1",
-            summary="测试标签1"
+            summary="并发操作测试标签一号"
         )
         await self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="concurrent_tag2",
-            summary="测试标签2"
+            summary="并发操作测试标签二号"
         )
 
         # 先添加一个测试条目
@@ -546,7 +549,7 @@ class TestConcurrentOperations:
             task = self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=f"tag_{i}",
-                summary=f"Tag {i}"
+                summary=f"测试标签零号" if i == 0 else f"测试标签{i}号"
             )
             tasks.append(task)
 
@@ -626,7 +629,7 @@ class TestConcurrentOperations:
             result = await self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=tag_name,
-                summary=f"测试标签 {tag_name}"
+                summary=f"测试标签tag{tag_name.replace('tag', '')}"
             )
             assert result["success"], f"Failed to register {tag_name}"
             print(f"  ✓ 预先注册标签: {tag_name}")
@@ -699,7 +702,7 @@ class TestConcurrentOperations:
         await self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="test_tag",
-            summary="测试标签"
+            summary="并发删除操作测试用标签"
         )
         print("  ✓ 预先注册标签: test_tag")
 
@@ -772,7 +775,7 @@ class TestConcurrentOperations:
         await self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="old_tag",
-            summary="旧标签"
+            summary="待合并删除的旧测试标签"
         )
         print("  ✓ 预先注册标签: old_tag")
 
@@ -808,7 +811,7 @@ class TestConcurrentOperations:
         register_task = self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="new_tag",
-            summary="新标签"
+            summary="新注册的测试标签备用"
         )
 
         # 等待两个操作完成
@@ -939,7 +942,7 @@ class TestConcurrentOperations:
             result = await self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=tag_name,
-                summary=f"标签 {tag_name}"
+                summary=f"测试标签{tag_name.replace('tag_', '').upper()}类"
             )
             assert result["success"]
             print(f"  ✓ 预先注册标签: {tag_name}")
@@ -1053,13 +1056,13 @@ class TestConcurrentOperations:
         tasks.append(self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="new_tag1",
-            summary="新标签1"
+            summary="新注册的测试标签选项一"
         ))
 
         tasks.append(self.tag_service.register_tag(
             project_id=self.project_id,
             tag_name="new_tag2",
-            summary="新标签2"
+            summary="新注册的测试标签选项二"
         ))
 
         # B2级操作
@@ -1116,7 +1119,7 @@ class TestConcurrentOperations:
             await self.tag_service.register_tag(
                 project_id=self.project_id,
                 tag_name=tag,
-                summary=f"测试标签 {tag}"
+                summary=f"高并发测试标签{tag.replace('concurrent_tag', '')}"
             )
 
         # 先添加多个测试条目

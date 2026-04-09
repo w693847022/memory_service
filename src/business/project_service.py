@@ -7,6 +7,7 @@
 from datetime import datetime
 from typing import Optional, Dict, List, Any, Union
 
+from src.models import Item, ItemCreate, ItemUpdate
 from business.core.groups import (
     all_group_names, DEFAULT_TAGS,
     validate_group_name, validate_status, validate_severity,
@@ -474,28 +475,38 @@ class ProjectService:
         # 生成时间戳
         timestamps = self.storage.generate_timestamps()
 
-        # 创建新条目
-        new_item = {
-            "id": item_id,
-            "_v": 1,
-            "summary": summary,
-            "content": content,
-            "tags": tags or [],
-            "created_at": timestamps["created_at"],
-            "updated_at": timestamps["updated_at"]
-        }
+        # 使用 ItemCreate 模型进行验证
+        item_create = ItemCreate(
+            summary=summary,
+            content=content,
+            tags=tags or [],
+            status=status,
+            severity=severity,
+            related=related
+        )
 
-        if status:
-            new_item["status"] = status
-        if severity:
-            new_item["severity"] = severity
-        if related:
-            new_item["related"] = related
+        # 创建新条目
+        new_item = Item(
+            id=item_id,
+            summary=item_create.summary,
+            content=item_create.content,
+            tags=item_create.tags,
+            status=item_create.status,
+            severity=item_create.severity,
+            related=item_create.related,
+            created_at=timestamps["created_at"],
+            updated_at=timestamps["updated_at"],
+            version=1
+        )
+
+        # 转换为字典格式用于存储（保持向后兼容）
+        new_item_dict = new_item.model_dump()
+        new_item_dict["_v"] = 1  # 保持版本字段兼容性
 
         # 添加到对应分组
         if group not in project_data:
             project_data[group] = []
-        project_data[group].append(new_item)
+        project_data[group].append(new_item_dict)
 
         # 更新版本号
         project_data["_versions"][group] = project_data.get("_versions", {}).get(group, 1) + 1
@@ -516,11 +527,13 @@ class ProjectService:
             if group in CONTENT_SEPARATE_GROUPS:
                 await self.storage.save_item_content(project_id, group, item_id, content)
 
+            # 返回使用 Pydantic 模型验证的结果
             return {
                 "success": True,
                 "project_id": project_id,
                 "group": group,
                 "item_id": item_id,
+                "item": Item.model_validate(new_item_dict).model_dump(),
                 "message": f"条目 '{item_id}' 已添加到 '{group}' 分组"
             }
 
@@ -565,16 +578,24 @@ class ProjectService:
 
         items = project_data.get(group, [])
         item = None
-        for i in items:
-            if i.get("id") == item_id:
-                item = i
+        item_index = None
+        for i, itm in enumerate(items):
+            if itm.get("id") == item_id:
+                item = itm
+                item_index = i
                 break
 
         if item is None:
             return {"success": False, "error": f"在分组 '{group}' 中找不到条目 '{item_id}'"}
 
+        # 使用 Pydantic 模型验证当前条目
+        try:
+            current_item = Item.model_validate(item)
+        except Exception as e:
+            return {"success": False, "error": f"条目数据格式错误: {e}"}
+
         # 版本检测
-        current_version = item.get("_v", 1)
+        current_version = current_item.version
         if expected_version is not None and current_version != expected_version:
             return {
                 "success": False,
@@ -586,27 +607,31 @@ class ProjectService:
             }
 
         # 记录旧标签用于计数更新
-        old_tags = item.get("tags", [])
+        old_tags = current_item.tags
+
+        # 使用 ItemUpdate 模型进行验证
+        item_update = ItemUpdate(
+            summary=summary,
+            content=content,
+            tags=tags,
+            status=status,
+            severity=severity,
+            related=related,
+            version=current_version
+        )
 
         # 更新字段
-        if content is not None:
-            item["content"] = content
-        if summary is not None:
-            item["summary"] = summary
-        if status is not None:
-            item["status"] = status
-        if severity is not None:
-            item["severity"] = severity
-        if related is not None:
-            item["related"] = related
-        if tags is not None:
-            item["tags"] = tags
+        update_data = item_update.model_dump(exclude_none=True)
+        for field, value in update_data.items():
+            if field != "version" and value is not None:
+                item[field] = value
 
         # 更新时间戳
         item["updated_at"] = datetime.now().isoformat()
 
         # 条目版本递增
         item["_v"] = current_version + 1
+        item["version"] = current_version + 1
 
         # 项目全局版本递增
         project_data["_version"] = project_data.get("_version", 0) + 1
@@ -633,13 +658,15 @@ class ProjectService:
             if group in CONTENT_SEPARATE_GROUPS and content is not None:
                 await self.storage.save_item_content(project_id, group, item_id, content)
 
+            # 使用 Pydantic 模型验证并返回
+            updated_item = Item.model_validate(item)
             return {
                 "success": True,
                 "project_id": project_id,
                 "group": group,
                 "item_id": item_id,
-                "item": {k: v for k, v in item.items() if k != "content"} if group in CONTENT_SEPARATE_GROUPS else item,
-                "version": item["_v"],
+                "item": updated_item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set()),
+                "version": updated_item.version,
                 "message": f"条目 '{item_id}' 已更新"
             }
 
