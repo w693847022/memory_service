@@ -19,7 +19,7 @@ from typing import Optional, Dict, List, Any, Union
 from cachetools import TTLCache
 import aiofiles
 
-from business.core.barrier_manager import BarrierManager
+from business.core.barrier_decorator import BarrierManager, get_barrier_manager
 from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 
 # TTL 缓存配置
@@ -48,8 +48,8 @@ class ProjectStorage:
         self.storage_dir = storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        # 阻挡位管理器
-        self._barrier = barrier_manager or BarrierManager()
+        # 阻挡位管理器（使用新的装饰器式 BarrierManager）
+        self._barrier = barrier_manager or get_barrier_manager()
 
         # 元数据文件
         self.metadata_path = self.storage_dir / "_metadata.json"

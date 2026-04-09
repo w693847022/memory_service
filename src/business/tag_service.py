@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 
 from business.core.groups import get_all_groups
+from business.core.barrier_decorator import barrier
+from business.core.barrier_constants import OperationLevel
 
 
 class TagService:
@@ -72,6 +74,7 @@ class TagService:
 
     # ==================== 异步业务方法 ====================
 
+    @barrier(level=OperationLevel.L3, files=["_tags.json"], key="{project_id}")
     async def register_tag(
         self,
         project_id: str,
@@ -108,47 +111,47 @@ class TagService:
                 "error": f"摘要长度无效：需要3-200字符，当前为 {len(summary)} 字符"
             }
 
-        async with self.storage.barrier.tag_register(project_id):
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            tag_registry = project_data.get("tag_registry", {})
+        tag_registry = project_data.get("tag_registry", {})
 
-            # 检查标签是否已注册
-            if tag_name in tag_registry:
-                return {
-                    "success": False,
-                    "error": f"标签 '{tag_name}' 已经注册",
-                    "tag_info": tag_registry[tag_name]
-                }
-
-            # 注册新标签
-            tag_registry[tag_name] = {
-                "summary": summary,
-                "created_at": datetime.now().isoformat(),
-                "usage_count": 0,
-                "aliases": aliases or []
+        # 检查标签是否已注册
+        if tag_name in tag_registry:
+            return {
+                "success": False,
+                "error": f"标签 '{tag_name}' 已经注册",
+                "tag_info": tag_registry[tag_name]
             }
 
-            project_data["tag_registry"] = tag_registry
-            project_data["info"]["updated_at"] = datetime.now().isoformat()
+        # 注册新标签
+        tag_registry[tag_name] = {
+            "summary": summary,
+            "created_at": datetime.now().isoformat(),
+            "usage_count": 0,
+            "aliases": aliases or []
+        }
 
-            # 版本更新
-            versions = project_data.setdefault("_versions", {})
-            versions["tag_registry"] = versions.get("tag_registry", 1) + 1
-            project_data["_version"] = project_data.get("_version", 0) + 1
+        project_data["tag_registry"] = tag_registry
+        project_data["info"]["updated_at"] = datetime.now().isoformat()
 
-            if await self.storage.save_project_data(project_id, project_data):
-                return {
-                    "success": True,
-                    "message": f"标签 '{tag_name}' 已成功注册",
-                    "tag_name": tag_name,
-                    "tag_info": tag_registry[tag_name]
-                }
+        # 版本更新
+        versions = project_data.setdefault("_versions", {})
+        versions["tag_registry"] = versions.get("tag_registry", 1) + 1
+        project_data["_version"] = project_data.get("_version", 0) + 1
 
-            return {"success": False, "error": "保存数据失败"}
+        if await self.storage.save_project_data(project_id, project_data):
+            return {
+                "success": True,
+                "message": f"标签 '{tag_name}' 已成功注册",
+                "tag_name": tag_name,
+                "tag_info": tag_registry[tag_name]
+            }
 
+        return {"success": False, "error": "保存数据失败"}
+
+    @barrier(level=OperationLevel.L3, files=["_tags.json"], key="{project_id}")
     async def update_tag(
         self,
         project_id: str,
@@ -175,40 +178,40 @@ class TagService:
                 "error": f"摘要长度无效：需要3-200字符，当前为 {len(summary)} 字符"
             }
 
-        async with self.storage.barrier.tag_register(project_id):
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            tag_registry = project_data.get("tag_registry", {})
+        tag_registry = project_data.get("tag_registry", {})
 
-            if tag_name not in tag_registry:
-                return {
-                    "success": False,
-                    "error": f"标签 '{tag_name}' 未注册"
-                }
+        if tag_name not in tag_registry:
+            return {
+                "success": False,
+                "error": f"标签 '{tag_name}' 未注册"
+            }
 
-            # 更新摘要
-            if summary is not None:
-                tag_registry[tag_name]["summary"] = summary
+        # 更新摘要
+        if summary is not None:
+            tag_registry[tag_name]["summary"] = summary
 
-            project_data["tag_registry"] = tag_registry
-            project_data["info"]["updated_at"] = datetime.now().isoformat()
+        project_data["tag_registry"] = tag_registry
+        project_data["info"]["updated_at"] = datetime.now().isoformat()
 
-            # 版本更新
-            versions = project_data.setdefault("_versions", {})
-            versions["tag_registry"] = versions.get("tag_registry", 1) + 1
-            project_data["_version"] = project_data.get("_version", 0) + 1
+        # 版本更新
+        versions = project_data.setdefault("_versions", {})
+        versions["tag_registry"] = versions.get("tag_registry", 1) + 1
+        project_data["_version"] = project_data.get("_version", 0) + 1
 
-            if await self.storage.save_project_data(project_id, project_data):
-                return {
-                    "success": True,
-                    "message": f"标签 '{tag_name}' 已更新",
-                    "tag_info": tag_registry[tag_name]
-                }
+        if await self.storage.save_project_data(project_id, project_data):
+            return {
+                "success": True,
+                "message": f"标签 '{tag_name}' 已更新",
+                "tag_info": tag_registry[tag_name]
+            }
 
-            return {"success": False, "error": "保存数据失败"}
+        return {"success": False, "error": "保存数据失败"}
 
+    @barrier(level=OperationLevel.L2, files=["_tags.json"], key="{project_id}")
     async def delete_tag(
         self,
         project_id: str,
@@ -229,47 +232,47 @@ class TagService:
         Returns:
             操作结果
         """
-        async with self.storage.barrier.tag_delete(project_id):
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            tag_registry = project_data.get("tag_registry", {})
+        tag_registry = project_data.get("tag_registry", {})
 
-            if tag_name not in tag_registry:
-                return {
-                    "success": False,
-                    "error": f"标签 '{tag_name}' 未注册"
-                }
+        if tag_name not in tag_registry:
+            return {
+                "success": False,
+                "error": f"标签 '{tag_name}' 未注册"
+            }
 
-            # 检查标签是否正在使用
-            usage_count = tag_registry[tag_name].get("usage_count", 0)
+        # 检查标签是否正在使用
+        usage_count = tag_registry[tag_name].get("usage_count", 0)
 
-            if usage_count > 0 and not force:
-                return {
-                    "success": False,
-                    "error": f"标签 '{tag_name}' 正在被 {usage_count} 个条目使用，请使用 force=True 强制删除"
-                }
+        if usage_count > 0 and not force:
+            return {
+                "success": False,
+                "error": f"标签 '{tag_name}' 正在被 {usage_count} 个条目使用，请使用 force=True 强制删除"
+            }
 
-            # 删除标签
-            del tag_registry[tag_name]
+        # 删除标签
+        del tag_registry[tag_name]
 
-            project_data["tag_registry"] = tag_registry
-            project_data["info"]["updated_at"] = datetime.now().isoformat()
+        project_data["tag_registry"] = tag_registry
+        project_data["info"]["updated_at"] = datetime.now().isoformat()
 
-            # 版本更新
-            versions = project_data.setdefault("_versions", {})
-            versions["tag_registry"] = versions.get("tag_registry", 1) + 1
-            project_data["_version"] = project_data.get("_version", 0) + 1
+        # 版本更新
+        versions = project_data.setdefault("_versions", {})
+        versions["tag_registry"] = versions.get("tag_registry", 1) + 1
+        project_data["_version"] = project_data.get("_version", 0) + 1
 
-            if await self.storage.save_project_data(project_id, project_data):
-                return {
-                    "success": True,
-                    "message": f"标签 '{tag_name}' 已删除"
-                }
+        if await self.storage.save_project_data(project_id, project_data):
+            return {
+                "success": True,
+                "message": f"标签 '{tag_name}' 已删除"
+            }
 
-            return {"success": False, "error": "保存数据失败"}
+        return {"success": False, "error": "保存数据失败"}
 
+    @barrier(level=OperationLevel.L2, files=["_tags.json"], key="{project_id}")
     async def merge_tags(
         self,
         project_id: str,
@@ -290,82 +293,81 @@ class TagService:
         Returns:
             操作结果
         """
-        async with self.storage.barrier.tag_delete(project_id):  # 复用 tag_delete 阻挡位
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            tag_registry = project_data.get("tag_registry", {})
+        tag_registry = project_data.get("tag_registry", {})
 
-            # 检查两个标签都已注册
-            if old_tag not in tag_registry:
-                return {
-                    "success": False,
-                    "error": f"旧标签 '{old_tag}' 未注册"
-                }
+        # 检查两个标签都已注册
+        if old_tag not in tag_registry:
+            return {
+                "success": False,
+                "error": f"旧标签 '{old_tag}' 未注册"
+            }
 
-            if new_tag not in tag_registry:
-                return {
-                    "success": False,
-                    "error": f"新标签 '{new_tag}' 未注册"
-                }
+        if new_tag not in tag_registry:
+            return {
+                "success": False,
+                "error": f"新标签 '{new_tag}' 未注册"
+            }
 
-            if old_tag == new_tag:
-                return {
-                    "success": False,
-                    "error": "旧标签和新标签不能相同"
-                }
+        if old_tag == new_tag:
+            return {
+                "success": False,
+                "error": "旧标签和新标签不能相同"
+            }
 
-            # 统计需要迁移的条目数量
-            migrated_count = 0
-            affected_groups = []
+        # 统计需要迁移的条目数量
+        migrated_count = 0
+        affected_groups = []
 
-            # 获取所有组名称
-            all_groups = get_all_groups()
+        # 获取所有组名称
+        all_groups = get_all_groups()
 
-            # 在所有分组中迁移标签
-            for group_name in all_groups:
-                items = project_data.get(group_name, [])
-                group_affected = False
-                for item in items:
-                    tags = item.get("tags", [])
-                    if old_tag in tags:
-                        tags.remove(old_tag)
-                        if new_tag not in tags:
-                            tags.append(new_tag)
-                        item["tags"] = tags
-                        item["_v"] = item.get("_v", 1) + 1
-                        migrated_count += 1
-                        group_affected = True
-                if group_affected:
-                    affected_groups.append(group_name)
+        # 在所有分组中迁移标签
+        for group_name in all_groups:
+            items = project_data.get(group_name, [])
+            group_affected = False
+            for item in items:
+                tags = item.get("tags", [])
+                if old_tag in tags:
+                    tags.remove(old_tag)
+                    if new_tag not in tags:
+                        tags.append(new_tag)
+                    item["tags"] = tags
+                    item["_v"] = item.get("_v", 1) + 1
+                    migrated_count += 1
+                    group_affected = True
+            if group_affected:
+                affected_groups.append(group_name)
 
-            # 更新使用计数
-            old_usage = tag_registry[old_tag].get("usage_count", 0)
-            new_usage = tag_registry[new_tag].get("usage_count", 0)
-            tag_registry[new_tag]["usage_count"] = new_usage + old_usage
+        # 更新使用计数
+        old_usage = tag_registry[old_tag].get("usage_count", 0)
+        new_usage = tag_registry[new_tag].get("usage_count", 0)
+        tag_registry[new_tag]["usage_count"] = new_usage + old_usage
 
-            # 删除旧标签
-            del tag_registry[old_tag]
+        # 删除旧标签
+        del tag_registry[old_tag]
 
-            project_data["tag_registry"] = tag_registry
-            project_data["info"]["updated_at"] = datetime.now().isoformat()
+        project_data["tag_registry"] = tag_registry
+        project_data["info"]["updated_at"] = datetime.now().isoformat()
 
-            # 版本更新
-            versions = project_data.setdefault("_versions", {})
-            versions["tag_registry"] = versions.get("tag_registry", 1) + 1
-            for group_name in affected_groups:
-                versions[group_name] = versions.get(group_name, 1) + 1
-            project_data["_version"] = project_data.get("_version", 0) + 1
+        # 版本更新
+        versions = project_data.setdefault("_versions", {})
+        versions["tag_registry"] = versions.get("tag_registry", 1) + 1
+        for group_name in affected_groups:
+            versions[group_name] = versions.get(group_name, 1) + 1
+        project_data["_version"] = project_data.get("_version", 0) + 1
 
-            if await self.storage.save_project_data(project_id, project_data):
-                return {
-                    "success": True,
-                    "message": f"已将标签 '{old_tag}' 合并到 '{new_tag}'，迁移了 {migrated_count} 个条目",
-                    "migrated_count": migrated_count
-                }
+        if await self.storage.save_project_data(project_id, project_data):
+            return {
+                "success": True,
+                "message": f"已将标签 '{old_tag}' 合并到 '{new_tag}'，迁移了 {migrated_count} 个条目",
+                "migrated_count": migrated_count
+            }
 
-            return {"success": False, "error": "保存数据失败"}
+        return {"success": False, "error": "保存数据失败"}
 
     async def list_all_registered_tags(self, project_id: str) -> Dict[str, Any]:
         """列出项目中所有已注册的标签.
@@ -591,6 +593,7 @@ class TagService:
             } if is_registered else None
         }
 
+    @barrier(level=OperationLevel.L5, files=["{group_name}/{item_id}.json"], key="{project_id}:{group_name}:{item_id}")
     async def add_item_tag(
         self,
         project_id: str,
@@ -613,58 +616,58 @@ class TagService:
         Returns:
             操作结果
         """
-        async with self.storage.barrier.update_item(project_id, group_name, item_id):
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            if group_name not in get_all_groups():
-                return {"success": False, "error": f"分组 '{group_name}' 不存在"}
+        if group_name not in get_all_groups():
+            return {"success": False, "error": f"分组 '{group_name}' 不存在"}
 
-            # 强制注册检查：标签必须先注册才能使用
-            tag_registry = project_data.get("tag_registry", {})
-            if tag not in tag_registry:
+        # 强制注册检查：标签必须先注册才能使用
+        tag_registry = project_data.get("tag_registry", {})
+        if tag not in tag_registry:
+            return {
+                "success": False,
+                "error": f"标签 '{tag}' 未注册，请先使用 tag_register 注册该标签"
+            }
+
+        # 找到目标条目
+        items = project_data.get(group_name, [])
+        item = None
+        for i in items:
+            if i.get("id") == item_id:
+                item = i
+                break
+
+        if item is None:
+            return {"success": False, "error": f"条目ID '{item_id}' 不存在"}
+
+        current_version = item.get("_v", 1)
+        current_tags = item.get("tags", [])
+
+        if tag not in current_tags:
+            current_tags.append(tag)
+            item["tags"] = current_tags
+            item["_v"] = current_version + 1
+
+            # 更新使用计数
+            tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
+            project_data["tag_registry"] = tag_registry
+
+            project_data["info"]["updated_at"] = datetime.now().isoformat()
+            project_data["_version"] = project_data.get("_version", 0) + 1
+
+            if await self.storage.save_project_data(project_id, project_data):
                 return {
-                    "success": False,
-                    "error": f"标签 '{tag}' 未注册，请先使用 tag_register 注册该标签"
+                    "success": True,
+                    "message": f"已为条目 '{item_id}' 添加标签 '{tag}'",
+                    "tags": current_tags
                 }
+            return {"success": False, "error": "保存数据失败"}
 
-            # 找到目标条目
-            items = project_data.get(group_name, [])
-            item = None
-            for i in items:
-                if i.get("id") == item_id:
-                    item = i
-                    break
+        return {"success": True, "message": f"标签 '{tag}' 已存在", "tags": current_tags}
 
-            if item is None:
-                return {"success": False, "error": f"条目ID '{item_id}' 不存在"}
-
-            current_version = item.get("_v", 1)
-            current_tags = item.get("tags", [])
-
-            if tag not in current_tags:
-                current_tags.append(tag)
-                item["tags"] = current_tags
-                item["_v"] = current_version + 1
-
-                # 更新使用计数
-                tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
-                project_data["tag_registry"] = tag_registry
-
-                project_data["info"]["updated_at"] = datetime.now().isoformat()
-                project_data["_version"] = project_data.get("_version", 0) + 1
-
-                if await self.storage.save_project_data(project_id, project_data):
-                    return {
-                        "success": True,
-                        "message": f"已为条目 '{item_id}' 添加标签 '{tag}'",
-                        "tags": current_tags
-                    }
-                return {"success": False, "error": "保存数据失败"}
-
-            return {"success": True, "message": f"标签 '{tag}' 已存在", "tags": current_tags}
-
+    @barrier(level=OperationLevel.L5, files=["{group_name}/{item_id}.json"], key="{project_id}:{group_name}:{item_id}")
     async def remove_item_tag(
         self,
         project_id: str,
@@ -687,49 +690,48 @@ class TagService:
         Returns:
             操作结果
         """
-        async with self.storage.barrier.update_item(project_id, group_name, item_id):
-            project_data = await self.storage.get_project_data(project_id)
-            if project_data is None:
-                return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-            if group_name not in get_all_groups():
-                return {"success": False, "error": f"分组 '{group_name}' 不存在"}
+        if group_name not in get_all_groups():
+            return {"success": False, "error": f"分组 '{group_name}' 不存在"}
 
-            # 找到目标条目
-            items = project_data.get(group_name, [])
-            item = None
-            for i in items:
-                if i.get("id") == item_id:
-                    item = i
-                    break
+        # 找到目标条目
+        items = project_data.get(group_name, [])
+        item = None
+        for i in items:
+            if i.get("id") == item_id:
+                item = i
+                break
 
-            if item is None:
-                return {"success": False, "error": f"条目ID '{item_id}' 不存在"}
+        if item is None:
+            return {"success": False, "error": f"条目ID '{item_id}' 不存在"}
 
-            current_version = item.get("_v", 1)
-            current_tags = item.get("tags", [])
+        current_version = item.get("_v", 1)
+        current_tags = item.get("tags", [])
 
-            if tag in current_tags:
-                current_tags.remove(tag)
-                item["tags"] = current_tags
-                item["_v"] = current_version + 1
+        if tag in current_tags:
+            current_tags.remove(tag)
+            item["tags"] = current_tags
+            item["_v"] = current_version + 1
 
-                # 更新使用计数
-                tag_registry = project_data.get("tag_registry", {})
-                if tag in tag_registry:
-                    current_count = tag_registry[tag].get("usage_count", 0)
-                    tag_registry[tag]["usage_count"] = max(0, current_count - 1)
-                    project_data["tag_registry"] = tag_registry
+            # 更新使用计数
+            tag_registry = project_data.get("tag_registry", {})
+            if tag in tag_registry:
+                current_count = tag_registry[tag].get("usage_count", 0)
+                tag_registry[tag]["usage_count"] = max(0, current_count - 1)
+                project_data["tag_registry"] = tag_registry
 
-                project_data["info"]["updated_at"] = datetime.now().isoformat()
-                project_data["_version"] = project_data.get("_version", 0) + 1
+            project_data["info"]["updated_at"] = datetime.now().isoformat()
+            project_data["_version"] = project_data.get("_version", 0) + 1
 
-                if await self.storage.save_project_data(project_id, project_data):
-                    return {
-                        "success": True,
-                        "message": f"已从条目 '{item_id}' 移除标签 '{tag}'",
-                        "tags": current_tags
-                    }
-                return {"success": False, "error": "保存数据失败"}
+            if await self.storage.save_project_data(project_id, project_data):
+                return {
+                    "success": True,
+                    "message": f"已从条目 '{item_id}' 移除标签 '{tag}'",
+                    "tags": current_tags
+                }
+            return {"success": False, "error": "保存数据失败"}
 
-            return {"success": True, "message": f"标签 '{tag}' 不存在", "tags": current_tags}
+        return {"success": True, "message": f"标签 '{tag}' 不存在", "tags": current_tags}

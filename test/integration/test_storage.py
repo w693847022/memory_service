@@ -156,8 +156,8 @@ class TestStorageIntegration:
         else:
             raise AssertionError("无法找到项目目录")
 
-        project_file = project_dir / "project.json"
-        assert project_file.exists(), "project.json 不存在"
+        project_file = project_dir / "_project.json"
+        assert project_file.exists(), "_project.json 不存在"
 
         # 验证所有默认组的 content 目录存在
         for group_name in ("features", "fixes", "notes", "standards"):
@@ -205,9 +205,9 @@ class TestStorageIntegration:
             saved = content_file.read_text(encoding="utf-8")
             assert saved == expected_content, f"{group} content 不匹配"
 
-        # 验证 project.json 不包含任何 content 字段
+        # 验证 _project.json 不包含任何 content 字段
         project_dir = self.storage._get_project_dir(project_id)
-        project_json = project_dir / "project.json"
+        project_json = project_dir / "_project.json"
         with open(project_json, "r", encoding="utf-8") as f:
             disk_data = json.load(f)
         for group in ("features", "fixes", "notes", "standards"):
@@ -259,9 +259,9 @@ class TestStorageIntegration:
         result = await self.project_service.register_project("迁移测试", "/tmp/test")
         project_id = result["project_id"]
 
-        # 直接修改 project.json，模拟旧格式（内联 content）
+        # 直接修改 _project.json，模拟旧格式（内联 content）
         project_dir = self.storage._get_project_dir(project_id)
-        project_json = project_dir / "project.json"
+        project_json = project_dir / "_project.json"
         with open(project_json, "r", encoding="utf-8") as f:
             data = json.load(f)
 

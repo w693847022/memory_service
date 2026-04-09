@@ -143,8 +143,7 @@ class TestRestGroups:
         project_id = register_result["data"]["project_id"]
 
         # 创建自定义分组
-        result = rest_client.post("/api/groups/custom", params={
-            "project_id": project_id,
+        result = rest_client.post(f"/api/projects/{project_id}/groups", params={
             "group_name": "custom_backlog",
             "content_max_bytes": 500,
             "summary_max_bytes": 100
