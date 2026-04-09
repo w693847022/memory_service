@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Body
 from business.core.groups import UnifiedGroupConfig, GroupType, all_group_names
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
-from business.models.response import ApiResponse
+from src.models import ApiResponse
 
 # 全局服务实例
 _storage = None

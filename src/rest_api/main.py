@@ -100,7 +100,7 @@ app.add_middleware(RequestTrackerMiddleware)
 # 统一响应格式
 # ===================
 
-from common.response import ApiResponse
+from src.models import ApiResponse
 
 
 # ===================

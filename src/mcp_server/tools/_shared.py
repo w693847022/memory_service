@@ -41,5 +41,5 @@ def _tool_response(result, success_data=None, success_message=None):
 
 def _error_response(error):
     """构建错误响应."""
-    from common.response import ApiResponse
+    from src.models import ApiResponse
     return ApiResponse(success=False, error=error).to_json()

@@ -1,15 +1,9 @@
 """通用工具函数模块 - 不包含任何业务逻辑依赖."""
 
 import re
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Pattern
 
-
-@dataclass
-class PaginationResult:
-    items: List[Any]
-    pagination_meta: Dict[str, Any]
-    filtered_total: int
+from src.models.config import PaginationResult
 
 
 def resolve_default_size(size, view_mode):

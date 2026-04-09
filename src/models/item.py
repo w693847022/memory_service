@@ -8,6 +8,40 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+class ItemRelated(BaseModel):
+    """关联字段 - 替代原有的 related_feature, note_id 等."""
+
+    features: List[str] = Field(default_factory=list, description="关联的 features")
+    fixes: List[str] = Field(default_factory=list, description="关联的 fixes")
+    notes: List[str] = Field(default_factory=list, description="关联的 notes")
+    standards: List[str] = Field(default_factory=list, description="关联的 standards")
+
+    def to_dict(self) -> Dict[str, List[str]]:
+        """转换为字典，仅包含非空字段."""
+        result: Dict[str, List[str]] = {}
+        if self.features:
+            result["features"] = self.features
+        if self.fixes:
+            result["fixes"] = self.fixes
+        if self.notes:
+            result["notes"] = self.notes
+        if self.standards:
+            result["standards"] = self.standards
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Optional[Dict[str, List[str]]]) -> Optional["ItemRelated"]:
+        """从字典创建（兼容旧数据迁移）."""
+        if not data:
+            return None
+        return cls(
+            features=data.get("features", []),
+            fixes=data.get("fixes", []),
+            notes=data.get("notes", []),
+            standards=data.get("standards", []),
+        )
+
+
 class Item(BaseModel):
     """
     Complete item model with all fields.

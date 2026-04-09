@@ -55,6 +55,24 @@ class ApiResponse(BaseModel, Generic[T]):
         return result
 
     @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ApiResponse[T]":
+        """
+        Create an ApiResponse from a dictionary.
+
+        Args:
+            data: Dictionary containing response data
+
+        Returns:
+            ApiResponse instance created from the dictionary
+        """
+        return cls(
+            success=data.get("success", False),
+            data=data.get("data"),
+            message=data.get("message"),
+            error=data.get("error"),
+        )
+
+    @classmethod
     def success_response(
         cls,
         data: Optional[T] = None,

@@ -9,57 +9,12 @@
 支持热点自动识别与升级机制。
 """
 
-from enum import Enum
 from cachetools import TTLCache, LRUCache
 from typing import Optional, Any, Dict
-from dataclasses import dataclass
 import threading
 
-
-class CacheLevel(Enum):
-    """缓存层级"""
-    L1_HOT = "l1_hot"      # 热点数据
-    L2_WARM = "l2_warm"    # 常规数据
-    L3_LIST = "l3_list"    # 列表数据
-
-
-@dataclass
-class CacheConfig:
-    """缓存配置"""
-    # L1: 热点缓存
-    l1_ttl: int = 60           # 60秒
-    l1_maxsize: int = 20       # 最多20个
-
-    # L2: 常规缓存
-    l2_ttl: int = 600          # 10分钟
-    l2_maxsize: int = 100      # 最多100个
-
-    # L3: 列表缓存 (LRU)
-    l3_maxsize: int = 1000     # 最多1000个
-
-    # 热点识别
-    hot_threshold: int = 10    # 访问10次升级为热点
-    promotion_enabled: bool = True  # 是否启用自动升级
-
-
-@dataclass
-class CacheStats:
-    """缓存统计"""
-    l1_hits: int = 0
-    l1_misses: int = 0
-    l2_hits: int = 0
-    l2_misses: int = 0
-    l3_hits: int = 0
-    l3_misses: int = 0
-    promotions: int = 0       # L2→L1 升级次数
-    total_access: int = 0
-
-    @property
-    def hit_rate(self) -> float:
-        """计算缓存命中率"""
-        total_hits = self.l1_hits + self.l2_hits + self.l3_hits
-        total = total_hits + self.l1_misses + self.l2_misses + self.l3_misses
-        return total_hits / total if total > 0 else 0.0
+from src.models.config import CacheConfig, CacheStats
+from src.models.enums import CacheLevel
 
 
 class SmartCache:

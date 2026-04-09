@@ -1,7 +1,6 @@
 """Common 模块 - 通用非业务逻辑组件."""
 
 from .config import parse_args
-from .response import ApiResponse
 from .utils import (
     PaginationResult,
     resolve_default_size,
@@ -16,7 +15,6 @@ from .utils import (
 
 __all__ = [
     "parse_args",
-    "ApiResponse",
     "PaginationResult",
     "resolve_default_size",
     "paginate",

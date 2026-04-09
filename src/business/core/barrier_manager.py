@@ -15,16 +15,9 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from enum import IntEnum 
 from typing import Dict
 
-class BarrierLevel(IntEnum):
-    """阻挡等级枚举"""
-    B1 = 1
-    B2 = 2
-    B3 = 3
-    B4 = 4
-    B5 = 5
+from src.models.enums import BarrierLevel
 
 class DrainCounter:
     """活跃操作计数器 - 跟踪 B4/B5 级别正在执行的操作数.

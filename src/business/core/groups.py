@@ -1,147 +1,21 @@
 """组配置和检测函数模块."""
-from dataclasses import dataclass, field
-from enum import Enum
 from typing import List, Optional, Dict, Any
 import json
 
+from src.models.config import (
+    FieldConfig,
+    GroupConfig,
+    UnifiedGroupConfig,
+    GroupSettings,
+)
+from src.models.enums import GroupType
 
 # 系统保留字段（不能用作自定义组名）
 # 注意：内置组 features/notes/fixes/standards 不是保留字段，它们是有效的组名
 RESERVED_FIELDS = ["id", "info", "tag_registry"]
 
-
-class GroupType(Enum):
-    """组类型枚举."""
-    FEATURES = "features"
-    FIXES = "fixes"
-    NOTES = "notes"
-    STANDARDS = "standards"
-
-    @classmethod
-    def values(cls) -> List[str]:
-        return [g.value for g in cls]
-
-    @classmethod
-    def from_string(cls, s: str) -> Optional["GroupType"]:
-        """从字符串获取枚举值，忽略大小写和空格."""
-        s_lower = s.lower().strip()
-        for g in cls:
-            if g.value == s_lower:
-                return g
-        return None
-
-
-@dataclass
-class FieldConfig:
-    """字段配置."""
-    max_tokens: int
-    required: bool = False
-
-
-@dataclass
-class GroupConfig:
-    """组配置（内部使用，兼容旧代码）."""
-    content: FieldConfig
-    summary: FieldConfig
-    status_values: List[str] = field(default_factory=list)
-    severity_values: List[str] = field(default_factory=list)
-    required_fields: List[str] = field(default_factory=list)
-
-    def to_unified_dict(self) -> Dict[str, Any]:
-        """转换为统一配置字典（用于 JSON 存储）."""
-        return {
-            "content_max_bytes": self.content.max_tokens * 3,
-            "summary_max_bytes": self.summary.max_tokens * 3,
-            "allow_related": bool(self.status_values),
-            "allowed_related_to": [],
-            "enable_status": bool(self.status_values),
-            "enable_severity": bool(self.severity_values),
-            "status_values": self.status_values,
-            "severity_values": self.severity_values,
-            "required_fields": self.required_fields,
-        }
-
-    @classmethod
-    def from_unified_dict(cls, data: Dict[str, Any]) -> "GroupConfig":
-        """从统一配置字典创建 GroupConfig."""
-        content_max = data.get("content_max_bytes", 240) // 3
-        summary_max = data.get("summary_max_bytes", 90) // 3
-        return cls(
-            content=FieldConfig(max_tokens=content_max),
-            summary=FieldConfig(max_tokens=summary_max),
-            status_values=data.get("status_values", []),
-            severity_values=data.get("severity_values", []),
-            required_fields=data.get("required_fields", ["content", "summary"]),
-        )
-
-
-@dataclass
-class UnifiedGroupConfig:
-    """统一组配置（内置组和自定义组通用）."""
-    content_max_bytes: int = 240
-    summary_max_bytes: int = 90
-    allow_related: bool = False
-    allowed_related_to: List[str] = field(default_factory=list)
-    enable_status: bool = True
-    enable_severity: bool = False
-    status_values: List[str] = field(default_factory=list)
-    severity_values: List[str] = field(default_factory=list)
-    required_fields: List[str] = field(default_factory=list)
-    is_builtin: bool = False
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典以便 JSON 序列化."""
-        return {
-            "content_max_bytes": self.content_max_bytes,
-            "summary_max_bytes": self.summary_max_bytes,
-            "allow_related": self.allow_related,
-            "allowed_related_to": self.allowed_related_to,
-            "enable_status": self.enable_status,
-            "enable_severity": self.enable_severity,
-            "status_values": self.status_values,
-            "severity_values": self.severity_values,
-            "required_fields": self.required_fields,
-            "is_builtin": self.is_builtin,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UnifiedGroupConfig":
-        """从字典创建数据类."""
-        if isinstance(data, cls):
-            return data
-        return cls(
-            content_max_bytes=data.get("content_max_bytes", 240),
-            summary_max_bytes=data.get("summary_max_bytes", 90),
-            allow_related=data.get("allow_related", False),
-            allowed_related_to=data.get("allowed_related_to", []),
-            enable_status=data.get("enable_status", True),
-            enable_severity=data.get("enable_severity", False),
-            status_values=data.get("status_values", []),
-            severity_values=data.get("severity_values", []),
-            required_fields=data.get("required_fields", ["content", "summary"]),
-            is_builtin=data.get("is_builtin", False),
-        )
-
-
 # 保留 CustomGroupConfig 作为 UnifiedGroupConfig 的别名，兼容旧代码
 CustomGroupConfig = UnifiedGroupConfig
-
-
-@dataclass
-class GroupSettings:
-    """全局组设置."""
-    default_related_rules: Dict[str, List[str]] = field(default_factory=dict)
-
-    def to_dict(self) -> Dict:
-        return {
-            "default_related_rules": self.default_related_rules
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict) -> "GroupSettings":
-        return cls(
-            default_related_rules=data.get("default_related_rules", {})
-        )
 
 
 # 默认内置组配置（用于初始化 JSON 存储）

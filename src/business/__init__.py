@@ -7,7 +7,7 @@ from .core import (
     track_calls,
 )
 
-from .models import ApiResponse, Item, ItemRelated
+from src.models import ApiResponse, Item, ItemRelated
 
 from .storage import Storage
 from .tag_service import TagService

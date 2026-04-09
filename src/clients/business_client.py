@@ -6,7 +6,7 @@
 import os
 import httpx
 from typing import Optional, Dict, List, Union, Any
-from common.response import ApiResponse
+from src.models import ApiResponse
 from .pool_config import ConnectionPoolConfig
 
 
