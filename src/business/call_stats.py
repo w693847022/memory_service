@@ -13,6 +13,8 @@ from typing import Optional, Dict, Any, Union
 import threading
 
 from cachetools import TTLCache
+from src.models.stats import CallStatsData, ToolStats, DailyStats
+from src.models.version import ProjectVersions
 
 # ===================
 # 配置参数
@@ -56,16 +58,18 @@ class CallStats:
         if self.stats_path.exists():
             try:
                 with open(self.stats_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # 转换为 Pydantic 模型
+                    stats_data = CallStatsData(**data)
+                    return stats_data.model_dump()
             except (json.JSONDecodeError, IOError):
                 pass
 
-        return {
-            "version": "1.0",
-            "created_at": datetime.now().isoformat(),
-            "tool_calls": {},
-            "daily_stats": {}
-        }
+        # 使用 CallStatsData 模型初始化
+        return CallStatsData(
+            version="1.0",
+            created_at=datetime.now().isoformat()
+        ).model_dump()
 
     def _save_stats(self) -> bool:
         """保存统计数据."""
@@ -103,14 +107,7 @@ class CallStats:
 
                 # 初始化工具统计
                 if tool_name not in self.data["tool_calls"]:
-                    self.data["tool_calls"][tool_name] = {
-                        "total": 0,
-                        "by_project": {},
-                        "by_client": {},
-                        "by_ip": {},
-                        "first_called": None,
-                        "last_called": None
-                    }
+                    self.data["tool_calls"][tool_name] = ToolStats().model_dump()
 
                 tool_stats = self.data["tool_calls"][tool_name]
                 tool_stats["total"] += 1
@@ -130,10 +127,7 @@ class CallStats:
 
                 # 每日统计
                 if date_str not in self.data["daily_stats"]:
-                    self.data["daily_stats"][date_str] = {
-                        "total_calls": 0,
-                        "tools": {}
-                    }
+                    self.data["daily_stats"][date_str] = DailyStats().model_dump()
 
                 self.data["daily_stats"][date_str]["total_calls"] += 1
                 self.data["daily_stats"][date_str]["tools"][tool_name] = \

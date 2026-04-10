@@ -19,7 +19,7 @@ from typing import Optional, Dict, List, Any, Union
 from cachetools import TTLCache
 import aiofiles
 
-from src.models import ProjectData, GroupIndex
+from src.models.storage import ProjectData
 from business.core.barrier_decorator import BarrierManager, get_barrier_manager
 from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 
@@ -350,22 +350,22 @@ class ProjectStorage:
                     pass
             return False
 
-    async def _load_project(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """加载单个项目数据（支持拆分文件格式）.
+    async def _load_project(self, project_id: str) -> Optional[ProjectData]:
+        """加载单个项目数据并返回 ProjectData 模型.
 
         支持的格式：
         - 新拆分格式：_project.json, _tags.json, {group}/_index.json
         - 旧目录格式：project.json（需要手动迁移）
 
         Returns:
-            项目数据字典（内部使用），如果需要 ProjectData 模型，使用 get_project_data()
+            ProjectData 模型实例，如果项目不存在则返回 None
         """
-        # 快速路径：多级缓存查询
+        # 快速路径：多级缓存查询（缓存的是 ProjectData 模型）
         cached_data = self._cache.get(project_id)
         if cached_data is not None:
             return cached_data
 
-        # 加载拆分格式
+        # 加载拆分格式（先加载为原始 dict 进行兼容性处理）
         project_json_path = self._get_project_json_path(project_id)
         if project_json_path.exists():
             data = await self._load_split_format(project_id)
@@ -399,7 +399,8 @@ class ProjectStorage:
                     del item["content"]
                     need_save = True
         if need_save:
-            await self._save_project(project_id, data)
+            # 迁移时需要用 dict 格式保存（此时还没有转为模型）
+            await self._save_project_dict(project_id, data)
 
         if "tag_registry" not in data:
             data["tag_registry"] = {}
@@ -410,64 +411,73 @@ class ProjectStorage:
         # 版本控制迁移
         migrated = self._migrate_to_version_control(project_id, data)
         if migrated:
-            await self._save_project(project_id, data)
+            await self._save_project_dict(project_id, data)
 
         # 补全版本结构
         self._ensure_versions(data)
 
-        # 存入多级缓存
-        self._cache.set(project_id, data, CacheLevel.L2_WARM)
-
-        return data
-
-    async def get_project_data(self, project_id: str) -> Optional[ProjectData]:
-        """获取项目数据并转换为 ProjectData 模型.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            ProjectData 模型实例，如果项目不存在则返回 None
-        """
-        data_dict = await self._load_project(project_id)
-        if data_dict is None:
-            return None
-
         # 转换为 ProjectData 模型
+        project_data = ProjectData.from_storage(data)
+
+        # 存入多级缓存（缓存 ProjectData 模型）
+        self._cache.set(project_id, project_data, CacheLevel.L2_WARM)
+
+        return project_data
+
+    async def _save_project_dict(self, project_id: str, data: Dict[str, Any]) -> bool:
+        """保存原始 dict 格式的项目数据（仅用于内部迁移）."""
         try:
-            # 构建元数据
-            metadata = {
-                "id": data_dict.get("id"),
-                "name": data_dict.get("name"),
-                **data_dict.get("info", {})
-            }
-
-            # 构建分组索引
-            groups = {}
             from business.core.groups import CONTENT_SEPARATE_GROUPS
+
+            project_dir = self._get_project_dir(project_id)
+            project_dir.mkdir(parents=True, exist_ok=True)
+
             for group_name in CONTENT_SEPARATE_GROUPS:
-                items = data_dict.get(group_name, [])
-                groups[group_name] = GroupIndex(items=[item.get("id") for item in items])
+                self._get_group_content_dir(project_id, group_name)
 
-            # 构建标签注册表
-            tags = data_dict.get("tag_registry", {})
-
-            # 构建配置
-            config = {
-                "_version": data_dict.get("_version", 1),
-                "_versions": data_dict.get("_versions", {}),
-                "_group_configs": data_dict.get("_group_configs")
+            # 1. 保存元数据到 _project.json
+            meta_data = {
+                "id": data.get("id"),
+                "name": data.get("name"),
+                "info": data.get("info", {}),
+                "_version": data.get("_version", 1),
+                "_versions": data.get("_versions", {}),
+                "_group_configs": data.get("_group_configs"),
             }
 
-            return ProjectData(
-                metadata=metadata,
-                groups=groups,
-                tags=tags,
-                config=config
-            )
-        except Exception as e:
-            # 如果转换失败，返回 None
-            return None
+            if "info" in meta_data and meta_data["info"]:
+                if not meta_data["info"].get("id") and meta_data["id"]:
+                    meta_data["info"]["id"] = meta_data["id"]
+                if not meta_data["info"].get("name") and meta_data["name"]:
+                    meta_data["info"]["name"] = meta_data["name"]
+
+            if not await self._save_project_meta(project_id, meta_data):
+                return False
+
+            # 2. 保存标签到 _tags.json
+            tags_data = {
+                "_version": data.get("_versions", {}).get("tag_registry", 1),
+                "tags": data.get("tag_registry", {})
+            }
+            if not await self._save_tags_index(project_id, tags_data):
+                return False
+
+            # 3. 保存各分组的 _index.json
+            for group_name in CONTENT_SEPARATE_GROUPS:
+                items = data.get(group_name, [])
+                group_version = data.get("_versions", {}).get(group_name, 1)
+                index_data = {"_version": group_version, "items": []}
+                for item in items:
+                    item_summary = {k: v for k, v in item.items() if k != "content"}
+                    index_data["items"].append(item_summary)
+                    if "content" in item and item["content"]:
+                        await self._save_item_content(project_id, group_name, item["id"], item["content"])
+                if not await self._save_group_index(project_id, group_name, index_data):
+                    return False
+
+            return True
+        except IOError:
+            return False
 
     async def _load_split_format(self, project_id: str) -> Optional[Dict[str, Any]]:
         """加载拆分格式的项目数据."""
@@ -512,19 +522,16 @@ class ProjectStorage:
             return None
 
 
-    async def _save_project(self, project_id: str, project_data: Dict[str, Any]) -> bool:
-        """保存单个项目数据到拆分文件格式（write-through 缓存）.
+    async def _save_project(self, project_id: str, project_data: ProjectData) -> bool:
+        """保存 ProjectData 模型到拆分文件格式（write-through 缓存）.
 
-        拆分格式：
-        - _project.json: 元数据（id, name, info, _version, _versions, _group_configs）
-        - _tags.json: 标签注册表
-        - {group}/_index.json: 各分组的条目索引（不含 content）
-        - {group}/{item_id}.md: 条目的 content 内容
-
-        注意：所有默认组的 content 字段不写入 JSON，而是单独保存为 .md 文件
+        将 ProjectData 模型转换为存储格式 dict，然后写入拆分文件。
         """
         try:
             from business.core.groups import CONTENT_SEPARATE_GROUPS
+
+            # 转换为存储格式 dict
+            data = project_data.to_storage()
 
             # 确保项目目录存在
             project_dir = self._get_project_dir(project_id)
@@ -536,12 +543,12 @@ class ProjectStorage:
 
             # 1. 保存元数据到 _project.json
             meta_data = {
-                "id": project_data.get("id"),
-                "name": project_data.get("name"),
-                "info": project_data.get("info", {}),
-                "_version": project_data.get("_version", 1),
-                "_versions": project_data.get("_versions", {}),
-                "_group_configs": project_data.get("_group_configs"),
+                "id": data.get("id"),
+                "name": data.get("name"),
+                "info": data.get("info", {}),
+                "_version": data.get("_version", 1),
+                "_versions": data.get("_versions", {}),
+                "_group_configs": data.get("_group_configs"),
             }
 
             # 提取项目名称和ID到 info（如果缺失）
@@ -556,18 +563,18 @@ class ProjectStorage:
 
             # 2. 保存标签到 _tags.json
             tags_data = {
-                "_version": project_data.get("_versions", {}).get("tag_registry", 1),
-                "tags": project_data.get("tag_registry", {})
+                "_version": data.get("_versions", {}).get("tag_registry", 1),
+                "tags": data.get("tag_registry", {})
             }
             if not await self._save_tags_index(project_id, tags_data):
                 return False
 
             # 3. 保存各分组的 _index.json
             for group_name in CONTENT_SEPARATE_GROUPS:
-                items = project_data.get(group_name, [])
+                items = data.get(group_name, [])
 
                 # 获取分组版本号
-                group_version = project_data.get("_versions", {}).get(group_name, 1)
+                group_version = data.get("_versions", {}).get(group_name, 1)
 
                 index_data = {
                     "_version": group_version,
@@ -681,10 +688,10 @@ class ProjectStorage:
             if file_path.name not in ["_metadata.json", "_stats.json"]:
                 project_id = file_path.stem
                 project_data = await self._load_project(project_id)
-                if project_data and "info" in project_data:
-                    name = project_data["info"].get("name", project_id)
+                if project_data:
+                    name = project_data.metadata.name
                     self._projects_cache[project_id] = name
-                    uuid_val = project_data.get("id") or project_data["info"].get("id")
+                    uuid_val = project_data.id or project_data.metadata.id
                     if uuid_val:
                         self._uuid_to_name_cache[uuid_val] = name
 
@@ -701,8 +708,8 @@ class ProjectStorage:
                     project_name = project_dir.name
                     project_data = await self._load_project(project_name)
                     if project_data:
-                        uuid_val = project_data.get("id") or project_data.get("info", {}).get("id")
-                        name = project_data.get("name") or project_data.get("info", {}).get("name", project_name)
+                        uuid_val = project_data.id or project_data.metadata.id
+                        name = project_data.name or project_data.metadata.name or project_name
 
                         if uuid_val:
                             self._projects_cache[uuid_val] = name
@@ -817,7 +824,7 @@ class ProjectStorage:
         if project_data is None:
             return {"success": False, "error": f"无法加载项目数据: {project_id}"}
 
-        project_name = project_data["info"].get("name", project_dir.name)
+        project_name = project_data.metadata.name or project_dir.name
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         archive_base_name = f"{timestamp}_{project_name}"
 
@@ -830,10 +837,10 @@ class ProjectStorage:
                 tar.add(str(project_dir), arcname=project_dir.name)
 
             meta_data = {
-                "id": project_data.get("id") or project_data["info"].get("id", project_id),
+                "id": project_data.id or project_data.metadata.id,
                 "name": project_name,
-                "summary": project_data["info"].get("summary", ""),
-                "tags": project_data["info"].get("tags", []),
+                "summary": project_data.metadata.summary,
+                "tags": project_data.metadata.tags,
                 "archived_at": datetime.now().isoformat(),
                 "archive_file": archive_file.name
             }
@@ -934,31 +941,43 @@ class ProjectStorage:
 
         return None
 
-    def _generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Dict] = None) -> str:
-        """生成条目唯一ID."""
+    def _generate_item_id(self, prefix: str, project_id: Optional[str] = None, project_data: Optional[Any] = None) -> str:
+        """生成条目唯一ID.
+
+        Args:
+            prefix: ID 前缀 (feat/note/fix/std)
+            project_id: 项目 ID
+            project_data: ProjectData 模型或 dict（兼容旧调用）
+        """
         date_str = datetime.now().strftime("%Y%m%d")
         max_counter = 0
 
-        if project_id:
-            if project_data is None:
-                # 注意: 这里不能异步加载，调用方应传入 project_data
-                pass
-            if project_data:
-                prefix_to_list = {
-                    "feat": "features",
-                    "note": "notes",
-                    "fix": "fixes",
-                    "std": "standards"
-                }
-                items_list = prefix_to_list.get(prefix, "features")
+        if project_id and project_data:
+            prefix_to_list = {
+                "feat": "features",
+                "note": "notes",
+                "fix": "fixes",
+                "std": "standards"
+            }
+            items_list = prefix_to_list.get(prefix, "features")
+            prefix_with_date = f"{prefix}_{date_str}_"
 
-                prefix_with_date = f"{prefix}_{date_str}_"
+            # 支持 ProjectData 模型和 dict 两种输入
+            if isinstance(project_data, ProjectData):
+                items = project_data.get_items(items_list)
+                for item in items:
+                    if item.id.startswith(prefix_with_date):
+                        try:
+                            counter = int(item.id[len(prefix_with_date):])
+                            max_counter = max(max_counter, counter)
+                        except (ValueError, IndexError):
+                            continue
+            elif isinstance(project_data, dict):
                 for item in project_data.get(items_list, []):
                     item_id = item.get("id", "")
                     if item_id.startswith(prefix_with_date):
                         try:
-                            counter_str = item_id[len(prefix_with_date):]
-                            counter = int(counter_str)
+                            counter = int(item_id[len(prefix_with_date):])
                             max_counter = max(max_counter, counter)
                         except (ValueError, IndexError):
                             continue

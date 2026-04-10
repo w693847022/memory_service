@@ -14,6 +14,42 @@ from unittest.mock import Mock, MagicMock, patch, AsyncMock
 from business.project_service import ProjectService
 from datetime import datetime
 
+from src.models.storage import ProjectData
+from src.models.project import ProjectMetadata
+from src.models.item import Item
+from src.models.tag import TagInfo
+
+
+def _make_project_data(items=None, group="features"):
+    """创建测试用 ProjectData 模型。"""
+    now = datetime.now().isoformat()
+    metadata = ProjectMetadata(
+        id="550e8400-e29b-41d4-a716-446655440000",
+        name="test_project",
+        created_at=now,
+        updated_at=now,
+        tags=[]
+    )
+    groups = {}
+    if items:
+        for item_dict in items:
+            if "version" not in item_dict and "_v" in item_dict:
+                item_dict["version"] = item_dict["_v"]
+            item = Item.model_validate(item_dict)
+            if group not in groups:
+                groups[group] = []
+            groups[group].append(item)
+
+    return ProjectData(
+        id="550e8400-e29b-41d4-a716-446655440000",
+        name="test_project",
+        version=1,
+        versions={"project": 1, "tag_registry": 1, "features": 1},
+        metadata=metadata,
+        tag_registry={},
+        groups=groups
+    )
+
 
 @pytest.mark.asyncio
 class TestVersionControl:
@@ -22,7 +58,6 @@ class TestVersionControl:
     @pytest_asyncio.fixture(autouse=True)
     async def setup_fixtures(self):
         """设置测试环境 - 每个测试方法前自动执行."""
-        # Create async context manager mock for barrier
         from contextlib import asynccontextmanager
 
         @asynccontextmanager
@@ -38,46 +73,30 @@ class TestVersionControl:
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat()
         }
-        # Make async methods return AsyncMock
-        self.mock_storage.update_item_with_version_check = AsyncMock()
         self.mock_storage.get_project_data = AsyncMock()
         self.mock_storage.save_project_data = AsyncMock()
-        self.mock_storage.update_timestamp = Mock()
         self.service = ProjectService(self.mock_storage)
         yield
-        # Cleanup if needed
 
     async def test_update_item_with_version_conflict(self):
         """测试版本冲突检测."""
-        # 准备测试数据
         project_id = "test_project"
         group = "features"
         item_id = "feat_20260409_1"
+        now = datetime.now().isoformat()
 
-        # 创建一个版本为2的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
             "version": 2,
             "tags": ["test"],
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": now,
+            "updated_at": now
         }
 
-        # Mock get_project_data to return project with the item
-        self.mock_storage.get_project_data.return_value = {
-            "info": {
-                "name": "Test Project",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "tags": []
-            },
-            "features": [item_data],
-            "tag_registry": {}
-        }
+        self.mock_storage.get_project_data.return_value = _make_project_data([item_data], group)
 
-        # 尝试用错误的版本号更新（期望版本是1，但实际是2）
         result = await self.service.update_item(
             project_id=project_id,
             group=group,
@@ -86,7 +105,6 @@ class TestVersionControl:
             expected_version=1  # 错误的版本号
         )
 
-        # 验证版本冲突被检测到
         assert result["success"] is False
         assert result["error"] == "version_conflict"
 
@@ -95,32 +113,21 @@ class TestVersionControl:
         project_id = "test_project"
         group = "features"
         item_id = "feat_20260409_1"
+        now = datetime.now().isoformat()
 
-        # 创建一个版本为2的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
             "version": 2,
             "tags": ["test"],
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": now,
+            "updated_at": now
         }
 
-        # Mock get_project_data to return project with the item
-        self.mock_storage.get_project_data.return_value = {
-            "info": {
-                "name": "Test Project",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "tags": []
-            },
-            "features": [item_data],
-            "tag_registry": {}
-        }
+        self.mock_storage.get_project_data.return_value = _make_project_data([item_data], group)
         self.mock_storage.save_project_data.return_value = True
 
-        # 用正确的版本号更新
         result = await self.service.update_item(
             project_id=project_id,
             group=group,
@@ -129,7 +136,6 @@ class TestVersionControl:
             expected_version=2  # 正确的版本号
         )
 
-        # 验证更新成功且版本递增
         assert result["success"] is True
         assert result["version"] == 3
         assert result["item"]["summary"] == "Updated summary"
@@ -139,6 +145,7 @@ class TestVersionControl:
         project_id = "test_project"
         group = "features"
         item_id = "feat_20260409_1"
+        now = datetime.now().isoformat()
 
         item_data = {
             "id": item_id,
@@ -146,24 +153,13 @@ class TestVersionControl:
             "content": "Test content",
             "version": 2,
             "tags": ["test"],
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": now,
+            "updated_at": now
         }
 
-        # Mock get_project_data to return project with the item
-        self.mock_storage.get_project_data.return_value = {
-            "info": {
-                "name": "Test Project",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "tags": []
-            },
-            "features": [item_data],
-            "tag_registry": {}
-        }
+        self.mock_storage.get_project_data.return_value = _make_project_data([item_data], group)
         self.mock_storage.save_project_data.return_value = True
 
-        # 不提供版本号，应该直接更新
         result = await self.service.update_item(
             project_id=project_id,
             group=group,
@@ -171,7 +167,6 @@ class TestVersionControl:
             summary="Updated summary"
         )
 
-        # 验证更新成功且版本递增
         assert result["success"] is True
         assert result["version"] == 3
 
@@ -180,32 +175,21 @@ class TestVersionControl:
         project_id = "test_project"
         group = "features"
         item_id = "feat_20260409_1"
+        now = datetime.now().isoformat()
 
-        # 创建没有版本字段的条目
         item_data = {
             "id": item_id,
             "summary": "Test feature",
             "content": "Test content",
             "version": 1,
             "tags": ["test"],
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
+            "created_at": now,
+            "updated_at": now
         }
 
-        # Mock get_project_data to return project with the item
-        self.mock_storage.get_project_data.return_value = {
-            "info": {
-                "name": "Test Project",
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "tags": []
-            },
-            "features": [item_data],
-            "tag_registry": {}
-        }
+        self.mock_storage.get_project_data.return_value = _make_project_data([item_data], group)
         self.mock_storage.save_project_data.return_value = True
 
-        # 更新条目
         result = await self.service.update_item(
             project_id=project_id,
             group=group,
@@ -213,6 +197,5 @@ class TestVersionControl:
             summary="Updated summary"
         )
 
-        # 验证版本从1初始化并递增到2
         assert result["success"] is True
         assert result["version"] == 2

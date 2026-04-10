@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from datetime import datetime
 
 from src.models.item import Item, ItemCreate, ItemUpdate, ItemResponse
-from src.models.project import ProjectMetadata, ProjectCreate, ProjectResponse
+from src.models.project import ProjectMetadata
 from src.models.tag import TagInfo, TagRegistry
 from src.models.response import ApiResponse
 
@@ -484,25 +484,35 @@ class TestItemUpdate:
 
 
 class TestProjectCreate:
-    """Test cases for ProjectCreate model validation."""
+    """Test cases for ProjectMetadata creation (replaces ProjectCreate)."""
 
-    def test_valid_project_create(self):
-        """Test creating a valid ProjectCreate instance."""
-        project_create = ProjectCreate(
+    def test_valid_project_metadata_create(self):
+        """Test creating a valid ProjectMetadata instance."""
+        now = datetime.now().isoformat()
+        metadata = ProjectMetadata(
+            id="550e8400-e29b-41d4-a716-446655440000",
             name="new_project",
             path="/path/to/project",
             summary="A new project",
-            tags=["new", "test"]
+            tags=["new", "test"],
+            created_at=now,
+            updated_at=now
         )
-        assert project_create.name == "new_project"
-        assert project_create.tags == ["new", "test"]
+        assert metadata.name == "new_project"
+        assert metadata.tags == ["new", "test"]
 
-    def test_project_create_with_defaults(self):
-        """Test ProjectCreate with default values."""
-        project_create = ProjectCreate(name="new_project")
-        assert project_create.path is None
-        assert project_create.summary == ""
-        assert project_create.tags == []
+    def test_project_metadata_with_defaults(self):
+        """Test ProjectMetadata with default values."""
+        now = datetime.now().isoformat()
+        metadata = ProjectMetadata(
+            id="550e8400-e29b-41d4-a716-446655440000",
+            name="new_project",
+            created_at=now,
+            updated_at=now
+        )
+        assert metadata.path is None
+        assert metadata.summary == ""
+        assert metadata.tags == []
 
 
 class TestTagRegistry:

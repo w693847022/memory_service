@@ -1,19 +1,19 @@
 """
 Pydantic models for project-related operations.
 
-These models define the structure and validation for projects and their metadata.
+仅保留核心模型 ProjectMetadata（项目元数据）和 ProjectInitialData（项目初始化）。
+删除未使用的 ProjectCreate 和 ProjectResponse（已被 ApiResponse 替代）。
 """
 
-from typing import List, Literal, Optional
+from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
 class ProjectMetadata(BaseModel):
     """
-    Complete project metadata model.
+    项目元数据模型。
 
-    Represents a project with all its metadata including ID, name, path,
-    and other configuration details.
+    作为项目中唯一的项目信息模型，贯穿存储层/缓存层/业务层。
     """
 
     id: str = Field(
@@ -56,13 +56,8 @@ class ProjectMetadata(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        """
-        Validate that project name contains only allowed characters.
-
-        Allowed: letters, numbers, underscores, Chinese characters, hyphens
-        """
+        """Validate that project name contains only allowed characters."""
         import re
-        # Allow letters, numbers, underscores, Chinese characters, and hyphens
         pattern = re.compile(r"^[\w\u4e00-\u9fff-]+$")
         if not pattern.match(v):
             raise ValueError(
@@ -83,120 +78,127 @@ class ProjectMetadata(BaseModel):
             raise ValueError("Project ID must be a valid UUID")
         return v.lower()
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "id": "550e8400-e29b-41d4-a716-446655440000",
-                "name": "ai_memory_mcp",
-                "path": "/home/user/projects/ai_memory_mcp",
-                "summary": "AI memory MCP server project",
-                "tags": ["mcp", "memory", "python"],
-                "status": "active",
-                "created_at": "2026-04-09T10:00:00Z",
-                "updated_at": "2026-04-09T10:00:00Z"
-            }
-        }
+    model_config = {"populate_by_name": True}
 
 
-class ProjectCreate(BaseModel):
+class ProjectInitialData(BaseModel):
     """
-    Model for creating a new project.
+    项目初始化数据结构，用于注册新项目时生成初始数据。
 
-    Contains all required and optional fields for project creation.
+    创建后通过 to_storage_dict() 转换为存储格式。
     """
 
+    id: str = Field(
+        ...,
+        description="Unique project identifier (UUID format)"
+    )
     name: str = Field(
         ...,
-        min_length=1,
-        max_length=100,
-        description="Project name (1-100 characters)"
+        description="Project name"
     )
-    path: Optional[str] = Field(
-        default=None,
-        description="File system path to the project"
+    version: int = Field(
+        default=1,
+        alias="_version",
+        description="Project data version"
     )
-    summary: str = Field(
-        default="",
-        max_length=500,
-        description="Brief project description (max 500 characters)"
+    versions: Dict[str, int] = Field(
+        default_factory=lambda: {
+            "project": 1,
+            "tag_registry": 1,
+        },
+        alias="_versions",
+        description="Version tracking for each data section"
     )
-    tags: List[str] = Field(
-        default_factory=list,
-        description="Tags associated with the project"
+    info: ProjectMetadata = Field(
+        ...,
+        description="Project metadata"
+    )
+    tag_registry: Dict[str, Dict] = Field(
+        default_factory=dict,
+        description="Tag registry with tag metadata"
+    )
+    groups: Dict[str, List] = Field(
+        default_factory=dict,
+        description="Group items indexed by group name"
     )
 
-    @field_validator("name")
+    model_config = {"populate_by_name": True}
+
+    def to_storage_dict(self) -> Dict:
+        """Convert to dictionary format for storage."""
+        result = {
+            "id": self.id,
+            "name": self.name,
+            "_version": self.version,
+            "_versions": self.versions,
+            "info": self.info.model_dump(),
+            "tag_registry": self.tag_registry,
+        }
+        for group_name, items in self.groups.items():
+            result[group_name] = items
+        return result
+
     @classmethod
-    def validate_name(cls, v: str) -> str:
-        """
-        Validate that project name contains only allowed characters.
+    def create(
+        cls,
+        project_id: str,
+        name: str,
+        path: Optional[str] = None,
+        summary: str = "",
+        tags: Optional[List[str]] = None,
+        group_configs: Optional[Dict[str, Dict]] = None,
+        default_tags: Optional[List[str]] = None
+    ) -> "ProjectInitialData":
+        """Create project initial data with dynamic group initialization."""
+        from datetime import datetime
 
-        Allowed: letters, numbers, underscores, Chinese characters, hyphens
-        """
-        import re
-        pattern = re.compile(r"^[\w\u4e00-\u9fff-]+$")
-        if not pattern.match(v):
-            raise ValueError(
-                "Project name must contain only letters, numbers, underscores, Chinese characters, and hyphens"
-            )
-        return v
+        if group_configs is None:
+            from business.core.groups import DEFAULT_GROUP_CONFIGS
+            group_configs = DEFAULT_GROUP_CONFIGS
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "name": "my_new_project",
-                "path": "/home/user/projects/my_new_project",
-                "summary": "A new project for testing",
-                "tags": ["test", "experimental"]
-            }
-        }
+        groups = {group_name: [] for group_name in group_configs.keys()}
 
+        # 初始化版本号（包含所有组）
+        versions = {"project": 1, "tag_registry": 1}
+        for group_name in group_configs.keys():
+            versions[group_name] = 1
 
-class ProjectResponse(BaseModel):
-    """
-    Response model for project operations.
+        tag_registry = {}
+        if default_tags:
+            for tag in default_tags:
+                tag_registry[tag] = {
+                    "summary": f"默认标签: {tag}",
+                    "created_at": datetime.now().isoformat(),
+                    "usage_count": 0,
+                    "aliases": []
+                }
 
-    Used as the standard response format for API endpoints returning project data.
-    """
+        if tags:
+            for tag in tags:
+                if tag not in tag_registry:
+                    tag_registry[tag] = {
+                        "summary": f"项目标签: {tag}",
+                        "created_at": datetime.now().isoformat(),
+                        "usage_count": 0,
+                        "aliases": []
+                    }
 
-    success: bool = Field(
-        ...,
-        description="Whether the operation was successful"
-    )
-    message: str = Field(
-        ...,
-        description="Human-readable message about the operation"
-    )
-    data: Optional[ProjectMetadata] = Field(
-        default=None,
-        description="Project metadata if successful"
-    )
-    error: Optional[str] = Field(
-        default=None,
-        description="Error message if unsuccessful"
-    )
+        now = datetime.now().isoformat()
+        info = ProjectMetadata(
+            id=project_id,
+            name=name,
+            path=path,
+            summary=summary,
+            tags=tags or [],
+            status="active",
+            created_at=now,
+            updated_at=now
+        )
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "success": True,
-                "message": "Project created successfully",
-                "data": {
-                    "id": "550e8400-e29b-41d4-a716-446655440000",
-                    "name": "my_new_project",
-                    "path": "/home/user/projects/my_new_project",
-                    "summary": "A new project for testing",
-                    "tags": ["test", "experimental"],
-                    "status": "active",
-                    "created_at": "2026-04-09T10:00:00Z",
-                    "updated_at": "2026-04-09T10:00:00Z"
-                },
-                "error": None
-            }
-        }
+        return cls(
+            id=project_id,
+            name=name,
+            info=info,
+            tag_registry=tag_registry,
+            groups=groups
+        )

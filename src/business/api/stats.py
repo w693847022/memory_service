@@ -37,17 +37,19 @@ async def project_stats():
         project_data = await _storage.get_project_data(pid)
         if project_data is None:
             continue
-        all_tags.extend(project_data.get("info", {}).get("tags", []))
-        total_features += len(project_data.get("features", []))
-        for feature in project_data.get("features", []):
-            status = feature.get("status", "pending")
+        all_tags.extend(project_data.metadata.tags)
+        features = project_data.get_items("features")
+        total_features += len(features)
+        for feature in features:
+            status = feature.status or "pending"
             if status in feature_stats:
                 feature_stats[status] += 1
-            for tag in feature.get("tags", []):
+            for tag in feature.tags:
                 feature_tag_counts[tag] = feature_tag_counts.get(tag, 0) + 1
-        total_notes += len(project_data.get("notes", []))
-        for note in project_data.get("notes", []):
-            for tag in note.get("tags", []):
+        notes = project_data.get_items("notes")
+        total_notes += len(notes)
+        for note in notes:
+            for tag in note.tags:
                 note_tag_counts[tag] = note_tag_counts.get(tag, 0) + 1
 
     tag_counts = {}

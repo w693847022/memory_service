@@ -1,244 +1,228 @@
 """
-Pydantic models for storage-related operations.
+核心项目数据聚合模型 - ProjectData。
 
-These models define the structure and validation for project data storage
-and group indexing.
+作为唯一的项目数据模型贯穿存储层/缓存层/业务层，
+提供 from_storage()/to_storage() 序列化方法和 Item/Tag/Version CRUD 方法。
 """
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
+
+from pydantic import BaseModel, Field
+
 from .item import Item
+from .project import ProjectMetadata
+from .tag import TagInfo
 
-
-class GroupIndex(BaseModel):
-    """
-    Index of items within a group.
-
-    Maintains a list of item IDs belonging to a specific group.
-    """
-
-    items: List[str] = Field(
-        default_factory=list,
-        description="List of item IDs in this group"
-    )
-
-    def add_item(self, item_id: str) -> None:
-        """
-        Add an item ID to the index.
-
-        Args:
-            item_id: Item ID to add
-        """
-        if item_id not in self.items:
-            self.items.append(item_id)
-
-    def remove_item(self, item_id: str) -> bool:
-        """
-        Remove an item ID from the index.
-
-        Args:
-            item_id: Item ID to remove
-
-        Returns:
-            True if item was removed, False if it wasn't in the index
-        """
-        try:
-            self.items.remove(item_id)
-            return True
-        except ValueError:
-            return False
-
-    def has_item(self, item_id: str) -> bool:
-        """
-        Check if an item ID exists in the index.
-
-        Args:
-            item_id: Item ID to check
-
-        Returns:
-            True if item exists in index, False otherwise
-        """
-        return item_id in self.items
-
-    @field_validator("items")
-    @classmethod
-    def validate_item_ids(cls, v: List[str]) -> List[str]:
-        """Validate that all item IDs follow the correct format."""
-        import re
-        pattern = re.compile(r"^[a-z]+_[0-9]{8}_[0-9]+$")
-        for item_id in v:
-            if not pattern.match(item_id):
-                raise ValueError(
-                    f"Invalid item ID format: '{item_id}'. "
-                    "Expected format: {{group}}_YYYYMMDD_sequence"
-                )
-        return v
-
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "items": [
-                    "feat_20260409_1",
-                    "feat_20260409_2",
-                    "feat_20260408_5"
-                ]
-            }
-        }
+# 存储格式中的保留键（不属于分组的顶层键）
+_STORAGE_RESERVED_KEYS = {
+    "id", "name", "_version", "_versions", "info",
+    "tag_registry", "_group_configs"
+}
 
 
 class ProjectData(BaseModel):
     """
-    Complete project data storage model.
+    核心项目数据聚合模型。
 
-    Aggregates all project data including metadata, groups, tags,
-    and configuration.
+    从存储层加载后以模型形式存在内存中，
+    业务层直接操作模型，缓存层缓存模型实例。
+
+    存储格式通过 from_storage()/to_storage() 双向转换保持兼容。
     """
 
-    metadata: Dict[str, Any] = Field(
+    id: str = Field(description="项目 UUID")
+    name: str = Field(description="项目名称")
+    version: int = Field(default=1, description="项目数据版本（对应存储 _version）")
+    versions: Dict[str, int] = Field(
         default_factory=dict,
-        description="Project metadata (id, name, path, summary, etc.)"
+        description="各组件版本号映射（动态支持自定义组）"
     )
-    groups: Dict[str, GroupIndex] = Field(
+    metadata: ProjectMetadata = Field(description="项目元数据")
+    tag_registry: Dict[str, TagInfo] = Field(
         default_factory=dict,
-        description="Group indexes mapping group names to item ID lists"
+        description="标签注册表（tag_name → TagInfo 模型）"
     )
-    items: Dict[str, Item] = Field(
+    groups: Dict[str, List[Item]] = Field(
         default_factory=dict,
-        description="All items indexed by their ID"
+        description="各分组条目（group_name → List[Item]）"
     )
-    tags: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Tag registry with tag metadata"
-    )
-    config: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Project-specific configuration"
+    group_configs: Optional[Any] = Field(
+        default=None,
+        description="分组配置（原始 dict，由 groups 模块管理）"
     )
 
-    def get_group_items(self, group_name: str) -> List[str]:
-        """
-        Get all item IDs for a specific group.
+    model_config = {"arbitrary_types_allowed": True, "populate_by_name": True}
 
-        Args:
-            group_name: Name of the group
+    # ==================== 序列化 ====================
 
-        Returns:
-            List of item IDs in the group, or empty list if group doesn't exist
-        """
-        if group_name in self.groups:
-            return self.groups[group_name].items
-        return []
-
-    def get_item(self, item_id: str) -> Optional[Item]:
-        """
-        Retrieve an item by its ID.
-
-        Args:
-            item_id: Item ID to retrieve
-
-        Returns:
-            Item if found, None otherwise
-        """
-        return self.items.get(item_id)
-
-    def add_item(self, item: Item, group_name: str) -> None:
-        """
-        Add an item to the project data.
-
-        Args:
-            item: Item to add
-            group_name: Name of the group to add the item to
-        """
-        # Add to items dictionary
-        self.items[item.id] = item
-
-        # Add to group index
-        if group_name not in self.groups:
-            self.groups[group_name] = GroupIndex()
-        self.groups[group_name].add_item(item.id)
-
-    def remove_item(self, item_id: str, group_name: str) -> bool:
-        """
-        Remove an item from the project data.
-
-        Args:
-            item_id: Item ID to remove
-            group_name: Name of the group containing the item
-
-        Returns:
-            True if item was removed, False if it wasn't found
-        """
-        # Remove from items dictionary
-        if item_id in self.items:
-            del self.items[item_id]
-
-        # Remove from group index
-        if group_name in self.groups:
-            return self.groups[group_name].remove_item(item_id)
-
-        return False
-
-    @field_validator("groups")
     @classmethod
-    def validate_groups(cls, v: Dict[str, GroupIndex]) -> Dict[str, GroupIndex]:
-        """Validate that group names are valid."""
-        import re
-        pattern = re.compile(r"^[a-z][a-z0-9_]*$")
-        for group_name in v.keys():
-            if not pattern.match(group_name):
-                raise ValueError(
-                    f"Invalid group name: '{group_name}'. "
-                    "Group names must start with a lowercase letter and contain only lowercase letters, numbers, and underscores"
-                )
-        return v
+    def from_storage(cls, data: Dict[str, Any]) -> "ProjectData":
+        """从存储格式的 dict 反序列化为 ProjectData 模型。
 
-    class Config:
-        """Pydantic configuration."""
-        populate_by_name = True
-        json_schema_extra = {
-            "example": {
-                "metadata": {
-                    "id": "550e8400-e29b-41d4-a716-446655440000",
-                    "name": "ai_memory_mcp",
-                    "path": "/home/user/projects/ai_memory_mcp",
-                    "summary": "AI memory MCP server project",
-                    "status": "active"
-                },
-                "groups": {
-                    "features": {
-                        "items": ["feat_20260409_1", "feat_20260409_2"]
-                    },
-                    "fixes": {
-                        "items": ["fix_20260409_1"]
-                    }
-                },
-                "items": {
-                    "feat_20260409_1": {
-                        "id": "feat_20260409_1",
-                        "summary": "Add user authentication",
-                        "content": "Implement OAuth2 authentication flow",
-                        "tags": ["feature", "auth"],
-                        "status": "in_progress",
-                        "severity": None,
-                        "related": None,
-                        "created_at": "2026-04-09T10:30:00Z",
-                        "updated_at": "2026-04-09T14:20:00Z",
-                        "version": 3
-                    }
-                },
-                "tags": {
-                    "feature": {
-                        "name": "feature",
-                        "summary": "New functionality or enhancement",
-                        "aliases": ["feat", "enhancement"],
-                        "usage_count": 42
-                    }
-                },
-                "config": {
-                    "enable_versioning": True,
-                    "max_items_per_group": 1000
-                }
-            }
+        Args:
+            data: 存储层加载的合并 dict
+
+        Returns:
+            ProjectData 模型实例
+        """
+        # 构建元数据
+        info = data.get("info", {})
+        metadata = ProjectMetadata(
+            id=data.get("id") or info.get("id", ""),
+            name=data.get("name") or info.get("name", ""),
+            path=info.get("path"),
+            summary=info.get("summary", ""),
+            tags=info.get("tags", []),
+            status=info.get("status", "active"),
+            created_at=info.get("created_at", ""),
+            updated_at=info.get("updated_at", "")
+        )
+
+        # 构建标签注册表
+        tag_registry = {}
+        for tag_name, tag_data in data.get("tag_registry", {}).items():
+            if isinstance(tag_data, TagInfo):
+                tag_registry[tag_name] = tag_data
+            else:
+                tag_registry[tag_name] = TagInfo(
+                    name=tag_name,
+                    summary=tag_data.get("summary", ""),
+                    aliases=tag_data.get("aliases", []),
+                    usage_count=tag_data.get("usage_count", 0)
+                )
+
+        # 构建各分组数据
+        groups = {}
+        for key, value in data.items():
+            if key in _STORAGE_RESERVED_KEYS:
+                continue
+            if isinstance(value, list):
+                items = []
+                for item_dict in value:
+                    if isinstance(item_dict, Item):
+                        items.append(item_dict)
+                    elif isinstance(item_dict, dict):
+                        # 兼容 _v 和 version 字段
+                        if "_v" in item_dict and "version" not in item_dict:
+                            item_dict["version"] = item_dict["_v"]
+                        try:
+                            items.append(Item.model_validate(item_dict))
+                        except Exception:
+                            # 验证失败的条目保留为原始 dict 的情况跳过
+                            pass
+                if items:
+                    groups[key] = items
+
+        return cls(
+            id=data.get("id", ""),
+            name=data.get("name", ""),
+            version=data.get("_version", 1),
+            versions=data.get("_versions", {}),
+            metadata=metadata,
+            tag_registry=tag_registry,
+            groups=groups,
+            group_configs=data.get("_group_configs")
+        )
+
+    def to_storage(self) -> Dict[str, Any]:
+        """序列化为存储格式的 dict。
+
+        Returns:
+            存储层可用的合并 dict
+        """
+        result: Dict[str, Any] = {
+            "id": self.id,
+            "name": self.name,
+            "_version": self.version,
+            "_versions": dict(self.versions),
+            "info": self.metadata.model_dump(),
+            "tag_registry": {
+                name: tag.model_dump()
+                for name, tag in self.tag_registry.items()
+            },
         }
+        if self.group_configs is not None:
+            result["_group_configs"] = self.group_configs
+
+        # 展开各分组条目
+        for group_name, items in self.groups.items():
+            result[group_name] = [item.model_dump() for item in items]
+
+        return result
+
+    # ==================== Item CRUD ====================
+
+    def get_items(self, group: str) -> List[Item]:
+        """获取指定分组的所有条目。"""
+        return self.groups.get(group, [])
+
+    def get_item(self, group: str, item_id: str) -> Optional[Item]:
+        """获取指定分组中的单个条目。"""
+        for item in self.groups.get(group, []):
+            if item.id == item_id:
+                return item
+        return None
+
+    def get_item_index(self, group: str, item_id: str) -> Optional[int]:
+        """获取条目在分组中的索引位置。"""
+        for i, item in enumerate(self.groups.get(group, [])):
+            if item.id == item_id:
+                return i
+        return None
+
+    def add_item(self, group: str, item: Item) -> None:
+        """添加条目到指定分组。"""
+        if group not in self.groups:
+            self.groups[group] = []
+        self.groups[group].append(item)
+
+    def remove_item(self, group: str, item_id: str) -> Optional[Item]:
+        """从指定分组中移除条目。
+
+        Returns:
+            被移除的 Item，如果未找到则返回 None
+        """
+        items = self.groups.get(group, [])
+        for i, item in enumerate(items):
+            if item.id == item_id:
+                return items.pop(i)
+        return None
+
+    # ==================== Tag CRUD ====================
+
+    def register_tag(self, tag: TagInfo) -> None:
+        """注册标签。"""
+        self.tag_registry[tag.name] = tag
+
+    def get_tag(self, tag_name: str) -> Optional[TagInfo]:
+        """获取标签信息。"""
+        return self.tag_registry.get(tag_name)
+
+    def remove_tag(self, tag_name: str) -> Optional[TagInfo]:
+        """移除标签。
+
+        Returns:
+            被移除的 TagInfo，如果未找到则返回 None
+        """
+        return self.tag_registry.pop(tag_name, None)
+
+    # ==================== Version ====================
+
+    def increment_version(self, field: str) -> int:
+        """递增指定组件的版本号。"""
+        current = self.versions.get(field, 1)
+        new_value = current + 1
+        self.versions[field] = new_value
+        self.version += 1
+        return new_value
+
+    def get_version(self, field: str) -> int:
+        """获取指定组件的版本号。"""
+        return self.versions.get(field, 1)
+
+    # ==================== 元数据操作 ====================
+
+    def touch(self) -> None:
+        """更新项目的 updated_at 时间戳。"""
+        self.metadata.updated_at = datetime.now().isoformat()

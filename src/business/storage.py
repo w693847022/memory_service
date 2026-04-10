@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, Union, List
 
 from business.core.storage_base import ProjectStorage
 from business.call_stats import CallStats
+from src.models.storage import ProjectData
 
 
 # ===================
@@ -81,12 +82,12 @@ class Storage(ProjectStorage):
 
     # ==================== 项目数据访问方法（异步）====================
 
-    async def get_project_data(self, project_id: str) -> Optional[Dict[str, Any]]:
-        """获取项目数据."""
+    async def get_project_data(self, project_id: str) -> Optional[ProjectData]:
+        """获取项目数据（返回 ProjectData 模型）."""
         return await self._load_project(project_id)
 
-    async def save_project_data(self, project_id: str, project_data: Dict[str, Any]) -> bool:
-        """保存项目数据."""
+    async def save_project_data(self, project_id: str, project_data: ProjectData) -> bool:
+        """保存项目数据（接受 ProjectData 模型）."""
         return await self._save_project(project_id, project_data)
 
     async def get_group_configs(self, project_id: str) -> Dict[str, Any]:

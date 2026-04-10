@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, Dict, List, Any, Union
 
 from src.models import Item, ItemCreate, ItemUpdate
+from src.models.storage import ProjectData
 from business.core.groups import (
     all_group_names, DEFAULT_TAGS,
     validate_group_name, validate_status, validate_severity,
@@ -19,52 +20,32 @@ from business.core.groups import (
 )
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
+from src.common.consts import (
+    FieldNames,
+    ErrorMessages,
+    SuccessMessages,
+    StatusValues,
+    SeverityValues,
+    Defaults
+)
+from src.models.version import ProjectVersions
+from src.models.response import ResponseBuilder
 
 
 class ProjectService:
-    """项目管理业务逻辑服务类.
-
-    封装项目管理相关的业务逻辑，包括：
-    - 项目注册、重命名、删除、归档
-    - 条目添加、更新、删除
-    - 项目信息查询
-
-    所有涉及 IO 的方法均为异步，使用 barrier_manager 进行并发控制。
-    """
+    """项目管理业务逻辑服务类."""
 
     def __init__(self, storage):
-        """初始化项目服务.
-
-        Args:
-            storage: 存储层实例（需要实现项目数据访问方法）
-        """
         self.storage = storage
 
     # ==================== 验证辅助方法 ====================
 
     def _validate_tag_name(self, tag_name: str) -> bool:
-        """验证标签名称格式.
-
-        Args:
-            tag_name: 标签名称
-
-        Returns:
-            是否有效
-        """
         import re
         pattern = r'^[a-zA-Z0-9_-]{1,30}$'
         return bool(re.match(pattern, tag_name))
 
     def _validate_tag_length(self, tag: str, max_tokens: int = 10) -> tuple[bool, str]:
-        """验证单个标签长度（基于 token 估算）.
-
-        Args:
-            tag: 要验证的标签
-            max_tokens: 最大 token 数
-
-        Returns:
-            (是否有效, 错误信息)
-        """
         if not tag:
             return False, "标签不能为空"
         estimated_tokens = len(tag) / 3
@@ -80,170 +61,96 @@ class ProjectService:
         name: str,
         path: Optional[str] = None,
         summary: str = "",
-        tags: Optional[List[str]] = None,
-        git_remote: Optional[str] = None,
-        git_remote_url: Optional[str] = None
+        tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """注册新项目.
+        from src.models.project import ProjectInitialData
+        from business.core.groups import DEFAULT_GROUP_CONFIGS
 
-        Args:
-            name: 项目名称
-            path: 项目路径（可选）
-            summary: 项目摘要（可选）
-            tags: 项目标签列表（可选）
-            git_remote: Git 远程名称（可选）
-            git_remote_url: Git 远程 URL（可选）
-
-        Returns:
-            操作结果
-        """
         project_id = self.storage._generate_id(name)
 
-        project_data = {
-            "id": project_id,
-            "_version": 1,
-            "_versions": {
-                "project": 1,
-                "tag_registry": 1,
-                "features": 1,
-                "fixes": 1,
-                "notes": 1,
-                "standards": 1,
-            },
-            "info": {
-                "name": name,
-                "path": path or "",
-                "git_remote": git_remote or "",
-                "git_remote_url": git_remote_url or "",
-                "summary": summary,
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat(),
-                "tags": tags or []
-            },
-            "features": [],
-            "notes": [],
-            "fixes": [],
-            "standards": [],
-            "tag_registry": {}
-        }
+        initial_data = ProjectInitialData.create(
+            project_id=project_id,
+            name=name,
+            path=path,
+            summary=summary,
+            tags=tags,
+            group_configs=DEFAULT_GROUP_CONFIGS,
+            default_tags=DEFAULT_TAGS
+        )
 
-        # 初始化标签注册表
-        tag_registry = {}
-        for tag in DEFAULT_TAGS:
-            tag_registry[tag] = {
-                "summary": f"默认标签: {tag}",
-                "created_at": datetime.now().isoformat(),
-                "usage_count": 0,
-                "aliases": []
-            }
-        if tags:
-            for tag in tags:
-                if self._validate_tag_name(tag) and tag not in tag_registry:
-                    tag_registry[tag] = {
-                        "summary": f"项目标签: {tag}",
-                        "created_at": datetime.now().isoformat(),
-                        "usage_count": 0,
-                        "aliases": []
-                    }
-        project_data["tag_registry"] = tag_registry
+        # 转换为存储格式 dict，然后构建 ProjectData
+        storage_dict = initial_data.to_storage_dict()
+        project_data = ProjectData.from_storage(storage_dict)
 
         if await self.storage.save_project_data(project_id, project_data):
-            return {
-                "success": True,
-                "project_id": project_id,
-                "message": f"项目 '{name}' 已成功注册，ID: {project_id}"
-            }
+            return ResponseBuilder.success(
+                data={"project_id": project_id},
+                message=SuccessMessages.PROJECT_REGISTERED.format(name=name, project_id=project_id)
+            ).to_dict()
 
-        return {"success": False, "error": "保存数据失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     @barrier(level=OperationLevel.L2, files=["_project.json"], key="{project_id}")
     async def project_rename(self, project_id: str, new_name: str) -> Dict[str, Any]:
-        """重命名项目（修改 name 字段并重命名目录）.
-
-        Args:
-            project_id: 项目 UUID
-            new_name: 新的项目名称
-
-        Returns:
-            操作结果
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        old_name = project_data["info"]["name"]
+        old_name = project_data.metadata.name
 
-        # 检查新名称是否已存在
         existing_projects = await self.storage.list_all_projects()
         for pid, pname in existing_projects.items():
             if pname == new_name and pid != project_id:
-                return {"success": False, "error": f"项目名称 '{new_name}' 已存在"}
+                return ResponseBuilder.error(f"项目名称 '{new_name}' 已存在").to_dict()
 
-        # 检查项目是否已归档
         if await self.storage.is_archived(project_id):
-            return {"success": False, "error": "已归档的项目不能重命名"}
+            return ResponseBuilder.error("已归档的项目不能重命名").to_dict()
 
-        # 获取项目路径
         project_dir = self.storage._get_project_dir(project_id)
         new_dir = self.storage.storage_dir / new_name
 
         if project_dir.exists() and project_dir.name != new_name:
-            # 执行目录重命名
             result = self.storage.safe_migrate_project_dir(project_dir, new_dir, new_name)
             if not result["success"]:
-                return {"success": False, "error": result.get("error", "重命名失败")}
-            # 清理归档文件
+                return ResponseBuilder.error(result.get("error", "重命名失败")).to_dict()
             self.storage.delete_archive_file(result.get("archived_path"))
 
-        # 更新内存中的项目数据
-        project_data["info"]["name"] = new_name
-        project_data["info"]["updated_at"] = datetime.now().isoformat()
-
-        # 版本更新
-        project_data["_versions"]["project"] = project_data.get("_versions", {}).get("project", 1) + 1
-        project_data["_version"] = project_data.get("_version", 0) + 1
+        # 操作模型
+        project_data.metadata.name = new_name
+        project_data.name = new_name
+        project_data.touch()
+        project_data.increment_version("project")
 
         if await self.storage.save_project_data(project_id, project_data):
-            # 更新缓存
             await self.storage.refresh_projects_cache()
-            return {
-                "success": True,
-                "old_name": old_name,
-                "new_name": new_name,
-                "message": f"项目已从 '{old_name}' 重命名为 '{new_name}'"
-            }
+            return ResponseBuilder.success(
+                data={"old_name": old_name, "new_name": new_name},
+                message=f"项目已从 '{old_name}' 重命名为 '{new_name}'"
+            ).to_dict()
 
-        return {"success": False, "error": "保存数据失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     # ==================== 项目查询 ====================
 
     async def list_projects(self, include_archived: bool = False) -> Dict[str, Any]:
-        """列出所有项目.
-
-        Args:
-            include_archived: 是否包含归档项目
-
-        Returns:
-            项目列表
-        """
         await self.storage.refresh_projects_cache()
         projects = []
 
         all_projects = await self.storage.list_all_projects()
         for project_id, name in all_projects.items():
             project_data = await self.storage.get_project_data(project_id)
-            if project_data and "info" in project_data:
-                info = project_data["info"]
+            if project_data:
                 projects.append({
                     "id": project_id,
                     "name": name,
-                    "summary": info.get("summary", ""),
-                    "tags": info.get("tags", []),
+                    "summary": project_data.metadata.summary,
+                    "tags": project_data.metadata.tags,
                     "status": "archived" if await self.storage.is_archived(project_id) else "active"
                 })
 
         if include_archived:
-            # 添加归档项目
             for archived in await self.storage.get_archived_projects():
                 projects.append({
                     "id": archived.get("id", ""),
@@ -254,35 +161,20 @@ class ProjectService:
                     "archived_at": archived.get("archived_at", "")
                 })
 
-        return {
-            "success": True,
-            "projects": projects,
-            "total": len(projects)
-        }
+        return {"success": True, "projects": projects, "total": len(projects)}
 
     async def get_project(self, project_id: str) -> Dict[str, Any]:
-        """获取项目信息.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            项目信息（包含版本号）
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        result = {
-            "success": True,
-            "data": project_data,
-        }
-        # 返回版本信息
-        if "_version" in project_data:
-            result["version"] = project_data["_version"]
-        if "_versions" in project_data:
-            result["versions"] = project_data["_versions"]
-
+        # 使用 to_storage() 转换为 dict 用于响应
+        data_dict = project_data.to_storage()
+        result = ResponseBuilder.success(data=data_dict).to_dict()
+        result[FieldNames.VERSION] = project_data.version
+        result[FieldNames.VERSIONS] = project_data.versions
         return result
 
     # ==================== 条目操作 ====================
@@ -299,31 +191,12 @@ class ProjectService:
         custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
         default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
-        """统一验证添加条目的所有参数.
-
-        Args:
-            group: 分组类型
-            content: 条目内容
-            summary: 条目摘要
-            status: 状态（可选）
-            severity: 严重程度
-            related: 关联数据
-            tag_list: 标签列表
-            custom_groups: 自定义组配置字典（可选）
-            default_rules: 默认关联规则（可选）
-
-        Returns:
-            验证结果
-        """
-        # 验证 group 有效性
         is_valid, error_msg = validate_group_name(group, custom_groups)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        # 获取自定义组配置
         custom_config = custom_groups.get(group) if custom_groups else None
 
-        # status 参数验证
         config = get_group_config(group)
         if config and config.status_values:
             if status is None:
@@ -340,22 +213,18 @@ class ProjectService:
         else:
             status = None
 
-        # severity 参数验证
         if severity is not None:
             is_valid, error_msg = validate_severity(severity, custom_config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 验证必需参数
         if not content:
             return {"success": False, "error": "content 参数不能为空"}
 
-        # 验证 content 长度
         is_valid, error_msg, _ = validate_content_length(content, group, custom_config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        # 验证 summary
         if not summary or not summary.strip():
             return {"success": False, "error": "summary 参数不能为空"}
 
@@ -363,7 +232,6 @@ class ProjectService:
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        # 验证 tags
         if not tag_list:
             return {"success": False, "error": "tags 参数不能为空"}
 
@@ -372,7 +240,6 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 解析并验证 related 参数
         is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
         if not is_valid:
             return {"success": False, "error": error_msg}
@@ -389,27 +256,12 @@ class ProjectService:
         custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
         default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
-        """统一验证更新条目参数.
-
-        Args:
-            group: 分组类型
-            item_id: 条目ID
-            content: 新内容（可选）
-            summary: 新摘要（可选）
-            related: 关联数据（可选）
-            custom_groups: 自定义组配置字典（可选）
-            default_rules: 默认关联规则（可选）
-
-        Returns:
-            验证结果
-        """
         is_valid, error_msg = validate_group_name(group, custom_groups)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
         custom_config = custom_groups.get(group) if custom_groups else None
 
-        # 验证 content
         if content is not None:
             if not content:
                 return {"success": False, "error": "content 不能为空"}
@@ -417,7 +269,6 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 验证 summary
         if summary is not None:
             if not summary.strip():
                 return {"success": False, "error": "summary 不能为空"}
@@ -425,7 +276,6 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        # 验证 related
         related_dict = None
         if related is not None:
             is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
@@ -446,36 +296,19 @@ class ProjectService:
         related: Optional[Dict[str, List[str]]] = None,
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """添加项目条目.
-
-        Args:
-            project_id: 项目ID
-            group: 分组类型
-            content: 条目内容
-            summary: 条目摘要
-            status: 状态（可选）
-            severity: 严重程度（可选）
-            related: 关联数据（可选）
-            tags: 标签列表（可选）
-
-        Returns:
-            操作结果
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        # 确定 ID 前缀
         prefix_map = {"features": "feat", "notes": "note", "fixes": "fix", "standards": "std"}
         prefix = prefix_map.get(group, "feat")
 
-        # 生成新条目 ID
         item_id = self.storage.generate_item_id(prefix, project_id, project_data)
 
-        # 生成时间戳
         timestamps = self.storage.generate_timestamps()
 
-        # 使用 ItemCreate 模型进行验证
         item_create = ItemCreate(
             summary=summary,
             content=content,
@@ -485,7 +318,6 @@ class ProjectService:
             related=related
         )
 
-        # 创建新条目
         new_item = Item(
             id=item_id,
             summary=item_create.summary,
@@ -499,45 +331,33 @@ class ProjectService:
             version=1
         )
 
-        # 转换为字典格式用于存储（保持向后兼容）
-        new_item_dict = new_item.model_dump()
-        new_item_dict["_v"] = 1  # 保持版本字段兼容性
-
-        # 添加到对应分组
-        if group not in project_data:
-            project_data[group] = []
-        project_data[group].append(new_item_dict)
-
-        # 更新版本号
-        project_data["_versions"][group] = project_data.get("_versions", {}).get(group, 1) + 1
-        project_data["_version"] = project_data.get("_version", 0) + 1
+        # 使用模型方法添加条目
+        project_data.add_item(group, new_item)
+        project_data.increment_version(group)
 
         # 更新标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
         for tag in tags or []:
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
+            tag_info = project_data.get_tag(tag)
+            if tag_info:
+                tag_info.usage_count += 1
 
-        # 更新项目更新时间
-        self.storage.update_timestamp(project_data["info"])
+        project_data.touch()
 
-        # 保存
         if await self.storage.save_project_data(project_id, project_data):
-            # 保存 content 到独立文件
             if group in CONTENT_SEPARATE_GROUPS:
                 await self.storage.save_item_content(project_id, group, item_id, content)
 
-            # 返回使用 Pydantic 模型验证的结果
-            return {
-                "success": True,
-                "project_id": project_id,
-                "group": group,
-                "item_id": item_id,
-                "item": Item.model_validate(new_item_dict).model_dump(),
-                "message": f"条目 '{item_id}' 已添加到 '{group}' 分组"
-            }
+            return ResponseBuilder.success(
+                data={
+                    "project_id": project_id,
+                    "group": group,
+                    "item_id": item_id,
+                    "item": new_item.model_dump()
+                },
+                message=SuccessMessages.ITEM_ADDED.format(item_id=item_id, group=group)
+            ).to_dict()
 
-        return {"success": False, "error": "保存数据失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     @barrier(level=OperationLevel.L5, files=["{group}/{item_id}.json"], key="{project_id}:{group}:{item_id}")
     async def update_item(
@@ -553,49 +373,20 @@ class ProjectService:
         tags: Optional[List[str]] = None,
         expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
-        """更新项目条目.
-
-        在 barrier 保护下直接操作数据，不再调用 storage.update_item_with_version_check()。
-
-        Args:
-            project_id: 项目ID
-            group: 分组类型
-            item_id: 条目ID
-            content: 内容更新（可选）
-            summary: 摘要更新（可选）
-            status: 状态更新（可选）
-            severity: 严重程度更新（可选）
-            related: 关联更新（可选）
-            tags: 标签更新（可选）
-            expected_version: 期望的版本号（可选，用于乐观锁检测）
-
-        Returns:
-            操作结果
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        items = project_data.get(group, [])
-        item = None
-        item_index = None
-        for i, itm in enumerate(items):
-            if itm.get("id") == item_id:
-                item = itm
-                item_index = i
-                break
-
+        item = project_data.get_item(group, item_id)
         if item is None:
-            return {"success": False, "error": f"在分组 '{group}' 中找不到条目 '{item_id}'"}
-
-        # 使用 Pydantic 模型验证当前条目
-        try:
-            current_item = Item.model_validate(item)
-        except Exception as e:
-            return {"success": False, "error": f"条目数据格式错误: {e}"}
+            return ResponseBuilder.error(
+                ErrorMessages.ITEM_NOT_FOUND.format(group=group, item_id=item_id)
+            ).to_dict()
 
         # 版本检测
-        current_version = current_item.version
+        current_version = item.version
         if expected_version is not None and current_version != expected_version:
             return {
                 "success": False,
@@ -606,10 +397,9 @@ class ProjectService:
                 "message": f"条目已被其他请求修改，当前版本: {current_version}"
             }
 
-        # 记录旧标签用于计数更新
-        old_tags = current_item.tags
+        old_tags = item.tags
 
-        # 使用 ItemUpdate 模型进行验证
+        # 使用 ItemUpdate 验证
         item_update = ItemUpdate(
             summary=summary,
             content=content,
@@ -620,57 +410,47 @@ class ProjectService:
             version=current_version
         )
 
-        # 更新字段
+        # 直接修改模型属性
         update_data = item_update.model_dump(exclude_none=True)
         for field, value in update_data.items():
             if field != "version" and value is not None:
-                item[field] = value
+                setattr(item, field, value)
 
-        # 更新时间戳
-        item["updated_at"] = datetime.now().isoformat()
+        item.updated_at = datetime.now().isoformat()
+        item.version = current_version + 1
 
-        # 条目版本递增
-        item["_v"] = current_version + 1
-        item["version"] = current_version + 1
-
-        # 项目全局版本递增
-        project_data["_version"] = project_data.get("_version", 0) + 1
+        project_data.increment_version("project")
 
         # 更新标签计数
-        tag_registry = project_data.get("tag_registry", {})
         removed_tags = set(old_tags) - set(tags or old_tags)
         added_tags = set(tags or old_tags) - set(old_tags)
 
         for tag in removed_tags:
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = max(0, tag_registry[tag].get("usage_count", 0) - 1)
+            tag_info = project_data.get_tag(tag)
+            if tag_info:
+                tag_info.usage_count = max(0, tag_info.usage_count - 1)
 
         for tag in added_tags:
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = tag_registry[tag].get("usage_count", 0) + 1
+            tag_info = project_data.get_tag(tag)
+            if tag_info:
+                tag_info.usage_count += 1
 
-        # 更新项目更新时间
-        self.storage.update_timestamp(project_data["info"])
+        project_data.touch()
 
-        # 保存
         if await self.storage.save_project_data(project_id, project_data):
-            # 更新独立 content 文件
             if group in CONTENT_SEPARATE_GROUPS and content is not None:
                 await self.storage.save_item_content(project_id, group, item_id, content)
 
-            # 使用 Pydantic 模型验证并返回
-            updated_item = Item.model_validate(item)
-            return {
-                "success": True,
-                "project_id": project_id,
-                "group": group,
-                "item_id": item_id,
-                "item": updated_item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set()),
-                "version": updated_item.version,
-                "message": f"条目 '{item_id}' 已更新"
-            }
+            item_data = item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set())
+            result = ResponseBuilder.success(
+                data={"project_id": project_id, "group": group, "item_id": item_id},
+                message=SuccessMessages.ITEM_UPDATED.format(item_id=item_id)
+            ).to_dict()
+            result["item"] = item_data
+            result["version"] = item.version
+            return result
 
-        return {"success": False, "error": "保存数据失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     @barrier(level=OperationLevel.L4, files=["{group}/"], key="{project_id}:{group}")
     async def delete_item(
@@ -679,131 +459,80 @@ class ProjectService:
         group: str,
         item_id: str
     ) -> Dict[str, Any]:
-        """删除项目条目.
-
-        Args:
-            project_id: 项目ID
-            group: 分组类型
-            item_id: 条目ID
-
-        Returns:
-            操作结果
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        items = project_data.get(group, [])
-        item_index = None
-        deleted_item = None
-
-        for i, item in enumerate(items):
-            if item.get("id") == item_id:
-                item_index = i
-                deleted_item = item
-                break
-
-        if item_index is None:
-            return {"success": False, "error": f"在分组 '{group}' 中找不到条目 '{item_id}'"}
+        deleted_item = project_data.remove_item(group, item_id)
+        if deleted_item is None:
+            return ResponseBuilder.error(
+                ErrorMessages.ITEM_NOT_FOUND.format(group=group, item_id=item_id)
+            ).to_dict()
 
         # 减少标签使用计数
-        tag_registry = project_data.get("tag_registry", {})
-        # deleted_item 此时保证不为 None（因为找到了 item_index）
-        for tag in (deleted_item or {}).get("tags", []):
-            if tag in tag_registry:
-                tag_registry[tag]["usage_count"] = max(0, tag_registry[tag].get("usage_count", 0) - 1)
+        for tag in deleted_item.tags:
+            tag_info = project_data.get_tag(tag)
+            if tag_info:
+                tag_info.usage_count = max(0, tag_info.usage_count - 1)
 
-        # 删除条目
-        del items[item_index]
+        project_data.increment_version(group)
+        project_data.touch()
 
-        # 更新版本号
-        project_data["_versions"][group] = project_data.get("_versions", {}).get(group, 1) + 1
-        project_data["_version"] = project_data.get("_version", 0) + 1
-
-        # 更新项目更新时间
-        self.storage.update_timestamp(project_data["info"])
-
-        # 保存
         if await self.storage.save_project_data(project_id, project_data):
-            # 删除独立的内容文件
             if group in CONTENT_SEPARATE_GROUPS:
                 self.storage.delete_item_content(project_id, group, item_id)
 
-            return {
-                "success": True,
-                "project_id": project_id,
-                "group": group,
-                "item_id": item_id,
-                "message": f"条目 '{item_id}' 已删除"
-            }
+            return ResponseBuilder.success(
+                data={"project_id": project_id, "group": group, "item_id": item_id},
+                message=SuccessMessages.ITEM_DELETED.format(item_id=item_id)
+            ).to_dict()
 
-        return {"success": False, "error": "保存数据失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     # ==================== 项目归档/删除 ====================
 
     @barrier(level=OperationLevel.L1, files=["_index.json"])
     async def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
-        """归档或永久删除项目.
-
-        Args:
-            project_id: 项目ID
-            mode: 操作模式 - "archive"(归档) 或 "delete"(永久删除)
-
-        Returns:
-            操作结果
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
-        if mode == "delete":
-            # 永久删除项目目录
+        from src.common.consts import OperationModes
+
+        if mode == OperationModes.DELETE:
             project_dir = self.storage._get_project_dir(project_id)
             if project_dir.exists():
                 import shutil
                 shutil.rmtree(project_dir)
-
-            # 从缓存移除
             await self.storage.refresh_projects_cache()
+            return ResponseBuilder.success(message=f"项目 '{project_id}' 已永久删除").to_dict()
 
-            return {
-                "success": True,
-                "message": f"项目 '{project_id}' 已永久删除"
-            }
-
-        # 归档模式
         result = await self.storage.archive_project(project_id)
         if result.get("success"):
             await self.storage.refresh_projects_cache()
-
         return result
 
     # ==================== 分组管理 ====================
 
     async def list_groups(self, project_id: str) -> Dict[str, Any]:
-        """列出项目的所有分组（返回完整配置）.
-
-        Args:
-            project_id: 项目ID
-
-        Returns:
-            分组列表（含完整配置）及全局设置
-        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
-            return {"success": False, "error": f"项目 '{project_id}' 不存在"}
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
 
         group_configs = await self.storage.get_group_configs(project_id)
         custom_groups = group_configs.get("groups", {})
 
         groups = []
 
-        # 内置组
         for group_name in all_group_names():
-            items = project_data.get(group_name, [])
-            # 获取默认配置
+            items = project_data.get_items(group_name)
             config = UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS.get(group_name, {}))
-            # 如果自定义组覆盖了内置组配置，使用自定义配置
             if group_name in custom_groups:
                 config = UnifiedGroupConfig.from_dict(custom_groups[group_name])
 
@@ -814,10 +543,9 @@ class ProjectService:
                 **config.to_dict()
             })
 
-        # 自定义组（不在内置组列表中的）
         for group_name, config_dict in custom_groups.items():
             if group_name not in all_group_names():
-                items = project_data.get(group_name, [])
+                items = project_data.get_items(group_name)
                 config = UnifiedGroupConfig.from_dict(config_dict)
                 groups.append({
                     "name": group_name,
@@ -833,32 +561,12 @@ class ProjectService:
         }
 
     async def get_group_config(self, project_id: str, group: str) -> Dict[str, Any]:
-        """获取单个组的配置.
-
-        Args:
-            project_id: 项目ID
-            group: 组名称
-
-        Returns:
-            组配置对象或错误信息
-        """
         group_configs = await self.storage.get_group_configs(project_id)
-
-        # 先检查自定义组
         custom_groups = group_configs.get("groups", {})
         if group in custom_groups:
-            return {
-                "success": True,
-                "config": UnifiedGroupConfig.from_dict(custom_groups[group]).to_dict()
-            }
-
-        # 再检查内置组
+            return {"success": True, "config": UnifiedGroupConfig.from_dict(custom_groups[group]).to_dict()}
         if group in DEFAULT_GROUP_CONFIGS:
-            return {
-                "success": True,
-                "config": DEFAULT_GROUP_CONFIGS[group]
-            }
-
+            return {"success": True, "config": DEFAULT_GROUP_CONFIGS[group]}
         return {"success": False, "error": f"组 '{group}' 不存在"}
 
     @barrier(level=OperationLevel.L3, files=["_groups.json"], key="{project_id}")
@@ -868,39 +576,21 @@ class ProjectService:
         group: str,
         config: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """更新单个组的配置.
-
-        Args:
-            project_id: 项目ID
-            group: 组名称
-            config: 完整的组配置对象
-
-        Returns:
-            操作结果
-        """
         group_configs = await self.storage.get_group_configs(project_id)
 
-        # 验证组名
-        is_valid, error_msg = validate_group_name(
-            group,
-            group_configs.get("groups", {})
-        )
+        is_valid, error_msg = validate_group_name(group, group_configs.get("groups", {}))
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        # 验证配置对象
         try:
             unified_config = UnifiedGroupConfig.from_dict(config)
         except Exception as e:
             return {"success": False, "error": f"配置格式错误: {e}"}
 
-        # 更新配置
         if "groups" not in group_configs:
             group_configs["groups"] = {}
         group_configs["groups"][group] = unified_config.to_dict()
 
-        # 保存
         if await self.storage.save_group_configs(project_id, group_configs):
             return {"success": True, "message": f"组 '{group}' 配置已更新"}
-
-        return {"success": False, "error": "保存配置失败"}
+        return ResponseBuilder.error(ErrorMessages.SAVE_CONFIG_FAILED).to_dict()
