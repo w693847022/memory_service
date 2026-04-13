@@ -153,7 +153,7 @@ class ProjectInitialData(BaseModel):
         from datetime import datetime
 
         if group_configs is None:
-            from business.core.groups import DEFAULT_GROUP_CONFIGS
+            from src.models.group import DEFAULT_GROUP_CONFIGS
             group_configs = DEFAULT_GROUP_CONFIGS
 
         groups = {group_name: [] for group_name in group_configs.keys()}

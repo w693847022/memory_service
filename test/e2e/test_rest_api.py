@@ -208,7 +208,7 @@ class TestRestTags:
         result = rest_client.put("/api/tags/update", params={
             "project_id": project_id,
             "tag_name": "test_update_tag",
-            "summary": "新摘要"
+            "summary": "更新后的摘要"
         })
 
         assert result["success"] is True
@@ -247,12 +247,12 @@ class TestRestTags:
         rest_client.post("/api/tags/register", params={
             "project_id": project_id,
             "tag_name": "old_tag",
-            "summary": "旧标签"
+            "summary": "旧的测试标签"
         })
         rest_client.post("/api/tags/register", params={
             "project_id": project_id,
             "tag_name": "new_tag",
-            "summary": "新标签"
+            "summary": "新的测试标签"
         })
 
         # 合并标签

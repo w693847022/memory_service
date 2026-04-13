@@ -39,13 +39,13 @@ async def test_complete_workflow():
             tags=["web", "ecommerce"]
         )
         assert result["success"], f"注册项目失败: {result}"
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
         print(f"    ✓ 项目已注册 (ID: {project_id})")
 
         # 2. 注册标签
         print("  步骤2: 注册标签...")
         await tag_service.register_tag(project_id, "urgent", "紧急任务")
-        await tag_service.register_tag(project_id, "feature", "新功能")
+        await tag_service.register_tag(project_id, "feature", "新功能开发")
         await tag_service.register_tag(project_id, "backend", "后端模块")
         print("    ✓ 标签已注册")
 
@@ -60,7 +60,7 @@ async def test_complete_workflow():
             tags=["backend"]
         )
         assert result["success"], f"添加功能失败: {result}"
-        feature_id = result["item_id"]
+        feature_id = result["data"]["item_id"]
         print(f"    ✓ 功能已添加 (ID: {feature_id})")
 
         # 4. 添加笔记
@@ -73,7 +73,7 @@ async def test_complete_workflow():
             tags=["backend"]
         )
         assert result["success"], f"添加笔记失败: {result}"
-        note_id = result["item_id"]
+        note_id = result["data"]["item_id"]
         print(f"    ✓ 笔记已添加 (ID: {note_id})")
 
         # 5. 查询项目
@@ -174,18 +174,19 @@ async def test_multi_project_workflow():
         project_c = await project_service.register_project("项目C", "/path/c", tags=["mobile"])
 
         # 为每个项目添加内容（使用 add_item 统一接口）
-        await project_service.add_item(project_id=project_a["project_id"], group="features", content="Web前端功能内容", summary="Web前端功能", status="pending", tags=["web"])
-        await project_service.add_item(project_id=project_b["project_id"], group="features", content="API接口功能内容", summary="API接口功能", status="pending", tags=["api"])
-        await project_service.add_item(project_id=project_c["project_id"], group="features", content="移动端功能内容", summary="移动端功能", status="pending", tags=["mobile"])
+        await project_service.add_item(project_id=project_a["data"]["project_id"], group="features", content="Web前端功能内容", summary="Web前端功能", status="pending", tags=["web"])
+        await project_service.add_item(project_id=project_b["data"]["project_id"], group="features", content="API接口功能内容", summary="API接口功能", status="pending", tags=["api"])
+        await project_service.add_item(project_id=project_c["data"]["project_id"], group="features", content="移动端功能内容", summary="移动端功能", status="pending", tags=["mobile"])
 
         # 获取项目列表
         result = await project_service.list_projects()
-        assert result["total"] == 3, f"项目数量不正确: {result['total']}"
+        assert result["success"], f"获取项目列表失败: {result}"
+        assert result["data"]["total"] == 3, f"项目数量不正确: {result['data']['total']}"
 
         # 验证各项目数据独立
-        data_a = await project_service.get_project(project_a["project_id"])
-        data_b = await project_service.get_project(project_b["project_id"])
-        data_c = await project_service.get_project(project_c["project_id"])
+        data_a = await project_service.get_project(project_a["data"]["project_id"])
+        data_b = await project_service.get_project(project_b["data"]["project_id"])
+        data_c = await project_service.get_project(project_c["data"]["project_id"])
 
         assert len(data_a["data"]["features"]) == 1, "项目A功能数量不正确"
         assert len(data_b["data"]["features"]) == 1, "项目B功能数量不正确"

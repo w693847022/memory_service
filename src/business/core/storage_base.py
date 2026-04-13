@@ -307,7 +307,7 @@ class ProjectStorage:
             data = json.loads(content)
 
             # 2. 迁移 content 到独立 .md 文件
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            from src.models.group import CONTENT_SEPARATE_GROUPS
             for group_name in CONTENT_SEPARATE_GROUPS:
                 for item in data.get(group_name, []):
                     if "content" in item and item["content"]:
@@ -390,7 +390,7 @@ class ProjectStorage:
                 note["summary"] = ""
 
         # 兼容旧格式：将内联 content 迁移到独立文件
-        from business.core.groups import CONTENT_SEPARATE_GROUPS
+        from src.models.group import CONTENT_SEPARATE_GROUPS
         need_save = False
         for group_name in CONTENT_SEPARATE_GROUPS:
             for item in data.get(group_name, []):
@@ -427,7 +427,7 @@ class ProjectStorage:
     async def _save_project_dict(self, project_id: str, data: Dict[str, Any]) -> bool:
         """保存原始 dict 格式的项目数据（仅用于内部迁移）."""
         try:
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            from src.models.group import CONTENT_SEPARATE_GROUPS
 
             project_dir = self._get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
@@ -493,7 +493,7 @@ class ProjectStorage:
                 tags_data = {"_version": 1, "tags": {}}
 
             # 3. 加载各分组的 _index.json
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            from src.models.group import CONTENT_SEPARATE_GROUPS
             groups_data = {}
             for group_name in CONTENT_SEPARATE_GROUPS:
                 index_data = await self._load_group_index(project_id, group_name)
@@ -528,7 +528,7 @@ class ProjectStorage:
         将 ProjectData 模型转换为存储格式 dict，然后写入拆分文件。
         """
         try:
-            from business.core.groups import CONTENT_SEPARATE_GROUPS
+            from src.models.group import CONTENT_SEPARATE_GROUPS
 
             # 转换为存储格式 dict
             data = project_data.to_storage()
@@ -609,7 +609,7 @@ class ProjectStorage:
 
     async def _load_group_configs(self, project_id: str) -> Dict[str, Any]:
         """加载组配置文件."""
-        from business.core.groups import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
+        from src.models.group import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
 
         config_path = self._get_group_config_path(project_id)
         if config_path.exists():
@@ -654,7 +654,7 @@ class ProjectStorage:
 
     def _serialize_group_configs(self, configs: Dict[str, Any]) -> Dict[str, Any]:
         """将组配置中的 dataclass/Pydantic 模型转换为字典."""
-        from business.core.groups import UnifiedGroupConfig
+        from src.models.group import UnifiedGroupConfig
 
         result = {}
         for key, value in configs.items():

@@ -10,7 +10,7 @@ from typing import Optional, List, Dict, Any
 
 from src.models import TagInfo
 from src.models.storage import ProjectData
-from business.core.groups import get_all_groups
+from src.models.enums import GroupType
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
 from src.common.consts import (
@@ -36,7 +36,7 @@ class TagService:
         return bool(re.match(pattern, tag_name))
 
     def _validate_description(self, description: str) -> bool:
-        return 3 <= len(description) <= 200
+        return 4 <= len(description) <= 100
 
     # ==================== 异步业务方法 ====================
 
@@ -189,7 +189,7 @@ class TagService:
 
         migrated_count = 0
         affected_groups = []
-        all_groups = get_all_groups()
+        all_groups = GroupType.values()
 
         for group_name in all_groups:
             items = project_data.get_items(group_name)
@@ -227,7 +227,7 @@ class TagService:
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
-        groups = get_all_groups()
+        groups = GroupType.values()
         tags_list = []
 
         for tag_name, tag_info in project_data.tag_registry.items():
@@ -268,7 +268,7 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in get_all_groups():
+        if group_name not in GroupType.values():
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -312,7 +312,7 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in get_all_groups():
+        if group_name not in GroupType.values():
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -352,7 +352,7 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in get_all_groups():
+        if group_name not in GroupType.values():
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -390,7 +390,7 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in get_all_groups():
+        if group_name not in GroupType.values():
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -436,7 +436,7 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in get_all_groups():
+        if group_name not in GroupType.values():
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()

@@ -9,6 +9,9 @@ test_dir = Path(__file__).parent.parent
 if str(test_dir) not in sys.path:
     sys.path.insert(0, str(test_dir))
 
+# 模块级变量，存储活跃的服务器实例（用于失败时打印日志）
+_active_servers = []
+
 # 导入测试工具类
 from e2e.utils import (
     BusinessTestServer,
@@ -34,10 +37,12 @@ def business_server():
     """
     server = BusinessTestServer(port=18002)
     server.start()
+    _active_servers.append(server)
     yield server
     print("\n[Business] 停止服务器...")
     server.stop()
     server.cleanup()
+    _active_servers.remove(server)
 
 
 @pytest.fixture(scope="session")
@@ -51,10 +56,12 @@ def mcp_server(business_server):
         business_url="http://localhost:18002"
     )
     server.start()
+    _active_servers.append(server)
     yield server
     print("\n[MCP] 停止服务器...")
     server.stop()
     server.cleanup()
+    _active_servers.remove(server)
 
 
 @pytest.fixture(scope="session")
@@ -68,10 +75,12 @@ def rest_server(business_server):
         business_url="http://localhost:18002"
     )
     server.start()
+    _active_servers.append(server)
     yield server
     print("\n[REST] 停止服务器...")
     server.stop()
     server.cleanup()
+    _active_servers.remove(server)
 
 
 # ===================
@@ -139,6 +148,18 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="function", autouse=True)
 def print_test_name(request):
-    """自动打印测试名称."""
+    """自动打印测试名称，失败时打印服务日志."""
     print(f"\n>>> 运行测试: {request.node.name}")
     yield
+    # 测试失败时，打印服务日志
+    if hasattr(request.node, 'rep_call') and request.node.rep_call.failed:
+        for server in _active_servers:
+            server.dump_logs()
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """捕获测试结果，用于在 print_test_name 中判断失败."""
+    outcome = yield
+    rep = outcome.get_result()
+    setattr(item, f"rep_{rep.when}", rep)

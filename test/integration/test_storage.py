@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from business.storage import Storage
 from business.project_service import ProjectService
+from business.groups_service import GroupsService
 
 
 @pytest.mark.asyncio
@@ -37,7 +38,8 @@ class TestStorageIntegration:
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
 
     async def test_json_storage_persistence(self):
         """测试 JSON 存储持久化."""
@@ -46,7 +48,7 @@ class TestStorageIntegration:
         # 创建第一个实例并添加数据
         project_service1 = self.project_service
         result = await project_service1.register_project("持久化测试", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         await project_service1.add_item(
             project_id=project_id,
@@ -73,7 +75,7 @@ class TestStorageIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("测试项目", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 添加笔记（使用 add_item 统一接口）
         note_content = "这是详细的笔记内容" * 100  # 较长内容
@@ -84,7 +86,7 @@ class TestStorageIntegration:
             summary="测试笔记",
             tags=[]
         )
-        note_id = result["item_id"]
+        note_id = result["data"]["item_id"]
 
         # 验证笔记内容在单独的文件中
         note_file = self.storage._get_item_content_path(project_id, "notes", note_id)
@@ -106,7 +108,7 @@ class TestStorageIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("测试项目", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 添加各种类型的数据（使用 add_item 统一接口）
         await self.project_service.add_item(
@@ -143,9 +145,9 @@ class TestStorageIntegration:
         # 验证目录结构
         # ProjectService 使用项目名称作为目录名
         projects = await self.project_service.list_projects()
-        if projects["success"] and projects["total"] > 0:
+        if projects["success"] and projects["data"]["total"] > 0:
             # 获取实际的项目名称（目录名）
-            for p in projects["projects"]:
+            for p in projects["data"]["projects"]:
                 project_dir = Path(self.temp_dir) / p["name"]
                 if project_dir.exists():
                     break
@@ -172,7 +174,7 @@ class TestStorageIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("全组测试", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 为每个默认组添加条目
         test_data = {}
@@ -194,7 +196,7 @@ class TestStorageIntegration:
                 kwargs["severity"] = severity
 
             add_result = await self.project_service.add_item(**kwargs)
-            item_id = add_result["item_id"]
+            item_id = add_result["data"]["item_id"]
             test_data[group] = (item_id, content)
 
         # 验证每个组的 .md 文件存在且内容正确
@@ -221,7 +223,7 @@ class TestStorageIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("删除测试", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 为每个默认组添加然后删除
         for group in ("features", "fixes", "notes", "standards"):
@@ -237,7 +239,7 @@ class TestStorageIntegration:
                 kwargs["status"] = status
 
             add_result = await self.project_service.add_item(**kwargs)
-            item_id = add_result["item_id"]
+            item_id = add_result["data"]["item_id"]
 
             # 验证文件存在
             content_file = self.storage._get_item_content_path(project_id, group, item_id)
@@ -257,7 +259,7 @@ class TestStorageIntegration:
 
         # 注册项目获取 project_id
         result = await self.project_service.register_project("迁移测试", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 直接修改 _project.json，模拟旧格式（内联 content）
         project_dir = self.storage._get_project_dir(project_id)
@@ -309,7 +311,7 @@ class TestStorageIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("并发测试", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 并发添加多个功能
         tasks = []
@@ -371,14 +373,15 @@ class TestSmartCacheIntegration:
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
 
     async def test_smart_cache_integration(self):
         """测试 SmartCache 与 Storage 的集成."""
         await self.async_setup_method()
         # 创建一个项目
         result = await self.project_service.register_project("cache_test", "缓存测试项目")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 添加一些数据
         await self.project_service.add_item(
@@ -392,7 +395,7 @@ class TestSmartCacheIntegration:
         for _ in range(5):
             data = await self.storage.get_project_data(project_id)
             assert data is not None
-            assert "features" in data
+            assert "features" in data.groups
 
         # 验证缓存统计
         stats = self.storage.get_cache_stats()
@@ -403,7 +406,7 @@ class TestSmartCacheIntegration:
         await self.async_setup_method()
         # 创建项目并添加数据
         result = await self.project_service.register_project("hit_rate_test", "命中率测试")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         for i in range(20):
             await self.project_service.add_item(
@@ -428,7 +431,7 @@ class TestSmartCacheIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("promo_test", "升级测试")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         await self.project_service.add_item(
             project_id=project_id,
@@ -463,7 +466,7 @@ class TestSmartCacheIntegration:
 
         # 执行一些操作
         result = await self.project_service.register_project("stats_test", "统计测试")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         await self.project_service.add_item(
             project_id=project_id,
@@ -486,7 +489,7 @@ class TestSmartCacheIntegration:
         await self.async_setup_method()
         # 验证旧的缓存接口仍然可用
         result = await self.project_service.register_project("compat_test", "兼容性测试")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         await self.project_service.add_item(
             project_id=project_id,

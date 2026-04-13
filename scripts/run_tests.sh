@@ -18,7 +18,7 @@ fi
 export PYTHONPATH="$PROJECT_ROOT"
 
 # 默认参数
-TEST_PATH="test/unit"
+TEST_PATH="test"
 VERBOSE=""
 COVERAGE=""
 TB="short"

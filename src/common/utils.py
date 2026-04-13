@@ -20,7 +20,7 @@ def paginate(items, page=1, size=0) -> Tuple[Optional[PaginationResult], Optiona
         return None, "分页参数必须为有效的整数"
     filtered_total = len(items)
     if size_int <= 0:
-        return PaginationResult(items, {}, filtered_total), None
+        return PaginationResult(items=items, pagination_meta={}, filtered_total=filtered_total), None
     if page_int < 1:
         return None, f"无效的页码: {page_int}"
     if size_int < 0:
@@ -28,7 +28,7 @@ def paginate(items, page=1, size=0) -> Tuple[Optional[PaginationResult], Optiona
     tp = (filtered_total + size_int - 1) // size_int if filtered_total > 0 else 0
     meta = {"page": page_int, "size": size_int, "total_pages": tp,
             "has_next": page_int < tp, "has_prev": page_int > 1}
-    return PaginationResult(items[(page_int - 1) * size_int:page_int * size_int], meta, filtered_total), None
+    return PaginationResult(items=items[(page_int - 1) * size_int:page_int * size_int], pagination_meta=meta, filtered_total=filtered_total), None
 
 
 def validate_view_mode(view_mode: str) -> Tuple[bool, Optional[str]]:

@@ -36,10 +36,18 @@ def _tool_response(result, success_data=None, success_message=None):
 
     由于 business_client 已返回 ApiResponse 对象，直接返回其 JSON 格式。
     """
-    return result.to_json()
+    # ApiResponse 对象使用 model_dump_json() 方法（Pydantic 提供）
+    if hasattr(result, 'model_dump_json'):
+        return result.model_dump_json()
+    # 如果是 dict，已经是 to_dict() 的结果
+    elif isinstance(result, dict):
+        import json
+        return json.dumps(result)
+    else:
+        return str(result)
 
 
 def _error_response(error):
     """构建错误响应."""
     from src.models import ApiResponse
-    return ApiResponse(success=False, error=error).to_json()
+    return ApiResponse(success=False, error=error).model_dump_json()

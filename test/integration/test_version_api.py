@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 from business.api.projects import init_services, router
 from fastapi import FastAPI
 
@@ -43,11 +44,12 @@ class TestApiVersionControl:
 
         # 初始化存储和服务
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
         self.tag_service = TagService(self.storage)
 
         # 初始化API服务
-        init_services(self.storage, self.project_service, self.tag_service)
+        init_services(self.storage, self.project_service, self.tag_service, self.groups_service)
 
         # 创建测试应用
         self.app = FastAPI()
@@ -63,7 +65,7 @@ class TestApiVersionControl:
             # 注册测试项目
             register_response = await client.post(
                 "/api/projects",
-                params={
+                json={
                     "name": "版本控制测试项目",
                     "summary": "用于测试版本控制功能的项目",
                     "tags": "test,version"

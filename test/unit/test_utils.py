@@ -40,17 +40,18 @@ def test_group_normalization():
     """测试分组验证."""
     print("测试: 分组验证...")
 
-    from business.core.groups import validate_group_name
+    from business.groups_service import GroupsService
+    from src.models.group import DEFAULT_GROUP_CONFIGS
 
     # 测试有效分组名
     for group in ["features", "fixes", "notes", "standards"]:
-        is_valid, error_msg = validate_group_name(group)
+        is_valid, error_msg = GroupsService.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
         assert is_valid, f"'{group}' 应该是有效的分组名"
 
     # 测试无效分组名（不再支持别名）
     invalid_names = ["feature", "fix", "功能", "feat", "invalid"]
     for invalid in invalid_names:
-        is_valid, error_msg = validate_group_name(invalid)
+        is_valid, error_msg = GroupsService.validate_group_name(invalid, DEFAULT_GROUP_CONFIGS)
         assert not is_valid, f"'{invalid}' 应该是无效的分组名"
 
     print("  ✓ 分组验证测试通过")
@@ -81,24 +82,34 @@ def test_content_validation():
     """测试内容长度验证."""
     print("测试: 内容长度验证...")
 
-    from business.core.groups import validate_content_length
+    from business.groups_service import GroupsService
+    from src.models.group import DEFAULT_GROUP_CONFIGS
 
-    # 测试有效内容
-    valid, msg, _ = validate_content_length("短内容", "features")
+    # 获取 features 和 notes 的配置
+    features_config = DEFAULT_GROUP_CONFIGS["features"]
+    notes_config = DEFAULT_GROUP_CONFIGS["notes"]
+    features_model = GroupsService.validate_group_name("features", DEFAULT_GROUP_CONFIGS)
+
+    # 测试有效内容 - 需要传入 config 对象
+    from src.models.group import UnifiedGroupConfig
+    features_config_model = UnifiedGroupConfig.from_dict(features_config)
+
+    valid, msg, _ = GroupsService.validate_content_length("短内容", features_config_model)
     assert valid, f"短内容应该有效: {msg}"
 
     # 测试过长内容 (features: 4000 bytes limit)
     long_content = "a" * 4500
-    valid, msg, _ = validate_content_length(long_content, "features")
+    valid, msg, _ = GroupsService.validate_content_length(long_content, features_config_model)
     assert not valid, "过长内容应该无效"
 
     # 测试 notes 分组的 1 token 最小长度 (3字符 ≈ 1 token)
-    valid, msg, _ = validate_content_length("aaa", "notes", min_tokens=1)
-    assert valid, f"3字符应该满足 min_tokens=1: {msg}"
+    notes_config_model = UnifiedGroupConfig.from_dict(notes_config)
+    valid, msg, _ = GroupsService.validate_content_length("aaa", notes_config_model, min_bytes=3)
+    assert valid, f"3字符应该满足 min_bytes=3: {msg}"
 
     # 测试不满足最小长度
-    valid, msg, _ = validate_content_length("a", "notes", min_tokens=1)
-    assert not valid, "1字符不应该满足 min_tokens=1"
+    valid, msg, _ = GroupsService.validate_content_length("a", notes_config_model, min_bytes=3)
+    assert not valid, "1字符不应该满足 min_bytes=3"
 
     print("  ✓ 内容长度验证测试通过")
 

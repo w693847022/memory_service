@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 
 
 @pytest.mark.asyncio
@@ -52,7 +53,8 @@ class TestCrossProjectConcurrent:
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
         self.tag_service = TagService(self.storage)
 
     async def test_concurrent_register_multiple_projects(self):
@@ -87,7 +89,7 @@ class TestCrossProjectConcurrent:
                 raise AssertionError(f"注册项目 {i} 失败，抛出异常: {result}")
 
             assert result["success"], f"注册项目 {i} 失败: {result.get('error')}"
-            project_id = result["project_id"]
+            project_id = result["data"]["project_id"]
             project_ids.append(project_id)
             print(f"✓ 项目 {i} 注册成功: {project_names[i]} -> {project_id}")
 
@@ -126,8 +128,8 @@ class TestCrossProjectConcurrent:
                 summary=f"待删除项目 {i}"
             )
             assert result["success"]
-            project_ids.append(result["project_id"])
-            print(f"✓ 注册项目 {i}: {result['project_id']}")
+            project_ids.append(result["data"]["project_id"])
+            print(f"✓ 注册项目 {i}: {result['data']['project_id']}")
 
         print(f"已注册 {len(project_ids)} 个项目，开始并发删除...")
 
@@ -183,7 +185,7 @@ class TestCrossProjectConcurrent:
             summary="项目A - 用于测试rename"
         )
         assert result_a["success"]
-        project_id_a = result_a["project_id"]
+        project_id_a = result_a["data"]["project_id"]
         self.project_ids.append(project_id_a)
         print(f"✓ 注册项目A: {project_id_a}")
 
@@ -194,7 +196,7 @@ class TestCrossProjectConcurrent:
             summary="项目B - 用于测试add_item"
         )
         assert result_b["success"]
-        project_id_b = result_b["project_id"]
+        project_id_b = result_b["data"]["project_id"]
         self.project_ids.append(project_id_b)
         print(f"✓ 注册项目B: {project_id_b}")
 
@@ -228,7 +230,7 @@ class TestCrossProjectConcurrent:
         if isinstance(add_item_result, Exception):
             raise AssertionError(f"项目B add_item失败，抛出异常: {add_item_result}")
         assert add_item_result["success"], f"项目B add_item失败: {add_item_result.get('error')}"
-        item_id_b = add_item_result["item_id"]
+        item_id_b = add_item_result["data"]["item_id"]
         print(f"✓ 项目B add_item成功: {item_id_b}")
 
         # 验证项目A确实被重命名
@@ -267,9 +269,9 @@ class TestCrossProjectConcurrent:
                 summary=f"条目测试项目 {i}"
             )
             assert result["success"]
-            project_ids.append(result["project_id"])
-            self.project_ids.append(result["project_id"])
-            print(f"✓ 注册项目 {i}: {result['project_id']}")
+            project_ids.append(result["data"]["project_id"])
+            self.project_ids.append(result["data"]["project_id"])
+            print(f"✓ 注册项目 {i}: {result['data']['project_id']}")
 
         # 并发在每个项目中添加条目
         tasks = []
@@ -294,8 +296,8 @@ class TestCrossProjectConcurrent:
                 raise AssertionError(f"项目 {i} add_item失败，抛出异常: {result}")
 
             assert result["success"], f"项目 {i} add_item失败: {result.get('error')}"
-            item_ids.append(result["item_id"])
-            print(f"✓ 项目 {i} add_item成功: {result['item_id']}")
+            item_ids.append(result["data"]["item_id"])
+            print(f"✓ 项目 {i} add_item成功: {result['data']['item_id']}")
 
         # 验证每个项目都能查询到添加的条目
         for i, (pid, item_id) in enumerate(zip(project_ids, item_ids)):
@@ -327,7 +329,7 @@ class TestCrossProjectConcurrent:
             summary="项目A - rename测试"
         )
         assert result_a["success"]
-        project_id_a = result_a["project_id"]
+        project_id_a = result_a["data"]["project_id"]
         print(f"✓ 注册项目A: {project_id_a}")
 
         # 注册项目B
@@ -337,7 +339,7 @@ class TestCrossProjectConcurrent:
             summary="项目B - delete测试"
         )
         assert result_b["success"]
-        project_id_b = result_b["project_id"]
+        project_id_b = result_b["data"]["project_id"]
         print(f"✓ 注册项目B: {project_id_b}")
 
         # 并发执行：项目A rename + 项目B delete

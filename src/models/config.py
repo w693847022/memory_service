@@ -2,129 +2,15 @@
 Configuration models for ai_memory_mcp.
 
 This module contains Pydantic models for configuration-related data structures,
-including group configurations, cache settings, connection pool settings, and pagination results.
+including cache settings, connection pool settings, and pagination results.
 """
 
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import httpx
 
 from pydantic import BaseModel, Field
-
-
-# ==================== 组配置模型 ====================
-
-
-class FieldConfig(BaseModel):
-    """字段配置."""
-
-    max_tokens: int = Field(..., description="最大 token 数")
-    required: bool = Field(default=False, description="是否必填")
-
-
-class GroupConfig(BaseModel):
-    """组配置（内部使用，兼容旧代码）."""
-
-    content: FieldConfig = Field(..., description="内容字段配置")
-    summary: FieldConfig = Field(..., description="摘要字段配置")
-    status_values: List[str] = Field(default_factory=list, description="允许的状态值列表")
-    severity_values: List[str] = Field(default_factory=list, description="允许的严重程度值列表")
-    required_fields: List[str] = Field(default_factory=list, description="必填字段列表")
-
-    def to_unified_dict(self) -> Dict[str, Any]:
-        """转换为统一配置字典（用于 JSON 存储）."""
-        return {
-            "content_max_bytes": self.content.max_tokens * 3,
-            "summary_max_bytes": self.summary.max_tokens * 3,
-            "allow_related": bool(self.status_values),
-            "allowed_related_to": [],
-            "enable_status": bool(self.status_values),
-            "enable_severity": bool(self.severity_values),
-            "status_values": self.status_values,
-            "severity_values": self.severity_values,
-            "required_fields": self.required_fields,
-        }
-
-    @classmethod
-    def from_unified_dict(cls, data: Dict[str, Any]) -> "GroupConfig":
-        """从统一配置字典创建 GroupConfig."""
-        content_max = data.get("content_max_bytes", 240) // 3
-        summary_max = data.get("summary_max_bytes", 90) // 3
-        return cls(
-            content=FieldConfig(max_tokens=content_max),
-            summary=FieldConfig(max_tokens=summary_max),
-            status_values=data.get("status_values", []),
-            severity_values=data.get("severity_values", []),
-            required_fields=data.get("required_fields", ["content", "summary"]),
-        )
-
-
-class UnifiedGroupConfig(BaseModel):
-    """统一组配置（内置组和自定义组通用）."""
-
-    content_max_bytes: int = Field(default=240, description="内容最大字节数")
-    summary_max_bytes: int = Field(default=90, description="摘要最大字节数")
-    allow_related: bool = Field(default=False, description="是否允许关联")
-    allowed_related_to: List[str] = Field(default_factory=list, description="允许关联的组列表")
-    enable_status: bool = Field(default=True, description="是否启用状态")
-    enable_severity: bool = Field(default=False, description="是否启用严重程度")
-    status_values: List[str] = Field(default_factory=list, description="状态值列表")
-    severity_values: List[str] = Field(default_factory=list, description="严重程度值列表")
-    required_fields: List[str] = Field(default_factory=list, description="必填字段列表")
-    is_builtin: bool = Field(default=False, description="是否为内置组")
-
-    def to_dict(self) -> Dict[str, Any]:
-        """转换为字典以便 JSON 序列化."""
-        return {
-            "content_max_bytes": self.content_max_bytes,
-            "summary_max_bytes": self.summary_max_bytes,
-            "allow_related": self.allow_related,
-            "allowed_related_to": self.allowed_related_to,
-            "enable_status": self.enable_status,
-            "enable_severity": self.enable_severity,
-            "status_values": self.status_values,
-            "severity_values": self.severity_values,
-            "required_fields": self.required_fields,
-            "is_builtin": self.is_builtin,
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "UnifiedGroupConfig":
-        """从字典创建配置."""
-        if isinstance(data, cls):
-            return data
-        return cls(
-            content_max_bytes=data.get("content_max_bytes", 240),
-            summary_max_bytes=data.get("summary_max_bytes", 90),
-            allow_related=data.get("allow_related", False),
-            allowed_related_to=data.get("allowed_related_to", []),
-            enable_status=data.get("enable_status", True),
-            enable_severity=data.get("enable_severity", False),
-            status_values=data.get("status_values", []),
-            severity_values=data.get("severity_values", []),
-            required_fields=data.get("required_fields", ["content", "summary"]),
-            is_builtin=data.get("is_builtin", False),
-        )
-
-
-class GroupSettings(BaseModel):
-    """全局组设置."""
-
-    default_related_rules: Dict[str, List[str]] = Field(
-        default_factory=dict, description="默认关联规则"
-    )
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {"default_related_rules": self.default_related_rules}
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "GroupSettings":
-        return cls(default_related_rules=data.get("default_related_rules", {}))
-
-
-# 保留 CustomGroupConfig 作为 UnifiedGroupConfig 的别名，兼容旧代码
-CustomGroupConfig = UnifiedGroupConfig
 
 
 # ==================== 缓存配置模型 ====================

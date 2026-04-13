@@ -113,7 +113,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=ApiResponse.error_resp(f"Internal server error: {str(exc)}")
+        content=ApiResponse.error_response(f"Internal server error: {str(exc)}")
     )
 
 
@@ -123,7 +123,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     logger.warning(f"Validation error: {exc}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content=ApiResponse.error_resp(str(exc))
+        content=ApiResponse.error_response(str(exc))
     )
 
 
@@ -135,14 +135,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 @limiter.limit(os.getenv("RATE_LIMIT_HEALTH", "60/minute"))
 async def health_check(request: Request):
     """健康检查端点."""
-    return ApiResponse.success_resp(data={"status": "healthy"})
+    return ApiResponse.success_response(data={"status": "healthy"})
 
 
 @app.get("/", tags=["Root"])
 @limiter.limit("30/minute")
 async def root(request: Request):
     """根路径."""
-    return ApiResponse.success_resp(data={
+    return ApiResponse.success_response(data={
         "name": "Project Memory REST API",
         "version": "1.0.0",
         "docs": "/docs",

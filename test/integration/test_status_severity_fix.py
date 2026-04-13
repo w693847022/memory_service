@@ -46,7 +46,7 @@ def test_status_severity_update():
             tags=["bug", "fix"]
         )
         assert result["success"], f"添加 fix 失败: {result}"
-        fix_id = result["item_id"]
+        fix_id = result["data"]["item_id"]
         print(f"  ✓ Fix 添加成功: {fix_id}")
 
         # 3. 验证初始状态

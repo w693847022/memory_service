@@ -146,8 +146,8 @@ class BusinessApiAsyncClient:
         tags: str = ""
     ) -> ApiResponse:
         """注册新项目."""
-        params = {"name": name, "path": path, "summary": summary, "tags": tags}
-        return await self._post("/api/projects", params=params)
+        json_data = {"name": name, "path": path, "summary": summary, "tags": tags}
+        return await self._post("/api/projects", json=json_data)
 
     async def get_project(self, project_id: str) -> ApiResponse:
         """获取项目详情."""
@@ -223,6 +223,11 @@ class BusinessApiAsyncClient:
             "updated_after": updated_after,
             "updated_before": updated_before
         }
+        # 根据 group_name 选择正确的端点
+        if not group_name:
+            # 获取整个项目信息
+            return await self._get(f"/api/projects/{project_id}")
+        # 获取项目条目
         return await self._get(f"/api/projects/{project_id}/items", params=params)
 
     async def project_add(
@@ -311,8 +316,8 @@ class BusinessApiAsyncClient:
         aliases: str = ""
     ) -> ApiResponse:
         """注册项目标签."""
-        params = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
-        return await self._post("/api/tags/register", params=params)
+        json_data = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
+        return await self._post("/api/tags/register", json=json_data)
 
     async def tag_update(
         self,
@@ -321,11 +326,10 @@ class BusinessApiAsyncClient:
         summary: Optional[str] = None
     ) -> ApiResponse:
         """更新已注册标签."""
-        params = {"project_id": project_id, "tag_name": tag_name}
-        params = {k: v for k, v in params.items() if v is not None}
+        json_data = {"project_id": project_id, "tag_name": tag_name}
         if summary is not None:
-            params["summary"] = summary
-        return await self._put("/api/tags/update", params=params)
+            json_data["summary"] = summary
+        return await self._put("/api/tags/update", json=json_data)
 
     async def tag_delete(
         self,
@@ -334,8 +338,8 @@ class BusinessApiAsyncClient:
         force: str = "false"
     ) -> ApiResponse:
         """删除标签注册."""
-        data = {"project_id": project_id, "tag_name": tag_name, "force": force}
-        return await self._delete("/api/tags/delete", params=data)
+        json_data = {"project_id": project_id, "tag_name": tag_name, "force": force}
+        return await self._delete("/api/tags/delete", json=json_data)
 
     async def tag_merge(
         self,
@@ -344,8 +348,8 @@ class BusinessApiAsyncClient:
         new_tag: str
     ) -> ApiResponse:
         """合并标签."""
-        params = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
-        return await self._post("/api/tags/merge", params=params)
+        json_data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
+        return await self._post("/api/tags/merge", json=json_data)
 
     # ===================
     # Stats APIs

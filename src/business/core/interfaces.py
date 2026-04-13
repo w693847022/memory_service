@@ -5,7 +5,7 @@
 
 from typing import Protocol, Optional, List, Dict, Any, Union
 
-from business.core.groups import UnifiedGroupConfig
+from src.models.group import UnifiedGroupConfig
 
 
 class ProjectServiceInterface(Protocol):

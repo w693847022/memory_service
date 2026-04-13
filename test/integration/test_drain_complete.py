@@ -28,7 +28,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
-from business.core.groups import UnifiedGroupConfig
+from business.groups_service import GroupsService
+from src.models.group import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS
 
 
 @pytest.mark.asyncio
@@ -57,7 +58,8 @@ class TestDrainCompleteMechanism:
         """
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
         self.tag_service = TagService(self.storage)
 
         result = await self.project_service.register_project(
@@ -65,7 +67,7 @@ class TestDrainCompleteMechanism:
             f"/tmp/{project_name}",
             summary="Drain机制完整测试项目"
         )
-        return result["project_id"]
+        return result["data"]["project_id"]
 
     # ==================== tag_delete drain 测试 ====================
 
@@ -96,7 +98,7 @@ class TestDrainCompleteMechanism:
             tags=["test_tag"]
         )
         assert add_result["success"]
-        print(f"  ✓ 添加初始条目: {add_result['item_id']}")
+        print(f"  ✓ 添加初始条目: {add_result['data']['item_id']}")
 
         # 步骤3: 同时启动 tag_delete 和 add_item
         # tag_delete 需要 drain B4+B5，所以应该等待 add_item 完成
@@ -129,7 +131,7 @@ class TestDrainCompleteMechanism:
         assert add_result["success"], f"Add失败: {add_result.get('error')}"
         assert delete_result["success"], f"Delete失败: {delete_result.get('error')}"
 
-        print(f"  ✓ Add成功: {add_result['item_id']}")
+        print(f"  ✓ Add成功: {add_result['data']['item_id']}")
         print(f"  ✓ Delete成功")
         print(f"  ✓ 耗时: {elapsed:.2f}s (drain机制生效)")
 
@@ -164,7 +166,7 @@ class TestDrainCompleteMechanism:
             tags=["test"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"  ✓ 添加测试条目: {item_id}")
 
         # 步骤2: 启动慢速update操作（模拟耗时操作）
@@ -199,7 +201,7 @@ class TestDrainCompleteMechanism:
         assert not isinstance(remove_result, Exception), f"Remove异常: {remove_result}"
 
         assert update_result["success"], f"Update失败: {update_result.get('error')}"
-        print(f"  ✓ Update成功: {update_result['item_id']}")
+        print(f"  ✓ Update成功: {update_result['data']['item_id']}")
         print(f"  ✓ Remove结果: {remove_result.get('success', False)}")
         print(f"  ✓ 耗时: {elapsed:.2f}s")
 
@@ -228,7 +230,7 @@ class TestDrainCompleteMechanism:
             tags=["test_tag"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"  ✓ 创建测试条目: {item_id}")
 
         # 步骤2: 启动慢速update操作
@@ -267,7 +269,7 @@ class TestDrainCompleteMechanism:
         assert not isinstance(delete_result, Exception), f"Delete异常: {delete_result}"
 
         if update_result.get("success"):
-            print(f"  ✓ Update成功: {update_result['item_id']}")
+            print(f"  ✓ Update成功: {update_result['data']['item_id']}")
         else:
             print(f"  ⚠ Update失败（预期行为）: {update_result.get('error', 'unknown')}")
 
@@ -304,8 +306,8 @@ class TestDrainCompleteMechanism:
             tags=["test"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
-        version = add_result.get("version", 1)
+        item_id = add_result["data"]["item_id"]
+        version = add_result["data"]["item"].get("_v", 1)
         print(f"  ✓ 创建测试条目: {item_id}, version: {version}")
 
         # 步骤2: 启动多个update操作
@@ -391,7 +393,7 @@ class TestDrainCompleteMechanism:
             tags=[]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"  ✓ 创建测试条目: {item_id}")
 
         # 步骤3: 启动慢速delete操作
@@ -471,7 +473,7 @@ class TestDrainCompleteMechanism:
             tags=["delete_during_tag"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"  ✓ 创建测试条目: {item_id}")
 
         # 步骤3: 启动慢速delete
@@ -568,7 +570,7 @@ class TestDrainCompleteMechanism:
                 tags=[f"tag_{i}"]
             )
             assert add_result["success"]
-            item_ids.append(add_result["item_id"])
+            item_ids.append(add_result["data"]["item_id"])
         print(f"  ✓ 创建 {len(item_ids)} 个测试条目")
 
         # 步骤2: 并发删除不同的条目
@@ -715,7 +717,7 @@ class TestDrainCompleteMechanism:
                 status="pending",
                 tags=["test"]
             )
-            item_ids.append(result["item_id"])
+            item_ids.append(result["data"]["item_id"])
         print(f"  ✓ 添加 {len(item_ids)} 个条目")
 
         # 步骤2: 在rename期间并发更新
@@ -775,8 +777,8 @@ class TestDrainCompleteMechanism:
             tags=["test"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
-        version = add_result.get("version", 1)
+        item_id = add_result["data"]["item_id"]
+        version = add_result["data"]["item"].get("_v", 1)
         print(f"  ✓ 添加条目: {item_id}, version: {version}")
 
         # 步骤2: 两个并发更新操作，都使用相同的版本号

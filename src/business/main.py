@@ -42,11 +42,13 @@ logger = logging.getLogger(__name__)
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 from business.stats_service import StatsService
 
 # 初始化 business 层服务
 _storage = Storage(storage_dir=storage_dir)
-_project_service = ProjectService(_storage)
+_groups_service = GroupsService(_storage)
+_project_service = ProjectService(_storage, groups_service=_groups_service)
 _tag_service = TagService(_storage)
 _stats_service = StatsService(_storage)
 
@@ -89,10 +91,10 @@ from business.api import (
 )
 
 # 初始化各路由的服务
-init_projects_services(_storage, _project_service, _tag_service)
+init_projects_services(_storage, _project_service, _tag_service, _groups_service)
 init_tags_services(_tag_service)
 init_stats_services(_storage, _stats_service)
-init_groups_services(_storage, _project_service)
+init_groups_services(_storage, _project_service, _groups_service)
 
 # 注册路由
 app.include_router(projects_router)

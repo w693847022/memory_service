@@ -137,8 +137,8 @@ class TestVersionControl:
         )
 
         assert result["success"] is True
-        assert result["version"] == 3
-        assert result["item"]["summary"] == "Updated summary"
+        assert result["data"]["version"] == 3
+        assert result["data"]["item"]["summary"] == "Updated summary"
 
     async def test_update_item_without_version_check(self):
         """测试不进行版本检查的更新."""
@@ -168,7 +168,7 @@ class TestVersionControl:
         )
 
         assert result["success"] is True
-        assert result["version"] == 3
+        assert result["data"]["version"] == 3
 
     async def test_update_item_version_initialization(self):
         """测试没有版本字段的条目初始化为版本1."""
@@ -198,4 +198,4 @@ class TestVersionControl:
         )
 
         assert result["success"] is True
-        assert result["version"] == 2
+        assert result["data"]["version"] == 2

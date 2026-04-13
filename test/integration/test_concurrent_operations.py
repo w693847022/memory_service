@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 
 
 @pytest.mark.asyncio
@@ -48,7 +49,8 @@ class TestConcurrentOperations:
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
         self.tag_service = TagService(self.storage)
 
         # 注册测试项目
@@ -57,7 +59,7 @@ class TestConcurrentOperations:
             "/tmp/concurrent_test",
             summary="并发操作测试项目"
         )
-        self.project_id = result["project_id"]
+        self.project_id = result["data"]["project_id"]
 
     # ==================== 基础并发操作测试 ====================
 
@@ -90,7 +92,7 @@ class TestConcurrentOperations:
             if isinstance(result, Exception):
                 raise AssertionError(f"Task {i} failed with exception: {result}")
             assert result["success"], f"Task {i} failed: {result.get('error')}"
-            print(f"✓ Task {i} succeeded: {result['item_id']}")
+            print(f"✓ Task {i} succeeded: {result['data']['item_id']}")
 
         print("✓ 并发添加同分组条目：全部成功")
 
@@ -114,7 +116,7 @@ class TestConcurrentOperations:
                 status="pending",
                 tags=["test"]
             )
-            item_ids.append(result["item_id"])
+            item_ids.append(result["data"]["item_id"])
 
         # 并发更新这3个条目
         tasks = []
@@ -158,7 +160,7 @@ class TestConcurrentOperations:
             tags=["test"]
         )
         assert result1["success"]
-        item_id = result1["item_id"]
+        item_id = result1["data"]["item_id"]
         print(f"✓ Added item: {item_id}")
 
         # 更新条目
@@ -202,8 +204,8 @@ class TestConcurrentOperations:
             tags=["test"]
         )
         assert result1["success"]
-        item_id = result1["item_id"]
-        version = result1.get("version", 1)
+        item_id = result1["data"]["item_id"]
+        version = result1["data"]["item"].get("_v", 1)
         print(f"✓ Added item: {item_id}, version: {version}")
 
         # 更新条目（使用正确的版本）
@@ -284,7 +286,7 @@ class TestConcurrentOperations:
             tags=["initial_tag"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"✓ 添加测试条目: {item_id}")
 
         # 预先注册标签
@@ -369,7 +371,7 @@ class TestConcurrentOperations:
             tags=["initial_tag", "to_be_deleted"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"✓ 添加测试条目: {item_id}")
 
         # 并发执行添加和删除标签操作
@@ -464,7 +466,7 @@ class TestConcurrentOperations:
             tags=["initial_tag"]
         )
         assert add_result["success"]
-        item_id = add_result["item_id"]
+        item_id = add_result["data"]["item_id"]
         print(f"✓ 添加测试条目: {item_id}")
 
         # 并发执行标签操作和条目更新操作
@@ -584,7 +586,7 @@ class TestConcurrentOperations:
                 "/tmp/rename_test",
                 summary=f"Rename test {i}"
             )
-            project_ids.append(result["project_id"])
+            project_ids.append(result["data"]["project_id"])
 
         # 并发重命名这些项目
         tasks = []
@@ -716,7 +718,7 @@ class TestConcurrentOperations:
             tags=["test_tag"]
         )
         assert result["success"]
-        print(f"  ✓ 添加条目: {result['item_id']}")
+        print(f"  ✓ 添加条目: {result['data']['item_id']}")
 
         # 并发执行tag_delete和project_rename
         delete_task = self.tag_service.delete_tag(
@@ -789,7 +791,7 @@ class TestConcurrentOperations:
             tags=["old_tag"]
         )
         assert result["success"]
-        print(f"  ✓ 添加条目: {result['item_id']}")
+        print(f"  ✓ 添加条目: {result['data']['item_id']}")
 
         # 创建慢速tag_delete任务（模拟耗时操作）
         async def slow_tag_delete():
@@ -1134,7 +1136,7 @@ class TestConcurrentOperations:
                 tags=["initial_tag"]
             )
             assert add_result["success"]
-            item_ids.append(add_result["item_id"])
+            item_ids.append(add_result["data"]["item_id"])
 
         print(f"✓ 添加 {len(item_ids)} 个测试条目")
 

@@ -1,6 +1,6 @@
 """Business API - Tags 路由."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 
 from src.models import ApiResponse
 
@@ -18,7 +18,12 @@ router = APIRouter(prefix="/api", tags=["tags"])
 
 
 @router.post("/tags/register")
-async def tag_register(project_id: str, tag_name: str, summary: str, aliases: str = ""):
+async def tag_register(
+    project_id: str = Body(...),
+    tag_name: str = Body(...),
+    summary: str = Body(...),
+    aliases: str = Body("")
+):
     """注册项目标签."""
     alias_list = [a.strip() for a in aliases.split(",")] if aliases else []
     result = await _tag_service.register_tag(project_id=project_id, tag_name=tag_name, summary=summary, aliases=alias_list)
@@ -28,7 +33,11 @@ async def tag_register(project_id: str, tag_name: str, summary: str, aliases: st
 
 
 @router.put("/tags/update")
-async def tag_update(project_id: str, tag_name: str, summary: str = None):
+async def tag_update(
+    project_id: str = Body(...),
+    tag_name: str = Body(...),
+    summary: str = Body("")
+):
     """更新已注册标签."""
     result = await _tag_service.update_tag(project_id=project_id, tag_name=tag_name, summary=summary)
     if result["success"]:
@@ -37,7 +46,11 @@ async def tag_update(project_id: str, tag_name: str, summary: str = None):
 
 
 @router.delete("/tags/delete")
-async def tag_delete(project_id: str, tag_name: str, force: str = "false"):
+async def tag_delete(
+    project_id: str = Body(...),
+    tag_name: str = Body(...),
+    force: str = Body("false")
+):
     """删除标签注册."""
     force_flag = force.lower() == "true"
     result = await _tag_service.delete_tag(project_id=project_id, tag_name=tag_name, force=force_flag)
@@ -47,7 +60,11 @@ async def tag_delete(project_id: str, tag_name: str, force: str = "false"):
 
 
 @router.post("/tags/merge")
-async def tag_merge(project_id: str, old_tag: str, new_tag: str):
+async def tag_merge(
+    project_id: str = Body(...),
+    old_tag: str = Body(...),
+    new_tag: str = Body(...)
+):
     """合并标签."""
     result = await _tag_service.merge_tags(project_id=project_id, old_tag=old_tag, new_tag=new_tag)
     if result["success"]:

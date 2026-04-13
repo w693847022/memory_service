@@ -9,15 +9,13 @@ from typing import Optional, Dict, List, Any, Union
 
 from src.models import Item, ItemCreate, ItemUpdate
 from src.models.storage import ProjectData
-from business.core.groups import (
-    all_group_names, DEFAULT_TAGS,
-    validate_group_name, validate_status, validate_severity,
-    validate_content_length, validate_summary_length,
-    get_group_config, validate_related,
-    UnifiedGroupConfig,
-    CONTENT_SEPARATE_GROUPS,
+from src.models.group import (
+    DEFAULT_TAGS,
     DEFAULT_GROUP_CONFIGS,
+    CONTENT_SEPARATE_GROUPS,
 )
+from src.models.group import UnifiedGroupConfig
+from business.groups_service import GroupsService
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
 from src.common.consts import (
@@ -35,8 +33,9 @@ from src.models.response import ResponseBuilder
 class ProjectService:
     """项目管理业务逻辑服务类."""
 
-    def __init__(self, storage):
+    def __init__(self, storage, groups_service: GroupsService = None):
         self.storage = storage
+        self.groups_service = groups_service
 
     # ==================== 验证辅助方法 ====================
 
@@ -64,7 +63,6 @@ class ProjectService:
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         from src.models.project import ProjectInitialData
-        from business.core.groups import DEFAULT_GROUP_CONFIGS
 
         project_id = self.storage._generate_id(name)
 
@@ -161,7 +159,9 @@ class ProjectService:
                     "archived_at": archived.get("archived_at", "")
                 })
 
-        return {"success": True, "projects": projects, "total": len(projects)}
+        return ResponseBuilder.success(
+            data={"projects": projects, "total": len(projects)}
+        ).to_dict()
 
     async def get_project(self, project_id: str) -> Dict[str, Any]:
         project_data = await self.storage.get_project_data(project_id)
@@ -172,15 +172,16 @@ class ProjectService:
 
         # 使用 to_storage() 转换为 dict 用于响应
         data_dict = project_data.to_storage()
-        result = ResponseBuilder.success(data=data_dict).to_dict()
-        result[FieldNames.VERSION] = project_data.version
-        result[FieldNames.VERSIONS] = project_data.versions
-        return result
+        # 添加版本信息到数据字典中
+        data_dict[FieldNames.VERSION] = project_data.version
+        data_dict[FieldNames.VERSIONS] = project_data.versions
+        return ResponseBuilder.success(data=data_dict).to_dict()
 
     # ==================== 条目操作 ====================
 
-    def validate_add_item(
+    async def validate_add_item(
         self,
+        project_id: str,
         group: str,
         content: str,
         summary: str,
@@ -188,47 +189,46 @@ class ProjectService:
         severity: str,
         related: Optional[Union[str, Dict[str, List[str]]]],
         tag_list: List[str],
-        custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
-        default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
-        is_valid, error_msg = validate_group_name(group, custom_groups)
+        all_configs = await self.groups_service.get_all_configs(project_id)
+
+        is_valid, error_msg = GroupsService.validate_group_name(group, all_configs)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        custom_config = custom_groups.get(group) if custom_groups else None
+        config = all_configs.get(group)
 
-        config = get_group_config(group)
         if config and config.status_values:
             if status is None:
                 return {"success": False, "error": "features/fixes 分组必须传入 status 参数 (有效值: pending/in_progress/completed)"}
-            is_valid, error_msg = validate_status(status, group, custom_config)
+            is_valid, error_msg = GroupsService.validate_status(status, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
-        elif custom_config and custom_config.enable_status:
+        elif config and config.enable_status:
             if status is None:
                 return {"success": False, "error": f"'{group}' 分组必须传入 status 参数"}
-            is_valid, error_msg = validate_status(status, group, custom_config)
+            is_valid, error_msg = GroupsService.validate_status(status, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
         else:
             status = None
 
         if severity is not None:
-            is_valid, error_msg = validate_severity(severity, custom_config)
+            is_valid, error_msg = GroupsService.validate_severity(severity, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         if not content:
             return {"success": False, "error": "content 参数不能为空"}
 
-        is_valid, error_msg, _ = validate_content_length(content, group, custom_config)
+        is_valid, error_msg, _ = GroupsService.validate_content_length(content, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
         if not summary or not summary.strip():
             return {"success": False, "error": "summary 参数不能为空"}
 
-        is_valid, error_msg, _ = validate_summary_length(summary, group, custom_config)
+        is_valid, error_msg, _ = GroupsService.validate_summary_length(summary, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
@@ -240,45 +240,46 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
-        is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
+        is_valid, error_msg, related_dict = GroupsService.validate_related(related, group, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
         return {"success": True, "related_dict": related_dict}
 
-    def validate_update_item(
+    async def validate_update_item(
         self,
+        project_id: str,
         group: str,
         item_id: str,
         content: Optional[str] = None,
         summary: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
-        custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
-        default_rules: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Any]:
-        is_valid, error_msg = validate_group_name(group, custom_groups)
+        all_configs = await self.groups_service.get_all_configs(project_id)
+
+        is_valid, error_msg = GroupsService.validate_group_name(group, all_configs)
         if not is_valid:
             return {"success": False, "error": error_msg}
 
-        custom_config = custom_groups.get(group) if custom_groups else None
+        config = all_configs.get(group)
 
         if content is not None:
             if not content:
                 return {"success": False, "error": "content 不能为空"}
-            is_valid, error_msg, _ = validate_content_length(content, group, custom_config)
+            is_valid, error_msg, _ = GroupsService.validate_content_length(content, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         if summary is not None:
             if not summary.strip():
                 return {"success": False, "error": "summary 不能为空"}
-            is_valid, error_msg, _ = validate_summary_length(summary, group, custom_config)
+            is_valid, error_msg, _ = GroupsService.validate_summary_length(summary, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
         related_dict = None
         if related is not None:
-            is_valid, error_msg, related_dict = validate_related(related, group, custom_config, default_rules)
+            is_valid, error_msg, related_dict = GroupsService.validate_related(related, group, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
@@ -443,11 +444,15 @@ class ProjectService:
 
             item_data = item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set())
             result = ResponseBuilder.success(
-                data={"project_id": project_id, "group": group, "item_id": item_id},
+                data={
+                    "project_id": project_id,
+                    "group": group,
+                    "item_id": item_id,
+                    "item": item_data,
+                    "version": item.version
+                },
                 message=SuccessMessages.ITEM_UPDATED.format(item_id=item_id)
             ).to_dict()
-            result["item"] = item_data
-            result["version"] = item.version
             return result
 
         return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
@@ -515,82 +520,3 @@ class ProjectService:
         if result.get("success"):
             await self.storage.refresh_projects_cache()
         return result
-
-    # ==================== 分组管理 ====================
-
-    async def list_groups(self, project_id: str) -> Dict[str, Any]:
-        project_data = await self.storage.get_project_data(project_id)
-        if project_data is None:
-            return ResponseBuilder.error(
-                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
-            ).to_dict()
-
-        group_configs = await self.storage.get_group_configs(project_id)
-        custom_groups = group_configs.get("groups", {})
-
-        groups = []
-
-        for group_name in all_group_names():
-            items = project_data.get_items(group_name)
-            config = UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS.get(group_name, {}))
-            if group_name in custom_groups:
-                config = UnifiedGroupConfig.from_dict(custom_groups[group_name])
-
-            groups.append({
-                "name": group_name,
-                "count": len(items),
-                "is_builtin": True,
-                **config.to_dict()
-            })
-
-        for group_name, config_dict in custom_groups.items():
-            if group_name not in all_group_names():
-                items = project_data.get_items(group_name)
-                config = UnifiedGroupConfig.from_dict(config_dict)
-                groups.append({
-                    "name": group_name,
-                    "count": len(items),
-                    "is_builtin": False,
-                    **config.to_dict()
-                })
-
-        return {
-            "success": True,
-            "groups": groups,
-            "settings": group_configs.get("group_settings", {})
-        }
-
-    async def get_group_config(self, project_id: str, group: str) -> Dict[str, Any]:
-        group_configs = await self.storage.get_group_configs(project_id)
-        custom_groups = group_configs.get("groups", {})
-        if group in custom_groups:
-            return {"success": True, "config": UnifiedGroupConfig.from_dict(custom_groups[group]).to_dict()}
-        if group in DEFAULT_GROUP_CONFIGS:
-            return {"success": True, "config": DEFAULT_GROUP_CONFIGS[group]}
-        return {"success": False, "error": f"组 '{group}' 不存在"}
-
-    @barrier(level=OperationLevel.L3, files=["_groups.json"], key="{project_id}")
-    async def update_group_config(
-        self,
-        project_id: str,
-        group: str,
-        config: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        group_configs = await self.storage.get_group_configs(project_id)
-
-        is_valid, error_msg = validate_group_name(group, group_configs.get("groups", {}))
-        if not is_valid:
-            return {"success": False, "error": error_msg}
-
-        try:
-            unified_config = UnifiedGroupConfig.from_dict(config)
-        except Exception as e:
-            return {"success": False, "error": f"配置格式错误: {e}"}
-
-        if "groups" not in group_configs:
-            group_configs["groups"] = {}
-        group_configs["groups"][group] = unified_config.to_dict()
-
-        if await self.storage.save_group_configs(project_id, group_configs):
-            return {"success": True, "message": f"组 '{group}' 配置已更新"}
-        return ResponseBuilder.error(ErrorMessages.SAVE_CONFIG_FAILED).to_dict()

@@ -3,13 +3,12 @@
 from fastapi import APIRouter, HTTPException, Body
 from typing import Optional
 
-from business.core.groups import (
-    validate_group_name,
-    is_group_with_status,
+from src.models.group import (
     UnifiedGroupConfig,
     CONTENT_SEPARATE_GROUPS,
     DEFAULT_GROUP_CONFIGS,
 )
+from business.groups_service import GroupsService
 from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode, parse_tags, validate_date, filter_tags_by_regex
 from src.models import ApiResponse
 
@@ -17,14 +16,16 @@ from src.models import ApiResponse
 _storage = None
 _project_service = None
 _tag_service = None
+_groups_service = None
 
 
-def init_services(storage, project_service, tag_service):
+def init_services(storage, project_service, tag_service, groups_service=None):
     """初始化服务实例."""
-    global _storage, _project_service, _tag_service
+    global _storage, _project_service, _tag_service, _groups_service
     _storage = storage
     _project_service = project_service
     _tag_service = tag_service
+    _groups_service = groups_service
 
 
 router = APIRouter(prefix="/api", tags=["projects"])
@@ -53,8 +54,8 @@ async def list_projects(
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result.get("error"))
 
-    projects = result["projects"]
-    total = result["total"]
+    projects = result["data"]["projects"]
+    total = result["data"]["total"]
 
     if name_regex:
         projects = [p for p in projects if name_regex.search(p.get("name", ""))]
@@ -86,17 +87,16 @@ async def list_projects(
 
 @router.post("/projects")
 async def register_project(
-    name: str,
-    path: str = "",
-    summary: str = "",
-    tags: str = ""
+    name: str = Body(...),
+    path: str = Body(""),
+    summary: str = Body(""),
+    tags: str = Body("")
 ):
     """注册新项目."""
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
     result = await _project_service.register_project(name, path, summary, tag_list)
     if result["success"]:
-        data = {k: v for k, v in result.items() if k not in ("success", "error", "message")}
-        return ApiResponse(success=True, data=data, message="项目注册成功").to_dict()
+        return ApiResponse(success=True, data=result["data"], message="项目注册成功").to_dict()
 
     # 处理并发冲突
     error = result.get("error")
@@ -126,7 +126,7 @@ async def rename_project(project_id: str, new_name: str):
     """重命名项目."""
     result = await _project_service.project_rename(project_id, new_name)
     if result["success"]:
-        return ApiResponse(success=True, data=result, message="项目重命名成功").to_dict()
+        return ApiResponse(success=True, data=result["data"], message="项目重命名成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
 
 
@@ -143,7 +143,7 @@ async def remove_project(project_id: str, mode: str = "archive"):
 @router.get("/projects/{project_id}/groups")
 async def list_groups(project_id: str):
     """列出项目的所有分组."""
-    result = await _project_service.list_groups(project_id)
+    result = await _groups_service.list_groups(project_id)
     if result["success"]:
         return ApiResponse(success=True, data={"groups": result.get("groups")}).to_dict()
     raise HTTPException(status_code=404, detail=result.get("error"))
@@ -206,7 +206,7 @@ async def project_tags_info(
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])}
         return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签").to_dict()
     else:
-        is_valid, error_msg = validate_group_name(group_name)
+        is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
         result = await _tag_service.list_group_tags(project_id, group_name)
@@ -290,7 +290,7 @@ async def project_get(
     data = result["data"]
 
     if group_name:
-        is_valid, error_msg = validate_group_name(group_name)
+        is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
 
@@ -313,7 +313,8 @@ async def project_get(
         filtered_items = items
         tag_list = parse_tags(tags) if tags else []
 
-        if is_group_with_status(group_name):
+        group_config = UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS.get(group_name, {}))
+        if group_config.enable_status and group_config.status_values:
             if status:
                 filtered_items = [f for f in filtered_items if f.get("status") == status]
             if severity:
@@ -395,19 +396,8 @@ async def project_add(
 ):
     """添加项目条目."""
     tag_list = parse_tags(tags)
-    group_configs = await _storage.get_group_configs(project_id)
-    # 构建完整的组配置：内置组 + 自定义组（用户修改的内置组配置会覆盖默认值）
-    all_groups = {}
-    # 先加载默认内置组配置
-    for name, cfg in DEFAULT_GROUP_CONFIGS.items():
-        all_groups[name] = UnifiedGroupConfig.from_dict(cfg)
-    # 再用存储的配置覆盖（包含自定义组和用户修改的内置组）
-    custom_groups_raw = group_configs.get("groups", {})
-    for name, cfg in custom_groups_raw.items():
-        all_groups[name] = UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
-    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
 
-    v = _project_service.validate_add_item(group, content, summary, status, severity, related, tag_list, all_groups, default_rules)
+    v = await _project_service.validate_add_item(project_id, group, content, summary, status, severity, related, tag_list)
     if not v["success"]:
         raise HTTPException(status_code=400, detail=v["error"])
 
@@ -419,17 +409,7 @@ async def project_add(
     )
 
     if result["success"]:
-        data = {
-            "project_id": project_id, "group": group, "item_id": result["item_id"],
-            "item": {"id": result["item_id"], "summary": summary, "content": content, "tags": tag_list}
-        }
-        if status:
-            data["item"]["status"] = status
-        if severity and severity != "medium":
-            data["item"]["severity"] = severity
-        if related_dict:
-            data["item"]["related"] = related_dict
-        return ApiResponse(success=True, data=data, message=f"条目 '{result['item_id']}' 已添加").to_dict()
+        return ApiResponse(success=True, data=result["data"], message=f"条目 '{result['data']['item_id']}' 已添加").to_dict()
 
     # 处理并发冲突
     error = result.get("error")
@@ -459,19 +439,7 @@ async def project_update(
     version: Optional[int] = Body(None)
 ):
     """更新项目条目."""
-    group_configs = await _storage.get_group_configs(project_id)
-    # 构建完整的组配置：内置组 + 自定义组（用户修改的内置组配置会覆盖默认值）
-    all_groups = {}
-    # 先加载默认内置组配置
-    for name, cfg in DEFAULT_GROUP_CONFIGS.items():
-        all_groups[name] = UnifiedGroupConfig.from_dict(cfg)
-    # 再用存储的配置覆盖（包含自定义组和用户修改的内置组）
-    custom_groups_raw = group_configs.get("groups", {})
-    for name, cfg in custom_groups_raw.items():
-        all_groups[name] = UnifiedGroupConfig.from_dict(cfg) if isinstance(cfg, dict) else cfg
-    default_rules = group_configs.get("group_settings", {}).get("default_related_rules", {})
-
-    v = _project_service.validate_update_item(group, item_id, content, summary, related, all_groups, default_rules)
+    v = await _project_service.validate_update_item(project_id, group, item_id, content, summary, related)
     if not v["success"]:
         raise HTTPException(status_code=400, detail=v["error"])
 
@@ -486,7 +454,7 @@ async def project_update(
     )
 
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["item"], "version": result.get("version")}, message=f"条目 '{item_id}' 已更新").to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["data"]["item"], "version": result["data"].get("version")}, message=f"条目 '{item_id}' 已更新").to_dict()
 
     # 处理并发冲突
     error = result.get("error")
@@ -509,7 +477,7 @@ async def project_update(
 @router.delete("/projects/{project_id}/items/{item_id}")
 async def project_delete(project_id: str, group: str, item_id: str):
     """删除项目条目."""
-    is_valid, error_msg = validate_group_name(group)
+    is_valid, error_msg = GroupsService.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
     if not item_id:
@@ -543,7 +511,7 @@ async def manage_item_tags(
     tags: str = ""
 ):
     """管理条目标签."""
-    is_valid, error_msg = validate_group_name(group_name)
+    is_valid, error_msg = GroupsService.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
 

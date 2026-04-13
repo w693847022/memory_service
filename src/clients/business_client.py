@@ -140,8 +140,8 @@ class BusinessApiClient:
         tags: str = ""
     ) -> ApiResponse:
         """注册新项目."""
-        params = {"name": name, "path": path, "summary": summary, "tags": tags}
-        return self._post("/api/projects", params=params)
+        json_data = {"name": name, "path": path, "summary": summary, "tags": tags}
+        return self._post("/api/projects", json=json_data)
 
     def get_project(self, project_id: str) -> ApiResponse:
         """获取项目详情."""
@@ -217,6 +217,11 @@ class BusinessApiClient:
             "updated_after": updated_after,
             "updated_before": updated_before
         }
+        # 根据 group_name 选择正确的端点
+        if not group_name:
+            # 获取整个项目信息
+            return self._get(f"/api/projects/{project_id}")
+        # 获取项目条目
         return self._get(f"/api/projects/{project_id}/items", params=params)
 
     def project_add(
@@ -309,8 +314,8 @@ class BusinessApiClient:
         aliases: str = ""
     ) -> ApiResponse:
         """注册项目标签."""
-        params = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
-        return self._post("/api/tags/register", params=params)
+        json_data = {"project_id": project_id, "tag_name": tag_name, "summary": summary, "aliases": aliases}
+        return self._post("/api/tags/register", json=json_data)
 
     def tag_update(
         self,
@@ -319,11 +324,10 @@ class BusinessApiClient:
         summary: Optional[str] = None
     ) -> ApiResponse:
         """更新已注册标签."""
-        params = {"project_id": project_id, "tag_name": tag_name}
-        params = {k: v for k, v in params.items() if v is not None}
+        json_data = {"project_id": project_id, "tag_name": tag_name}
         if summary is not None:
-            params["summary"] = summary
-        return self._put("/api/tags/update", params=params)
+            json_data["summary"] = summary
+        return self._put("/api/tags/update", json=json_data)
 
     def tag_delete(
         self,
@@ -332,8 +336,8 @@ class BusinessApiClient:
         force: str = "false"
     ) -> ApiResponse:
         """删除标签注册."""
-        data = {"project_id": project_id, "tag_name": tag_name, "force": force}
-        return self._delete("/api/tags/delete", params=data)
+        json_data = {"project_id": project_id, "tag_name": tag_name, "force": force}
+        return self._delete("/api/tags/delete", json=json_data)
 
     def tag_merge(
         self,
@@ -342,8 +346,8 @@ class BusinessApiClient:
         new_tag: str
     ) -> ApiResponse:
         """合并标签."""
-        params = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
-        return self._post("/api/tags/merge", params=params)
+        json_data = {"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag}
+        return self._post("/api/tags/merge", json=json_data)
 
     # ===================
     # Stats APIs

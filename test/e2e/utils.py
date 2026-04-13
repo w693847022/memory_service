@@ -14,12 +14,16 @@ import httpx
 
 # Add src to path
 src_dir = Path(__file__).parent.parent.parent / "src"
+project_root = Path(__file__).parent.parent.parent
 if str(src_dir) not in sys.path:
     sys.path.insert(0, str(src_dir))
 
 
 class TestServer:
     """测试服务器基类."""
+
+    # E2E 服务日志固定目录
+    _E2E_LOG_DIR = project_root / "logs" / "e2e"
 
     def __init__(self, name: str, port: int, storage_dir: Optional[str] = None):
         """初始化测试服务器.
@@ -35,6 +39,10 @@ class TestServer:
         self.process: Optional[subprocess.Popen] = None
         self.base_url = f"http://127.0.0.1:{port}"
         self._log_prefix = f"[{name}:{port}]"
+        # 日志文件 - 固定路径，每次覆盖
+        os.makedirs(self._E2E_LOG_DIR, exist_ok=True)
+        self._log_path = str(self._E2E_LOG_DIR / f"{name}.log")
+        self._log_file = None
 
     def start(self) -> None:
         """启动服务器."""
@@ -55,11 +63,47 @@ class TestServer:
                 else:
                     self.process.kill()
             self.process = None
+        if self._log_file:
+            self._log_file.close()
+            self._log_file = None
 
     def cleanup(self) -> None:
         """清理临时目录."""
         if self.storage_dir and os.path.exists(self.storage_dir):
             shutil.rmtree(self.storage_dir, ignore_errors=True)
+
+    def _kill_port_occupants(self) -> None:
+        """清理占用端口的进程."""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{self.port}"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    pid = pid.strip()
+                    if pid and pid != str(os.getpid()):
+                        print(f"{self._log_prefix} 清理占用端口的进程: PID {pid}")
+                        os.kill(int(pid), signal.SIGKILL)
+                time.sleep(0.5)
+        except Exception:
+            pass  # lsof 可能不存在或无权限
+
+    def dump_logs(self) -> str:
+        """读取并打印服务日志，返回日志内容."""
+        if not self._log_path or not os.path.exists(self._log_path):
+            return ""
+        with open(self._log_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        if content:
+            print(f"\n{'='*60}")
+            print(f" {self._log_prefix} 服务日志:")
+            print(f"{'='*60}")
+            print(content[-3000:] if len(content) > 3000 else content)
+            print(f"{'='*60}")
+        return content
 
     def _wait_for_ready(self, health_path: str = "/health", timeout: int = 30) -> None:
         """等待服务器就绪."""
@@ -93,25 +137,40 @@ class BusinessTestServer(TestServer):
 
     def start(self) -> None:
         """启动 Business API 服务器."""
+        self._kill_port_occupants()
         env = os.environ.copy()
         env["MCP_STORAGE_DIR"] = self.storage_dir
         env["PYTHONUNBUFFERED"] = "1"
         env["BUSINESS_PORT"] = str(self.port)
+        env["PYTHONPATH"] = str(src_dir)  # 确保 src 目录在 Python 路径中
 
         cmd = [sys.executable, "-m", "uvicorn", "business.main:app",
                "--host", "0.0.0.0", "--port", str(self.port)]
 
         print(f"{self._log_prefix} 启动命令: {' '.join(cmd)}")
         print(f"{self._log_prefix} 存储目录: {self.storage_dir}")
+        print(f"{self._log_prefix} 日志文件: {self._log_path}")
+
+        self._log_file = open(self._log_path, "w", encoding="utf-8")
 
         self.process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,  # 合并 stderr 到 stdout
             env=env,
-            cwd=str(src_dir),
+            cwd=str(project_root),  # 使用项目根目录作为工作目录
             preexec_fn=os.setsid if hasattr(os, 'setsid') else None
         )
+
+        # 等待一小段时间让进程启动
+        time.sleep(1)
+
+        # 检查进程是否还在运行
+        if self.process.poll() is not None:
+            self._log_file.close()
+            with open(self._log_path, "r", encoding="utf-8", errors="replace") as f:
+                output = f.read()
+            raise RuntimeError(f"{self._log_prefix} 服务器启动失败:\n{output}")
 
         self._wait_for_ready("/health")
 
@@ -126,6 +185,7 @@ class McpTestServer(TestServer):
 
     def start(self) -> None:
         """启动 MCP Server."""
+        self._kill_port_occupants()
         env = os.environ.copy()
         env["MCP_STORAGE_DIR"] = self.storage_dir
         env["MCP_PORT"] = str(self.port)
@@ -140,11 +200,14 @@ class McpTestServer(TestServer):
 
         print(f"{self._log_prefix} 启动命令: {' '.join(cmd)}")
         print(f"{self._log_prefix} Business API: {self.business_url}")
+        print(f"{self._log_prefix} 日志文件: {self._log_path}")
+
+        self._log_file = open(self._log_path, "w", encoding="utf-8")
 
         self.process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,
             env=env,
             cwd=str(src_dir.parent),
             preexec_fn=os.setsid if hasattr(os, 'setsid') else None
@@ -166,25 +229,40 @@ class RestTestServer(TestServer):
 
     def start(self) -> None:
         """启动 REST API 服务器."""
+        self._kill_port_occupants()
         env = os.environ.copy()
         env["MCP_STORAGE_DIR"] = self.storage_dir
         env["BUSINESS_API_URL"] = self.business_url
         env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONPATH"] = str(src_dir)  # 确保 src 目录在 Python 路径中
 
         cmd = [sys.executable, "-m", "uvicorn", "rest_api.main:app",
                "--host", "0.0.0.0", "--port", str(self.port)]
 
         print(f"{self._log_prefix} 启动命令: {' '.join(cmd)}")
         print(f"{self._log_prefix} Business API: {self.business_url}")
+        print(f"{self._log_prefix} 日志文件: {self._log_path}")
+
+        self._log_file = open(self._log_path, "w", encoding="utf-8")
 
         self.process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=self._log_file,
+            stderr=subprocess.STDOUT,  # 合并 stderr 到 stdout
             env=env,
-            cwd=str(src_dir),
+            cwd=str(project_root),  # 使用项目根目录作为工作目录
             preexec_fn=os.setsid if hasattr(os, 'setsid') else None
         )
+
+        # 等待一小段时间让进程启动
+        time.sleep(1)
+
+        # 检查进程是否还在运行
+        if self.process.poll() is not None:
+            self._log_file.close()
+            with open(self._log_path, "r", encoding="utf-8", errors="replace") as f:
+                output = f.read()
+            raise RuntimeError(f"{self._log_prefix} 服务器启动失败:\n{output}")
 
         self._wait_for_ready("/health")
 

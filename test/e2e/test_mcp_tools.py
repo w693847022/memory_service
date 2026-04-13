@@ -410,7 +410,7 @@ class TestMcpTagTools:
             "tag_update",
             project_id=project_id,
             tag_name="test",
-            summary="新摘要"
+            summary="更新后的摘要"
         )
 
         assert result["success"] is True
@@ -454,13 +454,13 @@ class TestMcpTagTools:
             "tag_register",
             project_id=project_id,
             tag_name="old_tag",
-            summary="旧标签"
+            summary="旧的测试标签"
         )
         mcp_client.call_tool(
             "tag_register",
             project_id=project_id,
             tag_name="new_tag",
-            summary="新标签"
+            summary="新的测试标签"
         )
 
         # 合并标签

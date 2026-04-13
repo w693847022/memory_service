@@ -54,23 +54,23 @@ class TestApiIntegration:
         result = await self.project_service.list_projects()
 
         assert result["success"], f"获取项目列表失败: {result}"
-        assert result["total"] == 3, f"项目数量不正确: {result['total']}"
+        assert result["data"]["total"] == 3, f"项目数量不正确: {result['data']['total']}"
 
         # 验证项目信息
-        projects = result["projects"]
+        projects = result["data"]["projects"]
         names = [p["name"] for p in projects]
         assert "项目A" in names, "项目A 不在列表中"
         assert "项目B" in names, "项目B 不在列表中"
         assert "项目C" in names, "项目C 不在列表中"
 
-        print(f"✓ 项目列表接口测试通过 (共 {result['total']} 个项目)")
+        print(f"✓ 项目列表接口测试通过 (共 {result['data']['total']} 个项目)")
 
     async def test_project_get_with_tags(self):
         """测试按标签查询接口."""
         await self.async_setup_method()
 
         result = await self.project_service.register_project("测试项目", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 注册标签
         await self.tag_service.register_tag(project_id, "urgent", "紧急且高优先级的任务")
@@ -109,7 +109,7 @@ class TestApiIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("测试项目", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 注册标签
         result = await self.tag_service.register_tag(project_id, "backend", "后端服务器端开发相关")
@@ -132,7 +132,7 @@ class TestApiIntegration:
         await self.async_setup_method()
 
         result = await self.project_service.register_project("测试项目", "/tmp/test")
-        project_id = result["project_id"]
+        project_id = result["data"]["project_id"]
 
         # 添加各分组内容（使用 add_item 统一接口）
         await self.project_service.add_item(
