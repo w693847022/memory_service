@@ -71,7 +71,7 @@ def mock_groups_service():
 
     # 创建上下文感知的 mock 方法，根据参数和状态返回相应的响应
     async def _create_custom_group(project_id, group_name, content_max_bytes=240, summary_max_bytes=90,
-                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, **kwargs):
+                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, max_tags=2):
         # 需要访问存储来检查组是否已存在
         if mock._storage_ref:
             group_configs = await mock._storage_ref.get_group_configs(project_id)

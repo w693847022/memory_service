@@ -56,13 +56,13 @@ class TestStorageIntegration:
             content="测试功能内容",
             summary="测试功能",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
 
         # 创建新实例，验证数据持久化
         storage2 = Storage(storage_dir=self.temp_dir)
         project_service2 = ProjectService(storage2)
-        project_data = await project_service2.get_project(project_id)
+        project_data = await project_service2.get_project(project_id, include_items=True)
 
         assert project_data is not None, "数据未持久化"
         assert project_data["data"]["info"]["name"] == "持久化测试", "项目名称未正确持久化"
@@ -84,7 +84,7 @@ class TestStorageIntegration:
             group="notes",
             content=note_content,
             summary="测试笔记",
-            tags=[]
+            tags=["note"]
         )
         note_id = result["data"]["item_id"]
 
@@ -117,14 +117,14 @@ class TestStorageIntegration:
             content="测试功能内容",
             summary="测试功能",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
             group="notes",
             content="笔记内容",
             summary="笔记",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
@@ -132,14 +132,14 @@ class TestStorageIntegration:
             content="测试修复内容",
             summary="测试修复",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
             group="standards",
             content="规范内容",
             summary="规范",
-            tags=[]
+            tags=["test"]
         )
 
         # 验证目录结构
@@ -233,7 +233,7 @@ class TestStorageIntegration:
                 group=group,
                 content=f"待删除{group}内容",
                 summary=f"待删除{group}",
-                tags=[]
+                tags=["test"]
             )
             if status:
                 kwargs["status"] = status
@@ -322,7 +322,7 @@ class TestStorageIntegration:
                 content=f"功能{i}内容",
                 summary=f"功能{i}",
                 status="pending",
-                tags=[]
+                tags=["test"]
             )
             tasks.append(task)
 
@@ -335,7 +335,7 @@ class TestStorageIntegration:
             assert result["success"], f"Task {i} failed: {result.get('error')}"
 
         # 验证数据一致性
-        project_data = await self.project_service.get_project(project_id)
+        project_data = await self.project_service.get_project(project_id, include_items=True)
         assert len(project_data["data"]["features"]) == 30, f"数据数量不正确: {len(project_data['data']['features'])}"
 
         print("✓ 并发访问安全性测试通过")

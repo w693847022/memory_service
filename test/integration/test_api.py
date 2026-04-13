@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 
 
 @pytest.mark.asyncio
@@ -38,7 +39,8 @@ class TestApiIntegration:
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
         self.storage = Storage(storage_dir=self.temp_dir)
-        self.project_service = ProjectService(self.storage)
+        self.groups_service = GroupsService(self.storage)
+        self.project_service = ProjectService(self.storage, self.groups_service)
         self.tag_service = TagService(self.storage)
 
     async def test_project_list_integration(self):
@@ -97,7 +99,7 @@ class TestApiIntegration:
         )
 
         # 查询所有数据并验证
-        result = await self.project_service.get_project(project_id)
+        result = await self.project_service.get_project(project_id, include_items=True)
 
         assert result is not None, "查询失败"
         assert len(result["data"]["features"]) == 2, f"功能数量不正确: {len(result['data']['features'])}"
@@ -116,7 +118,7 @@ class TestApiIntegration:
         assert result["success"], f"注册标签失败: {result}"
 
         # 查询标签信息 (使用 get_project 中的 tag_registry)
-        project_data = await self.project_service.get_project(project_id)
+        project_data = await self.project_service.get_project(project_id, include_items=True)
         tag_registry = project_data["data"].get("tag_registry", {})
         assert "backend" in tag_registry, "标签未正确注册"
 
@@ -141,14 +143,14 @@ class TestApiIntegration:
             content="测试功能内容",
             summary="测试功能",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
             group="notes",
             content="测试笔记",
             summary="笔记",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
@@ -156,18 +158,18 @@ class TestApiIntegration:
             content="测试修复内容",
             summary="测试修复",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
         await self.project_service.add_item(
             project_id=project_id,
             group="standards",
             content="测试规范",
             summary="规范",
-            tags=[]
+            tags=["test"]
         )
 
         # 获取项目数据（包含所有分组）
-        result = await self.project_service.get_project(project_id)
+        result = await self.project_service.get_project(project_id, include_items=True)
 
         assert result is not None, "获取项目数据失败"
 

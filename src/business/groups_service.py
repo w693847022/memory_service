@@ -34,7 +34,7 @@ class GroupsService:
     @staticmethod
     def validate_group_name(
         group_name: str,
-        all_configs: Dict[str, UnifiedGroupConfig],
+        all_configs: Dict[str, Any],
     ) -> Tuple[bool, Optional[str]]:
         """验证组名是否合法.
 
@@ -57,7 +57,7 @@ class GroupsService:
     @staticmethod
     def validate_status(
         status: str,
-        config: UnifiedGroupConfig = None,
+        config: Optional[UnifiedGroupConfig] = None,
     ) -> Tuple[bool, Optional[str]]:
         """验证状态值是否合法."""
         if config is None:
@@ -75,7 +75,7 @@ class GroupsService:
     @staticmethod
     def validate_severity(
         severity: str,
-        config: UnifiedGroupConfig = None,
+        config: Optional[UnifiedGroupConfig] = None,
     ) -> Tuple[bool, Optional[str]]:
         """验证严重程度值是否合法."""
         if config is None:
@@ -92,7 +92,7 @@ class GroupsService:
     @staticmethod
     def validate_content_length(
         content: str,
-        config: UnifiedGroupConfig = None,
+        config: Optional[UnifiedGroupConfig] = None,
         min_bytes: Optional[int] = None,
     ) -> Tuple[bool, Optional[str], Optional[int]]:
         """验证内容长度（字节验证）."""
@@ -112,7 +112,7 @@ class GroupsService:
     @staticmethod
     def validate_summary_length(
         summary: str,
-        config: UnifiedGroupConfig = None,
+        config: Optional[UnifiedGroupConfig] = None,
         min_bytes: Optional[int] = None,
     ) -> Tuple[bool, Optional[str], Optional[int]]:
         """验证摘要长度（字节验证）."""
@@ -133,7 +133,7 @@ class GroupsService:
     def validate_related(
         related: Optional[Union[str, Dict[str, List[str]]]],
         group_name: str,
-        config: UnifiedGroupConfig = None,
+        config: Optional[UnifiedGroupConfig] = None,
     ) -> Tuple[bool, str, Optional[Dict[str, List[str]]]]:
         """解析并验证 related 参数."""
         if related is None or related == "":
@@ -162,6 +162,34 @@ class GroupsService:
                 return False, f"分组 '{group_name}' 只能关联 {', '.join(allowed_related_to)}，不能关联 '{rel_group}'", None
 
         return True, "", related_dict
+
+    @staticmethod
+    def validate_tags_count(
+        tag_list: List[str],
+        config: Optional[UnifiedGroupConfig] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """验证标签数量是否超过配置限制.
+
+        Args:
+            tag_list: 标签列表
+            config: 组配置对象
+
+        Returns:
+            (is_valid, error_message) 二元组
+        """
+        if not tag_list:
+            return True, None
+
+        if config is None:
+            config = UnifiedGroupConfig()
+
+        count = len(tag_list)
+        max_allowed = config.max_tags
+
+        if count > max_allowed:
+            return False, f"标签数量超限：当前 {count} 个，最大允许 {max_allowed} 个"
+
+        return True, None
 
     # ==================== 异步配置读取 ====================
 
@@ -197,6 +225,7 @@ class GroupsService:
         allowed_related_to: Optional[List[str]] = None,
         enable_status: bool = True,
         enable_severity: bool = False,
+        max_tags: int = 2,
     ) -> Dict[str, Any]:
         """创建自定义组."""
         group_configs = await self.storage.get_group_configs(project_id)
@@ -212,6 +241,7 @@ class GroupsService:
             allowed_related_to=allowed_related_to or [],
             enable_status=enable_status,
             enable_severity=enable_severity,
+            max_tags=max_tags,
         )
 
         groups[group_name] = new_group

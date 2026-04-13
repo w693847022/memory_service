@@ -326,7 +326,7 @@ class TestConcurrentOperations:
         print(f"✓ 并发添加标签测试通过：{success_count}/{len(tags_to_add)} 个标签添加成功")
 
         # 验证最终状态
-        project_result = await self.project_service.get_project(self.project_id)
+        project_result = await self.project_service.get_project(self.project_id, include_items=True)
         items = project_result["data"]["features"]
         test_item = next((item for item in items if item["id"] == item_id), None)
 
@@ -418,7 +418,7 @@ class TestConcurrentOperations:
         print(f"✓ 并发添加删除标签测试通过：所有操作成功")
 
         # 验证最终状态
-        project_result = await self.project_service.get_project(self.project_id)
+        project_result = await self.project_service.get_project(self.project_id, include_items=True)
         items = project_result["data"]["features"]
         test_item = next((item for item in items if item["id"] == item_id), None)
 
@@ -516,7 +516,7 @@ class TestConcurrentOperations:
         print(f"✓ 标签操作与更新并发测试通过：{success_count}/{len(tasks)} 个操作成功")
 
         # 验证最终状态
-        project_result = await self.project_service.get_project(self.project_id)
+        project_result = await self.project_service.get_project(self.project_id, include_items=True)
         items = project_result["data"]["features"]
         test_item = next((item for item in items if item["id"] == item_id), None)
 
@@ -905,7 +905,7 @@ class TestConcurrentOperations:
         print(f"  ✓ 迁移条目数: {merge_result.get('migrated_count', 0)}")
 
         # 验证最终状态
-        project_data = await self.project_service.get_project(self.project_id)
+        project_data = await self.project_service.get_project(self.project_id, include_items=True)
         project_name = project_data["data"]["info"]["name"]
         assert project_name == "merged_renamed_project"
         print(f"  ✓ 项目名称: {project_name}")
@@ -1179,7 +1179,7 @@ class TestConcurrentOperations:
         assert failure_count == 0, f"存在 {failure_count} 个失败操作"
 
         # 验证最终数据一致性
-        project_result = await self.project_service.get_project(self.project_id)
+        project_result = await self.project_service.get_project(self.project_id, include_items=True)
         items = project_result["data"]["features"]
 
         for item_id in item_ids:

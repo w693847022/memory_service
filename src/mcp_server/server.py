@@ -98,9 +98,9 @@ def _get_server():
     return _server
 
 
-# 为了向后兼容，提供 server 属性
-@property
+# 为了向后兼容，提供 server 函数
 def server():
+    """获取服务器实例（向后兼容）."""
     return _get_server()
 
 
@@ -109,6 +109,6 @@ def server():
 # ===================
 
 if __name__ == "__main__":
-    server = _get_server()
+    srv = _get_server()
     args = parse_args()
-    server.run(transport=args.transport)
+    srv.run(transport=args.transport)

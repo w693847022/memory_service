@@ -23,6 +23,8 @@ from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
 from business.groups_service import GroupsService
+from business.core import barrier_decorator
+from business.core.barrier_decorator import BarrierManager
 
 
 @pytest.mark.asyncio
@@ -52,7 +54,11 @@ class TestCrossProjectConcurrent:
     async def async_setup_method(self):
         """每个测试方法前执行：设置测试环境."""
         self.temp_dir = tempfile.mkdtemp()
-        self.storage = Storage(storage_dir=self.temp_dir)
+        # 重置全局 BarrierManager，确保使用新的事件循环
+        barrier_decorator._global_barrier_manager = None
+        # 创建独立的 BarrierManager 避免跨事件循环锁问题
+        barrier_manager = BarrierManager()
+        self.storage = Storage(storage_dir=self.temp_dir, barrier_manager=barrier_manager)
         self.groups_service = GroupsService(self.storage)
         self.project_service = ProjectService(self.storage, groups_service=self.groups_service)
         self.tag_service = TagService(self.storage)
@@ -102,7 +108,7 @@ class TestCrossProjectConcurrent:
 
         # 验证可以查询到所有项目
         for pid in project_ids:
-            result = await self.project_service.get_project(project_id=pid)
+            result = await self.project_service.get_project(project_id=pid, include_items=True)
             assert result["success"], f"无法查询到项目 {pid}"
             print(f"✓ 项目 {pid} 可以正常查询")
 
@@ -151,6 +157,9 @@ class TestCrossProjectConcurrent:
 
             assert result["success"], f"删除项目 {i} 失败: {result.get('error')}"
             print(f"✓ 项目 {i} 删除成功: {project_ids[i]}")
+
+        # 清空 project_ids 列表，防止 cleanup fixture 重复删除
+        self.project_ids.clear()
 
         # 验证所有项目都无法再查询到
         # 等待一下确保文件系统操作完成
@@ -240,7 +249,7 @@ class TestCrossProjectConcurrent:
         print(f"✓ 验证项目A名称: {result_a_check['data']['info']['name']}")
 
         # 验证项目B确实添加了条目
-        result_b_check = await self.project_service.get_project(project_id=project_id_b)
+        result_b_check = await self.project_service.get_project(project_id=project_id_b, include_items=True)
         assert result_b_check["success"], "无法查询项目B"
         features = result_b_check["data"].get("features", [])
         assert len(features) > 0, "项目B的features分组应该有条目"
@@ -301,7 +310,7 @@ class TestCrossProjectConcurrent:
 
         # 验证每个项目都能查询到添加的条目
         for i, (pid, item_id) in enumerate(zip(project_ids, item_ids)):
-            result = await self.project_service.get_project(project_id=pid)
+            result = await self.project_service.get_project(project_id=pid, include_items=True)
             assert result["success"], f"无法查询项目 {pid}"
             features = result["data"].get("features", [])
             assert len(features) > 0, f"项目 {pid} 的features分组应该有条目"

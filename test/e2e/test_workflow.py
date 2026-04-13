@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 from business.storage import Storage
 from business.project_service import ProjectService
 from business.tag_service import TagService
+from business.groups_service import GroupsService
 
 
 @pytest.mark.asyncio
@@ -27,7 +28,8 @@ async def test_complete_workflow():
     temp_dir = tempfile.mkdtemp()
     try:
         storage = Storage(storage_dir=temp_dir)
-        project_service = ProjectService(storage)
+        groups_service = GroupsService(storage)
+        project_service = ProjectService(storage, groups_service)
         tag_service = TagService(storage)
 
         # 1. 注册项目
@@ -165,7 +167,8 @@ async def test_multi_project_workflow():
     temp_dir = tempfile.mkdtemp()
     try:
         storage = Storage(storage_dir=temp_dir)
-        project_service = ProjectService(storage)
+        groups_service = GroupsService(storage)
+        project_service = ProjectService(storage, groups_service)
 
         # 创建多个项目
         print("  创建多个项目...")

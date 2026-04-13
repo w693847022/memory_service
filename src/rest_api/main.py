@@ -3,12 +3,11 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Dict, Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
@@ -87,7 +86,23 @@ limiter = Limiter(
     storage_uri="memory://",  # 内存存储（单实例）
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# 自定义速率限制异常处理器（修复类型兼容性）
+async def _rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
+    """处理速率限制异常."""
+    if isinstance(exc, RateLimitExceeded):
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=ApiResponse.error_response("Rate limit exceeded")
+        )
+    # Fallback for other exceptions
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiResponse.error_response("Internal server error")
+    )
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 
 # ===================

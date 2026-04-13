@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Union, List
 
 from business.core.storage_base import ProjectStorage
+from business.core.barrier_decorator import BarrierManager
 from business.call_stats import CallStats
 from src.models.storage import ProjectData
 
@@ -29,13 +30,14 @@ class Storage(ProjectStorage):
     继承自 ProjectStorage，提供统一的数据访问接口。
     """
 
-    def __init__(self, storage_dir: Union[str, Path, None] = None):
+    def __init__(self, storage_dir: Union[str, Path, None] = None, barrier_manager: Optional[BarrierManager] = None):
         """初始化存储抽象层.
 
         Args:
             storage_dir: 存储目录路径，默认为 ~/.project_memory_ai/
+            barrier_manager: 阻挡位管理器实例（可选，用于测试）
         """
-        super().__init__(storage_dir)
+        super().__init__(storage_dir, barrier_manager=barrier_manager)
 
         # 初始化统计模块
         self._stats = CallStats(storage_dir)
@@ -143,7 +145,7 @@ class Storage(ProjectStorage):
         """归档项目."""
         result = await self._compress_and_archive_project(project_id)
         if result.get("success"):
-            self._barrier.remove_project_barriers(project_id)
+            self._barrier.cleanup_locks(project_id)
         return result
 
     async def is_archived(self, project_id: str) -> bool:

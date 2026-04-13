@@ -390,7 +390,7 @@ class TestDrainCompleteMechanism:
             content="Test feature for tag concurrent",
             summary="Feature without tag",
             status="pending",
-            tags=[]
+            tags=["test"]
         )
         assert add_result["success"]
         item_id = add_result["data"]["item_id"]
@@ -609,7 +609,7 @@ class TestDrainCompleteMechanism:
         assert elapsed < 2.0, f"可能发生死锁，耗时: {elapsed:.2f}s"
 
         # 步骤5: 验证最终状态
-        project_data = await self.project_service.get_project(project_id)
+        project_data = await self.project_service.get_project(project_id, include_items=True)
         features = project_data["data"]["features"]
         remaining_items = [f for f in features if f["id"] in item_ids]
 
@@ -649,7 +649,7 @@ class TestDrainCompleteMechanism:
             group="groups",
             content=str(group_data),
             summary="创建测试组",
-            tags=[]
+            tags=["test"]
         )
         assert result["success"]
         custom_group_name = f"custom_test_group_{int(time.time())}"
@@ -673,7 +673,7 @@ class TestDrainCompleteMechanism:
             item_id=custom_group_name,
             content=f"{group_data}",
             summary=custom_group_name,
-            tags=[]
+            tags=["test"]
         )
 
         # 步骤3: 并发执行
@@ -815,7 +815,7 @@ class TestDrainCompleteMechanism:
         assert conflict_count == 1, f"期望1个冲突，实际 {conflict_count}"
 
         # 步骤5: 验证最终状态
-        get_result = await self.project_service.get_project(project_id)
+        get_result = await self.project_service.get_project(project_id, include_items=True)
         items = get_result["data"]["features"]
         item = next(i for i in items if i["id"] == item_id)
         print(f"  ✓ 最终summary: {item['summary']}")
@@ -878,7 +878,7 @@ class TestDrainCompleteMechanism:
         assert successes > 0, "没有操作成功"
 
         # 步骤5: 验证最终数据一致性
-        project_data = await self.project_service.get_project(project_id)
+        project_data = await self.project_service.get_project(project_id, include_items=True)
         features = project_data["data"]["features"]
         print(f"  ✓ 最终features数量: {len(features)}")
 

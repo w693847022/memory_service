@@ -14,6 +14,12 @@ def init_services(tag_service):
     _tag_service = tag_service
 
 
+def _get_tag_service():
+    """获取标签服务实例（类型安全）."""
+    assert _tag_service is not None, "Tag service not initialized"
+    return _tag_service
+
+
 router = APIRouter(prefix="/api", tags=["tags"])
 
 
@@ -26,7 +32,7 @@ async def tag_register(
 ):
     """注册项目标签."""
     alias_list = [a.strip() for a in aliases.split(",")] if aliases else []
-    result = await _tag_service.register_tag(project_id=project_id, tag_name=tag_name, summary=summary, aliases=alias_list)
+    result = await _get_tag_service().register_tag(project_id=project_id, tag_name=tag_name, summary=summary, aliases=alias_list)
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "tag_name": tag_name, "tag_info": result.get("tag_info", {})}, message="标签注册成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
@@ -39,7 +45,7 @@ async def tag_update(
     summary: str = Body("")
 ):
     """更新已注册标签."""
-    result = await _tag_service.update_tag(project_id=project_id, tag_name=tag_name, summary=summary)
+    result = await _get_tag_service().update_tag(project_id=project_id, tag_name=tag_name, summary=summary)
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "tag_name": tag_name, "updated": True}, message="标签更新成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
@@ -53,7 +59,7 @@ async def tag_delete(
 ):
     """删除标签注册."""
     force_flag = force.lower() == "true"
-    result = await _tag_service.delete_tag(project_id=project_id, tag_name=tag_name, force=force_flag)
+    result = await _get_tag_service().delete_tag(project_id=project_id, tag_name=tag_name, force=force_flag)
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "tag_name": tag_name, "force": force_flag, "deleted": True}, message="标签删除成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))
@@ -66,7 +72,7 @@ async def tag_merge(
     new_tag: str = Body(...)
 ):
     """合并标签."""
-    result = await _tag_service.merge_tags(project_id=project_id, old_tag=old_tag, new_tag=new_tag)
+    result = await _get_tag_service().merge_tags(project_id=project_id, old_tag=old_tag, new_tag=new_tag)
     if result["success"]:
         return ApiResponse(success=True, data={"project_id": project_id, "old_tag": old_tag, "new_tag": new_tag, "merged": True}, message="标签合并成功").to_dict()
     raise HTTPException(status_code=400, detail=result.get("error"))

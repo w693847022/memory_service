@@ -72,6 +72,7 @@ def setup_logging(
 
 def get_request_id(record: logging.LogRecord) -> str:
     """从日志记录中提取 request_id."""
-    if hasattr(record, 'request_id'):
-        return f"[{record.request_id}] "
+    request_id = getattr(record, 'request_id', None)
+    if request_id:
+        return f"[{request_id}] "
     return ""

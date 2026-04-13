@@ -33,9 +33,13 @@ from src.models.response import ResponseBuilder
 class ProjectService:
     """项目管理业务逻辑服务类."""
 
-    def __init__(self, storage, groups_service: GroupsService = None):
+    def __init__(self, storage, groups_service: Optional[GroupsService] = None):
         self.storage = storage
-        self.groups_service = groups_service
+        # 如果未提供 groups_service，创建一个默认实例
+        if groups_service is None:
+            self.groups_service = GroupsService(storage)
+        else:
+            self.groups_service = groups_service
 
     # ==================== 验证辅助方法 ====================
 
@@ -255,6 +259,10 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
+        is_valid, error_msg = GroupsService.validate_tags_count(tag_list, config)
+        if not is_valid:
+            return {"success": False, "error": error_msg}
+
         is_valid, error_msg, related_dict = GroupsService.validate_related(related, group, config)
         if not is_valid:
             return {"success": False, "error": error_msg}
@@ -269,6 +277,7 @@ class ProjectService:
         content: Optional[str] = None,
         summary: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
+        tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         all_configs = await self.groups_service.get_all_configs(project_id)
 
@@ -298,6 +307,15 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
+        if tags is not None:
+            for tag in tags:
+                is_valid, error_msg = self._validate_tag_length(tag, max_tokens=10)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
         return {"success": True, "related_dict": related_dict}
 
     @barrier(level=OperationLevel.L4, files=["{group}/"], key="{project_id}:{group}")
@@ -312,6 +330,19 @@ class ProjectService:
         related: Optional[Dict[str, List[str]]] = None,
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
+        # 验证标签
+        if tags is not None:
+            # 检查空标签列表
+            if not tags:
+                return {"success": False, "error": "tags 参数不能为空"}
+
+            # 验证标签数量
+            all_configs = await self.groups_service.get_all_configs(project_id)
+            config = all_configs.get(group)
+            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(
@@ -389,6 +420,14 @@ class ProjectService:
         tags: Optional[List[str]] = None,
         expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
+        # 验证标签数量
+        if tags is not None:
+            all_configs = await self.groups_service.get_all_configs(project_id)
+            config = all_configs.get(group)
+            is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(

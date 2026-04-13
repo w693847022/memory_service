@@ -1,7 +1,6 @@
 """分组管理 API 路由."""
 
 import logging
-from typing import Optional, List, Dict
 
 from fastapi import APIRouter, Query, Path, HTTPException, Request
 
@@ -301,7 +300,17 @@ async def update_group_item(
         kwargs["related"] = related
 
     client = _get_async_client(request)
-    result = await client.project_update(**kwargs)
+    result = await client.project_update(
+        project_id=project_id,
+        group=group,
+        item_id=item_id,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        tags=tags,
+        related=related,
+    )
     if result.success:
         return {"success": True, "data": result.data, "message": "条目更新成功"}
     raise HTTPException(status_code=400, detail=result.error)
