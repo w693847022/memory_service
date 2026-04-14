@@ -344,10 +344,21 @@ class ProjectService:
         content: str,
         summary: str,
         status: Optional[str] = None,
-        severity: str = "medium",
+        severity: Optional[str] = "medium",
         related: Optional[Dict[str, List[str]]] = None,
         tags: Optional[List[str]] = None
     ) -> Dict[str, Any]:
+        all_configs = await self.groups_service.get_all_configs(project_id)
+        config = all_configs.get(group)
+
+        # 不支持对应字段的分组，强制忽略传入值（写入层兜底）
+        if config and not config.enable_status:
+            status = None
+        if config and not config.enable_severity:
+            severity = None
+        if config and not config.allow_related:
+            related = None
+
         # 验证标签
         if tags is not None:
             # 检查空标签列表
@@ -355,8 +366,6 @@ class ProjectService:
                 return {"success": False, "error": "tags 参数不能为空"}
 
             # 验证标签数量
-            all_configs = await self.groups_service.get_all_configs(project_id)
-            config = all_configs.get(group)
             is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}
@@ -438,10 +447,19 @@ class ProjectService:
         tags: Optional[List[str]] = None,
         expected_version: Optional[int] = None
     ) -> Dict[str, Any]:
+        all_configs = await self.groups_service.get_all_configs(project_id)
+        config = all_configs.get(group)
+
+        # 不支持对应字段的分组，强制忽略传入值（写入层兜底）
+        if config and not config.enable_status:
+            status = None
+        if config and not config.enable_severity:
+            severity = None
+        if config and not config.allow_related:
+            related = None
+
         # 验证标签数量
         if tags is not None:
-            all_configs = await self.groups_service.get_all_configs(project_id)
-            config = all_configs.get(group)
             is_valid, error_msg = GroupsService.validate_tags_count(tags, config)
             if not is_valid:
                 return {"success": False, "error": error_msg}

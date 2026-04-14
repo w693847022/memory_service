@@ -75,6 +75,7 @@ class TestVersionControl:
         }
         self.mock_storage.get_project_data = AsyncMock()
         self.mock_storage.save_project_data = AsyncMock()
+        self.mock_storage.get_group_configs = AsyncMock(return_value={"groups": {}, "group_settings": {}})
         self.service = ProjectService(self.mock_storage)
         yield
 
