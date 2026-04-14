@@ -5,8 +5,13 @@ import threading
 
 from business.core.smart_cache import (
     SmartCache,
-    CacheConfig,
     CacheLevel,
+)
+from src.models.config import (
+    CacheConfig,
+    CacheL1Config,
+    CacheL2Config,
+    CacheL3Config,
 )
 
 
@@ -269,7 +274,7 @@ class TestTTLExpiration:
 
     def test_l1_ttl_expiration(self):
         """测试 L1 TTL 过期."""
-        config = CacheConfig(l1_ttl=1)  # 1 秒过期
+        config = CacheConfig(l1=CacheL1Config(ttl=1))  # 1 秒过期
         cache = SmartCache(config)
 
         cache.set("key1", "value", CacheLevel.L1_HOT)
@@ -281,7 +286,7 @@ class TestTTLExpiration:
 
     def test_l2_ttl_expiration(self):
         """测试 L2 TTL 过期."""
-        config = CacheConfig(l2_ttl=1)  # 1 秒过期
+        config = CacheConfig(l2=CacheL2Config(ttl=1))  # 1 秒过期
         cache = SmartCache(config)
 
         cache.set("key1", "value", CacheLevel.L2_WARM)
@@ -297,7 +302,7 @@ class TestLRUEviction:
 
     def test_l3_lru_eviction(self):
         """测试 L3 LRU 淘汰."""
-        config = CacheConfig(l3_maxsize=2)
+        config = CacheConfig(l3=CacheL3Config(maxsize=2))
         cache = SmartCache(config)
 
         # 填满缓存
@@ -321,11 +326,9 @@ class TestConfigOverride:
     def test_custom_config(self):
         """测试自定义配置."""
         config = CacheConfig(
-            l1_ttl=10,
-            l1_maxsize=5,
-            l2_ttl=100,
-            l2_maxsize=20,
-            l3_maxsize=50,
+            l1=CacheL1Config(ttl=10, maxsize=5),
+            l2=CacheL2Config(ttl=100, maxsize=20),
+            l3=CacheL3Config(maxsize=50),
             hot_threshold=3,
         )
         cache = SmartCache(config)
