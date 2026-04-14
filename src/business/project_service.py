@@ -276,6 +276,8 @@ class ProjectService:
         item_id: str,
         content: Optional[str] = None,
         summary: Optional[str] = None,
+        status: Optional[str] = None,
+        severity: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
         tags: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
@@ -286,6 +288,22 @@ class ProjectService:
             return {"success": False, "error": error_msg}
 
         config = all_configs.get(group)
+
+        if config and config.status_values:
+            if status is not None:
+                is_valid, error_msg = GroupsService.validate_status(status, config)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+        elif config and config.enable_status:
+            if status is not None:
+                is_valid, error_msg = GroupsService.validate_status(status, config)
+                if not is_valid:
+                    return {"success": False, "error": error_msg}
+
+        if severity is not None:
+            is_valid, error_msg = GroupsService.validate_severity(severity, config)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
 
         if content is not None:
             if not content:

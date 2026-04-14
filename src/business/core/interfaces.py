@@ -131,6 +131,8 @@ class ProjectServiceInterface(Protocol):
         item_id: str,
         content: Optional[str] = None,
         summary: Optional[str] = None,
+        status: Optional[str] = None,
+        severity: Optional[str] = None,
         related: Optional[Union[str, Dict[str, List[str]]]] = None,
         custom_groups: Optional[Dict[str, UnifiedGroupConfig]] = None,
         default_rules: Optional[Dict[str, List[str]]] = None,
@@ -142,6 +144,8 @@ class ProjectServiceInterface(Protocol):
             item_id: 条目ID
             content: 新内容（可选）
             summary: 新摘要（可选）
+            status: 状态（可选）
+            severity: 严重程度（可选）
             related: 关联数据（可选）
             custom_groups: 自定义组配置字典（可选）
             default_rules: 默认关联规则（可选）

@@ -466,7 +466,7 @@ async def project_update(
     version: Optional[int] = Body(None)
 ):
     """更新项目条目."""
-    v = await _get_project_service().validate_update_item(project_id, group, item_id, content, summary, related, parse_tags(tags) if tags else None)
+    v = await _get_project_service().validate_update_item(project_id, group, item_id, content, summary, status, severity, related, parse_tags(tags) if tags else None)
     if not v["success"]:
         raise HTTPException(status_code=400, detail=v["error"])
 
