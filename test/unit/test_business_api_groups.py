@@ -71,7 +71,7 @@ def mock_groups_service():
 
     # 创建上下文感知的 mock 方法，根据参数和状态返回相应的响应
     async def _create_custom_group(project_id, group_name, content_max_bytes=240, summary_max_bytes=90,
-                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, max_tags=2):
+                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, max_tags=2, description=""):
         # 需要访问存储来检查组是否已存在
         if mock._storage_ref:
             group_configs = await mock._storage_ref.get_group_configs(project_id)
@@ -88,6 +88,7 @@ def mock_groups_service():
                 "allowed_related_to": allowed_related_to or [],
                 "enable_status": enable_status,
                 "enable_severity": enable_severity,
+                "description": description,
             }
             group_configs["groups"] = groups
 
@@ -134,7 +135,7 @@ def mock_groups_service():
             if not saved:
                 return {"success": False, "error": "保存配置失败"}
 
-        return {"success": True, "message": f"自定义组 '{group_name}' 已删除"}
+        return {"success": True, "message": f"自定义组 '{group_name}' 已删除，组内历史记录条目已保留"}
 
     async def _update_group_settings(project_id, default_related_rules, *args, **kwargs):
         if mock._storage_ref:
@@ -190,6 +191,7 @@ def mock_storage_with_groups():
                 "severity_values": [],
                 "required_fields": ["content", "summary"],
                 "is_builtin": False,
+                "description": "",
             }
         },
         "group_settings": {
@@ -237,6 +239,26 @@ class TestCreateCustomGroup:
         assert "apis" in data["message"]
         mock_storage.get_group_configs.assert_called_once_with("proj_001")
         mock_storage.save_group_configs.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_create_custom_group_with_description(self, mock_storage, mock_groups_service):
+        """测试创建带描述的自定义组."""
+        mock_groups_service.set_storage(mock_storage)
+        init_services(mock_storage, None, mock_groups_service)
+
+        response = await create_custom_group(
+            project_id="proj_001",
+            group_name="desc_group",
+            description="这是一个测试描述"
+        )
+
+        data = response
+        assert data["success"] is True
+
+        # 验证 description 被正确保存
+        call_args = mock_storage.save_group_configs.call_args
+        saved_config = call_args[0][1]
+        assert saved_config["groups"]["desc_group"]["description"] == "这是一个测试描述"
 
     @pytest.mark.asyncio
     async def test_create_custom_group_duplicate_name(self, mock_storage_with_groups, mock_groups_service):
@@ -392,6 +414,26 @@ class TestUpdateGroup:
         # summary_max_bytes 应该被更新为 200
         assert saved_config["groups"]["custom_api"]["summary_max_bytes"] == 200
 
+    @pytest.mark.asyncio
+    async def test_update_group_description(self, mock_storage_with_groups, mock_groups_service):
+        """测试更新组描述."""
+        mock_groups_service.set_storage(mock_storage_with_groups)
+        init_services(mock_storage_with_groups, None, mock_groups_service)
+
+        response = await update_group(
+            project_id="proj_001",
+            group_name="custom_api",
+            description="更新后的描述"
+        )
+
+        data = response
+        assert data["success"] is True
+
+        # 验证 description 被更新
+        call_args = mock_storage_with_groups.save_group_configs.call_args
+        saved_config = call_args[0][1]
+        assert saved_config["groups"]["custom_api"]["description"] == "更新后的描述"
+
 
 class TestDeleteCustomGroup:
     """测试 delete_custom_group 接口."""
@@ -409,7 +451,7 @@ class TestDeleteCustomGroup:
 
         data = response
         assert data["success"] is True
-        assert "已删除" in data["message"]
+        assert "已删除" in data["message"] and "历史记录条目已保留" in data["message"]
 
         # 验证组已被删除
         call_args = mock_storage_with_groups.save_group_configs.call_args

@@ -210,3 +210,58 @@ def test_unified_group_config_from_dict_with_max_tags():
     assert config.max_tags == 5, f"from_dict 应该加载 max_tags=5"
 
     print("  ✓ UnifiedGroupConfig.from_dict 加载 max_tags 测试通过")
+
+
+def test_unified_group_config_description_field():
+    """测试 UnifiedGroupConfig 的 description 字段."""
+    print("测试: UnifiedGroupConfig description 字段...")
+
+    # 测试默认值
+    config = UnifiedGroupConfig()
+    assert config.description == "", f"默认 description 应该是空字符串，实际是 {config.description}"
+
+    # 测试自定义值
+    config = UnifiedGroupConfig(description="测试描述")
+    assert config.description == "测试描述", f"自定义 description 应该是'测试描述'，实际是 {config.description}"
+
+    # 测试 to_dict 包含 description
+    config_dict = config.to_dict()
+    assert "description" in config_dict, "to_dict 应该包含 description 字段"
+    assert config_dict["description"] == "测试描述"
+
+    print("  ✓ UnifiedGroupConfig description 字段测试通过")
+
+
+def test_unified_group_config_from_dict_with_description():
+    """测试 UnifiedGroupConfig.from_dict 加载 description."""
+    print("测试: UnifiedGroupConfig.from_dict 加载 description...")
+
+    # 测试加载 description
+    config = UnifiedGroupConfig.from_dict({"description": "从字典加载"})
+    assert config.description == "从字典加载", f"from_dict 应该加载 description，实际是 {config.description}"
+
+    # 测试默认值（不提供 description）
+    config = UnifiedGroupConfig.from_dict({})
+    assert config.description == "", f"from_dict 默认 description 应该是空字符串，实际是 {config.description}"
+
+    print("  ✓ UnifiedGroupConfig.from_dict 加载 description 测试通过")
+
+
+def test_default_group_configs_have_description():
+    """测试所有默认组配置都有 description 字段."""
+    print("测试: 默认组配置包含 description...")
+
+    expected_descriptions = {
+        "features": "功能特性分组",
+        "fixes": "缺陷修复分组",
+        "notes": "笔记记录分组",
+        "standards": "规范标准分组",
+    }
+
+    for group_name, group_config in DEFAULT_GROUP_CONFIGS.items():
+        assert "description" in group_config, f"{group_name} 缺少 description 字段"
+        expected = expected_descriptions.get(group_name, "")
+        assert group_config["description"] == expected, f"{group_name} 的 description 默认值应该是 '{expected}'，实际是 '{group_config['description']}'"
+        print(f"  ✓ {group_name}: description='{group_config['description']}'")
+
+    print("  ✓ 默认组配置包含 description 测试通过")

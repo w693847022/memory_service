@@ -93,6 +93,7 @@ class TestUnifiedGroupConfigData:
         assert config.summary_max_bytes == 90
         assert config.allow_related is False
         assert config.max_tags == 2
+        assert config.description == ""
 
 
 class TestSettings:

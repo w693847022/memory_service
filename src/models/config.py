@@ -164,6 +164,7 @@ class UnifiedGroupConfigData(BaseModel):
     status_values: List[str] = Field(default_factory=list)
     severity_values: List[str] = Field(default_factory=list)
     required_fields: List[str] = Field(default_factory=list)
+    description: str = ""
     max_tags: int = 2
 
 

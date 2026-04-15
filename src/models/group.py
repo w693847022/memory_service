@@ -75,6 +75,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "severity_values": [],
         "required_fields": ["content", "summary", "status"],
         "is_builtin": True,
+        "description": "功能特性分组",
         "max_tags": 2,
     },
     "fixes": {
@@ -88,6 +89,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "severity_values": ["critical", "high", "medium", "low"],
         "required_fields": ["content", "summary", "status", "severity"],
         "is_builtin": True,
+        "description": "缺陷修复分组",
         "max_tags": 2,
     },
     "notes": {
@@ -101,6 +103,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "severity_values": [],
         "required_fields": ["content", "summary"],
         "is_builtin": True,
+        "description": "笔记记录分组",
         "max_tags": 2,
     },
     "standards": {
@@ -114,6 +117,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "severity_values": [],
         "required_fields": ["content", "summary"],
         "is_builtin": True,
+        "description": "规范标准分组",
         "max_tags": 2,
     },
 }
@@ -149,6 +153,7 @@ class UnifiedGroupConfig(BaseModel):
     severity_values: List[str] = Field(default_factory=list, description="严重程度值列表")
     required_fields: List[str] = Field(default_factory=list, description="必填字段列表")
     is_builtin: bool = Field(default=False, description="是否为内置组")
+    description: str = Field(default="", description="组描述")
     max_tags: int = Field(default=2, ge=0, description="单个item最大标签数量")
 
     def to_dict(self) -> Dict[str, Any]:
@@ -171,6 +176,7 @@ class UnifiedGroupConfig(BaseModel):
             severity_values=data.get("severity_values", []),
             required_fields=data.get("required_fields", ["content", "summary"]),
             is_builtin=data.get("is_builtin", False),
+            description=data.get("description", ""),
             max_tags=data.get("max_tags", 2),
         )
 

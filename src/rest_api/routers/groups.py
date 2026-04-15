@@ -1,6 +1,7 @@
 """分组管理 API 路由."""
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Query, Path, HTTPException, Request
 
@@ -43,6 +44,7 @@ async def create_custom_group(
     allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
     enable_status: bool = Query(True, description="是否开启 status 字段"),
     enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+    description: str = Query("", description="组描述"),
 ):
     """创建自定义组."""
     client = _get_async_client(request)
@@ -55,6 +57,7 @@ async def create_custom_group(
         allowed_related_to=allowed_related_to,
         enable_status=enable_status,
         enable_severity=enable_severity,
+        description=description,
     )
     if result.success:
         return {"success": True, "message": result.message or "操作成功"}
@@ -76,6 +79,7 @@ async def update_group(
     status_values: str = Query(None, description="状态值列表（逗号分隔）"),
     severity_values: str = Query(None, description="严重程度值列表（逗号分隔）"),
     required_fields: str = Query(None, description="必填字段列表（逗号分隔）"),
+    description: Optional[str] = Query(None, description="组描述"),
 ):
     """更新组配置（支持内置组和自定义组）."""
     client = _get_async_client(request)
@@ -92,6 +96,7 @@ async def update_group(
         status_values=status_values,
         severity_values=severity_values,
         required_fields=required_fields,
+        description=description,
     )
     if result.success:
         return {"success": True, "message": result.message or "操作成功"}
@@ -392,6 +397,7 @@ async def create_custom_group_compat(
     allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
     enable_status: bool = Query(True, description="是否开启 status 字段"),
     enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+    description: str = Query("", description="组描述"),
 ):
     """创建自定义组 (兼容 Business API 路径)."""
     client = _get_async_client(request)
@@ -404,6 +410,7 @@ async def create_custom_group_compat(
         allowed_related_to=allowed_related_to,
         enable_status=enable_status,
         enable_severity=enable_severity,
+        description=description,
     )
     if result.success:
         return {"success": True, "message": result.message or "操作成功"}
@@ -421,6 +428,7 @@ async def update_group_compat(
     allowed_related_to: str = Query(None, description="允许关联的目标组列表（逗号分隔）"),
     enable_status: bool = Query(None, description="是否开启 status 字段"),
     enable_severity: bool = Query(None, description="是否开启 severity 字段"),
+    description: Optional[str] = Query(None, description="组描述"),
 ):
     """更新组配置（兼容 Business API 路径）."""
     client = _get_async_client(request)
@@ -433,6 +441,7 @@ async def update_group_compat(
         allowed_related_to=allowed_related_to,
         enable_status=enable_status,
         enable_severity=enable_severity,
+        description=description,
     )
     if result.success:
         return {"success": True, "message": result.message or "操作成功"}

@@ -203,3 +203,55 @@ class TestBusinessApiAsyncClient:
         # 测试 DELETE
         await client._delete("/api/delete")
         assert mock_client.request.called
+
+    @pytest.mark.asyncio
+    @patch("clients.business_async_client.httpx.AsyncClient")
+    async def test_create_custom_group_with_description(self, mock_client_class):
+        """测试创建自定义组传递 description 参数."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "message": "创建成功"}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        client = BusinessApiAsyncClient()
+        result = await client.create_custom_group(
+            project_id="proj_001",
+            group_name="test_group",
+            description="测试描述"
+        )
+
+        assert result.success is True
+        # 验证请求参数中包含 description
+        call_args = mock_client.request.call_args
+        assert "params" in call_args.kwargs
+        assert call_args.kwargs["params"]["description"] == "测试描述"
+
+    @pytest.mark.asyncio
+    @patch("clients.business_async_client.httpx.AsyncClient")
+    async def test_update_group_with_description(self, mock_client_class):
+        """测试更新组配置传递 description 参数."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "message": "更新成功"}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = AsyncMock()
+        mock_client.request = AsyncMock(return_value=mock_response)
+        mock_client_class.return_value = mock_client
+
+        client = BusinessApiAsyncClient()
+        result = await client.update_group(
+            project_id="proj_001",
+            group_name="test_group",
+            description="更新描述"
+        )
+
+        assert result.success is True
+        # 验证请求参数中包含 description
+        call_args = mock_client.request.call_args
+        assert "params" in call_args.kwargs
+        assert call_args.kwargs["params"]["description"] == "更新描述"

@@ -226,6 +226,7 @@ class GroupsService:
         enable_status: bool = True,
         enable_severity: bool = False,
         max_tags: int = 2,
+        description: str = "",
     ) -> Dict[str, Any]:
         """创建自定义组."""
         group_configs = await self.storage.get_group_configs(project_id)
@@ -242,6 +243,7 @@ class GroupsService:
             enable_status=enable_status,
             enable_severity=enable_severity,
             max_tags=max_tags,
+            description=description,
         )
 
         groups[group_name] = new_group
@@ -305,13 +307,13 @@ class GroupsService:
         config = groups[group_name]
         is_builtin = config.is_builtin if isinstance(config, UnifiedGroupConfig) else config.get("is_builtin", False)
         if is_builtin:
-            return ResponseBuilder.error("不能删除内置组").to_dict()
+            return ResponseBuilder.error(f"内置组 '{group_name}' 不允许删除").to_dict()
 
         del groups[group_name]
         group_configs["groups"] = groups
 
         if await self.storage.save_group_configs(project_id, group_configs):
-            return ResponseBuilder.success(message=f"自定义组 '{group_name}' 已删除").to_dict()
+            return ResponseBuilder.success(message=f"自定义组 '{group_name}' 已删除，组内历史记录条目已保留").to_dict()
         return ResponseBuilder.error("保存配置失败").to_dict()
 
     @barrier(level=OperationLevel.L3, files=["_groups.json"], key="{project_id}")

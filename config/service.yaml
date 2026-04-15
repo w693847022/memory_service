@@ -57,6 +57,7 @@ groups:
       - "content"
       - "summary"
       - "status"
+    description: "功能特性分组"
     max_tags: 2
   fixes:
     content_max_bytes: 4000
@@ -81,6 +82,7 @@ groups:
       - "summary"
       - "status"
       - "severity"
+    description: "缺陷修复分组"
     max_tags: 2
   notes:
     content_max_bytes: 500
@@ -94,6 +96,7 @@ groups:
     required_fields:
       - "content"
       - "summary"
+    description: "笔记记录分组"
     max_tags: 5
   standards:
     content_max_bytes: 4000
@@ -108,6 +111,7 @@ groups:
     required_fields:
       - "content"
       - "summary"
+    description: "规范标准分组"
     max_tags: 2
 
 # 初始标签注册表（项目注册时自动创建）

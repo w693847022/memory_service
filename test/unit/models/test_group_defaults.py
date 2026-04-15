@@ -50,3 +50,14 @@ class TestGetDefaultRelatedRules:
         rules = get_default_related_rules()
         assert rules == custom_rules
         SettingsLoader._instance = None  # Reset
+
+
+class TestGetDefaultGroupConfigs:
+    """Test get_default_group_configs fallback logic."""
+
+    def test_fallback_has_description(self):
+        SettingsLoader.reload(Path("/nonexistent/path.yaml"))
+        from src.models.group import get_default_group_configs
+        configs = get_default_group_configs()
+        for group_name, config in configs.items():
+            assert "description" in config, f"{group_name} 缺少 description 字段"

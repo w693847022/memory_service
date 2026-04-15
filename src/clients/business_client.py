@@ -385,7 +385,8 @@ class BusinessApiClient:
         allow_related: bool = False,
         allowed_related_to: str = "",
         enable_status: bool = True,
-        enable_severity: bool = False
+        enable_severity: bool = False,
+        description: str = ""
     ) -> ApiResponse:
         """创建自定义组."""
         params = {
@@ -396,7 +397,8 @@ class BusinessApiClient:
             "allow_related": allow_related,
             "allowed_related_to": allowed_related_to,
             "enable_status": enable_status,
-            "enable_severity": enable_severity
+            "enable_severity": enable_severity,
+            "description": description
         }
         return self._post("/api/groups/custom", params=params)
 
@@ -413,7 +415,8 @@ class BusinessApiClient:
         max_tags: Optional[int] = None,
         status_values: Optional[str] = None,
         severity_values: Optional[str] = None,
-        required_fields: Optional[str] = None
+        required_fields: Optional[str] = None,
+        description: Optional[str] = None
     ) -> ApiResponse:
         """更新组配置."""
         params = {"project_id": project_id, "group_name": group_name}
@@ -421,7 +424,8 @@ class BusinessApiClient:
                      ("allow_related", allow_related), ("allowed_related_to", allowed_related_to),
                      ("enable_status", enable_status), ("enable_severity", enable_severity),
                      ("max_tags", max_tags), ("status_values", status_values),
-                     ("severity_values", severity_values), ("required_fields", required_fields)]:
+                     ("severity_values", severity_values), ("required_fields", required_fields),
+                     ("description", description)]:
             if v is not None:
                 params[k] = v
         return self._put("/api/groups/custom", params=params)
