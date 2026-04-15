@@ -10,8 +10,9 @@ from typing import Optional, Dict, List, Any, Union
 from src.models import Item, ItemCreate, ItemUpdate
 from src.models.storage import ProjectData
 from src.models.group import (
-    DEFAULT_TAGS,
-    DEFAULT_GROUP_CONFIGS,
+    get_default_tags,
+    get_default_group_configs,
+    get_default_related_rules,
     CONTENT_SEPARATE_GROUPS,
 )
 from src.models.group import UnifiedGroupConfig
@@ -76,8 +77,8 @@ class ProjectService:
             path=path,
             summary=summary,
             tags=tags,
-            group_configs=DEFAULT_GROUP_CONFIGS,
-            default_tags=DEFAULT_TAGS
+            group_configs=get_default_group_configs(),
+            default_tags=get_default_tags()
         )
 
         # 转换为存储格式 dict，然后构建 ProjectData

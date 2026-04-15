@@ -188,6 +188,8 @@ class Settings(BaseModel):
     cache: CacheConfig = Field(default_factory=CacheConfig)
     http: HttpPoolConfig = Field(default_factory=HttpPoolConfig)
     groups: GroupsConfigData = Field(default_factory=GroupsConfigData)
+    initial_tags: List[str] = Field(default_factory=list)
+    default_related_rules: Dict[str, List[str]] = Field(default_factory=dict)
 
 
 # ==================== 配置加载器 ====================

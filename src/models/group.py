@@ -40,6 +40,28 @@ def get_default_group_configs() -> Dict[str, Dict[str, Any]]:
         return _DEFAULT_GROUP_CONFIGS_FALLBACK
 
 
+def get_default_tags() -> List[str]:
+    """获取默认标签列表（从Settings加载，优先外部配置）."""
+    try:
+        settings = get_settings()
+        if settings.initial_tags:
+            return list(settings.initial_tags)
+    except Exception:
+        pass
+    return list(DEFAULT_TAGS)
+
+
+def get_default_related_rules() -> Dict[str, List[str]]:
+    """获取默认关联规则（从Settings加载，优先外部配置）."""
+    try:
+        settings = get_settings()
+        if settings.default_related_rules:
+            return dict(settings.default_related_rules)
+    except Exception:
+        pass
+    return dict(DEFAULT_RELATED_RULES)
+
+
 # 硬编码默认值（仅用于回退）
 _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
     "features": {

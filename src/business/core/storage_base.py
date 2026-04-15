@@ -527,7 +527,7 @@ class ProjectStorage:
 
     async def _load_group_configs(self, project_id: str) -> Dict[str, Any]:
         """加载组配置文件."""
-        from src.models.group import UnifiedGroupConfig, DEFAULT_GROUP_CONFIGS, DEFAULT_RELATED_RULES
+        from src.models.group import UnifiedGroupConfig, get_default_group_configs, get_default_related_rules
 
         config_path = self._get_group_config_path(project_id)
         if config_path.exists():
@@ -550,9 +550,9 @@ class ProjectStorage:
                 pass
 
         return {
-            "groups": {name: UnifiedGroupConfig.from_dict(cfg) for name, cfg in DEFAULT_GROUP_CONFIGS.items()},
+            "groups": {name: UnifiedGroupConfig.from_dict(cfg) for name, cfg in get_default_group_configs().items()},
             "group_settings": {
-                "default_related_rules": DEFAULT_RELATED_RULES
+                "default_related_rules": get_default_related_rules()
             }
         }
 

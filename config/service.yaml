@@ -109,3 +109,24 @@ groups:
       - "content"
       - "summary"
     max_tags: 2
+
+# 初始标签注册表（项目注册时自动创建）
+initial_tags:
+  - "implementation"
+  - "enhancement"
+  - "bug"
+  - "docs"
+  - "refactor"
+  - "test"
+  - "ops"
+  - "security"
+
+# 默认关联规则（项目注册时自动创建）
+default_related_rules:
+  features:
+    - "notes"
+  fixes:
+    - "features"
+    - "notes"
+  standards:
+    - "notes"

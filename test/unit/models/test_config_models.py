@@ -105,6 +105,17 @@ class TestSettings:
         assert settings.business.port == 8000
         assert settings.cache.l1.ttl == 60
         assert settings.groups.features.content_max_bytes == 4000
+        assert settings.initial_tags == []
+        assert settings.default_related_rules == {}
+
+    def test_custom_initial_tags(self):
+        settings = Settings(initial_tags=["custom-tag", "ops"])
+        assert settings.initial_tags == ["custom-tag", "ops"]
+
+    def test_custom_default_related_rules(self):
+        rules = {"features": ["notes"], "fixes": ["features"]}
+        settings = Settings(default_related_rules=rules)
+        assert settings.default_related_rules == rules
 
 
 class TestSettingsLoader:
@@ -127,6 +138,95 @@ class TestSettingsLoader:
         settings = SettingsLoader.load(Path("/nonexistent/path.yaml"))
         # Should use defaults
         assert settings.mcp.port == 8000
+
+    def test_load_initial_tags_and_related_rules_from_yaml(self, tmp_path):
+        yaml_content = """
+groups:
+  features:
+    content_max_bytes: 1000
+    summary_max_bytes: 50
+    allow_related: true
+    allowed_related_to:
+      - "notes"
+    enable_status: true
+    enable_severity: false
+    status_values:
+      - "pending"
+      - "completed"
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+      - "status"
+    max_tags: 2
+  fixes:
+    content_max_bytes: 1000
+    summary_max_bytes: 50
+    allow_related: true
+    allowed_related_to:
+      - "features"
+    enable_status: true
+    enable_severity: true
+    status_values:
+      - "pending"
+      - "completed"
+    severity_values:
+      - "high"
+      - "low"
+    required_fields:
+      - "content"
+      - "summary"
+      - "status"
+      - "severity"
+    max_tags: 2
+  notes:
+    content_max_bytes: 500
+    summary_max_bytes: 50
+    allow_related: false
+    allowed_related_to: []
+    enable_status: false
+    enable_severity: false
+    status_values: []
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+    max_tags: 5
+  standards:
+    content_max_bytes: 1000
+    summary_max_bytes: 50
+    allow_related: true
+    allowed_related_to:
+      - "notes"
+    enable_status: false
+    enable_severity: false
+    status_values: []
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+    max_tags: 2
+initial_tags:
+  - "custom-tag"
+  - "ops"
+default_related_rules:
+  features:
+    - "notes"
+  fixes:
+    - "features"
+"""
+        yaml_path = tmp_path / "test_service.yaml"
+        yaml_path.write_text(yaml_content, encoding="utf-8")
+
+        SettingsLoader._instance = None  # Reset
+        settings = SettingsLoader.reload(yaml_path)
+
+        assert settings.initial_tags == ["custom-tag", "ops"]
+        assert settings.default_related_rules == {
+            "features": ["notes"],
+            "fixes": ["features"],
+        }
+        SettingsLoader._instance = None  # Reset
 
 
 class TestPaginationResult:
