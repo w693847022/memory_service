@@ -38,6 +38,15 @@
 - 使用类型注解
 - 函数添加 docstring 说明
 
+### API 开发规范
+
+Business API 层（src/business/api/）的所有接口改动必须同步更新 HTTP 客户端层：
+
+- **MCP Server**: `src/mcp_server/tools/_shared.py` → `src/clients/business_client.py`
+- **FastAPI Server**: `src/rest_api/business_client.py` → `src/clients/business_client.py`
+
+新增/修改/删除接口时，需同步在 `BusinessApiClient` 类中添加/更新/移除对应的 HTTP 方法，确保通过 BUSINESS_API_URL (默认 http://localhost:8002) 正常调用。
+
 ### 提交信息规范
 
 使用 Conventional Commits 格式：

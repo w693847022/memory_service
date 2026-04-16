@@ -11,7 +11,7 @@ import time
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from features.stats import CallStats
+from business.call_stats import CallStats
 
 
 def test_callstats_initialization():
@@ -25,7 +25,6 @@ def test_callstats_initialization():
         # 初始化会创建统计文件
         assert stats.stats_path.exists() or stats.data is not None, "统计初始化失败"
         print("  ✓ 初始化测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -48,7 +47,6 @@ def test_record_call():
         assert "project_add" in data["tool_calls"], "工具未记录"
 
         print("  ✓ 记录调用测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -71,7 +69,6 @@ def test_get_tool_stats():
         assert tool_stats["total"] == 5, f"统计数量不正确: {tool_stats['total']}"
 
         print("  ✓ 获取工具统计测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -94,7 +91,6 @@ def test_get_project_stats():
         assert project_stats["total_calls"] == 2, f"项目统计不正确: {project_stats['total_calls']}"
 
         print("  ✓ 获取项目统计测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
@@ -119,7 +115,6 @@ def test_daily_stats():
         assert "project_add" in daily_data or len(daily_data) >= 0, "日统计应该有数据"
 
         print("  ✓ 日统计测试通过")
-        return True
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
 

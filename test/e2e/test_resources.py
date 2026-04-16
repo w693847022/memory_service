@@ -7,7 +7,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
-from features.guidelines import _build_guidelines_content, _build_chinese_guidelines, _build_english_guidelines
+from mcp_server.guidelines import _build_guidelines_content, _build_chinese_guidelines, _build_english_guidelines
 
 
 def test_guidelines_chinese():
@@ -31,7 +31,6 @@ def test_guidelines_chinese():
     assert "best_practices" in g, "缺少 best_practices 部分"
 
     print("  ✓ 中文指南资源测试通过")
-    return True
 
 
 def test_guidelines_english():
@@ -47,7 +46,6 @@ def test_guidelines_english():
     assert "guidelines" in guidelines, "缺少 guidelines 内容"
 
     print("  ✓ 英文指南资源测试通过")
-    return True
 
 
 def test_guidelines_content_builder():
@@ -67,7 +65,6 @@ def test_guidelines_content_builder():
     assert default["language"] == "zh", "非 en 语言应该默认返回中文"
 
     print("  ✓ 指南内容构建器测试通过")
-    return True
 
 
 def test_guidelines_structure():
@@ -101,7 +98,6 @@ def test_guidelines_structure():
     assert "cleanup" in mw, "memory_workflow 缺少 cleanup"
 
     print("  ✓ 指南结构完整性测试通过")
-    return True
 
 
 def run_all_tests():

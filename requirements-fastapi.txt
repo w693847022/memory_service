@@ -11,6 +11,7 @@ slowapi>=0.1.9
 
 # HTTP 客户端（调用 MCP Server）
 requests==2.32.2
+httpx==0.27.2  # Business API HTTP 客户端
 
 # 数据验证（FastAPI 依赖）
 pydantic>=2.0

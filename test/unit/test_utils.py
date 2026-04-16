@@ -34,35 +34,34 @@ def test_id_generation():
     assert re.match(standard_pattern, "std_20260322_1"), "standards ID 格式不正确"
 
     print("  ✓ ID 生成格式测试通过")
-    return True
 
 
 def test_group_normalization():
     """测试分组验证."""
     print("测试: 分组验证...")
 
-    from core.groups import validate_group_name
+    from business.groups_service import GroupsService
+    from src.models.group import DEFAULT_GROUP_CONFIGS
 
     # 测试有效分组名
     for group in ["features", "fixes", "notes", "standards"]:
-        is_valid, error_msg = validate_group_name(group)
+        is_valid, error_msg = GroupsService.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
         assert is_valid, f"'{group}' 应该是有效的分组名"
 
     # 测试无效分组名（不再支持别名）
     invalid_names = ["feature", "fix", "功能", "feat", "invalid"]
     for invalid in invalid_names:
-        is_valid, error_msg = validate_group_name(invalid)
+        is_valid, error_msg = GroupsService.validate_group_name(invalid, DEFAULT_GROUP_CONFIGS)
         assert not is_valid, f"'{invalid}' 应该是无效的分组名"
 
     print("  ✓ 分组验证测试通过")
-    return True
 
 
 def test_tag_parsing():
     """测试标签解析."""
     print("测试: 标签解析...")
 
-    from api.tools import _parse_tags
+    from mcp_server.tools import _parse_tags
 
     # 测试逗号分隔
     tags = _parse_tags("tag1,tag2,tag3")
@@ -77,34 +76,42 @@ def test_tag_parsing():
     assert tags == [], f"空字符串应该返回空列表: {tags}"
 
     print("  ✓ 标签解析测试通过")
-    return True
 
 
 def test_content_validation():
     """测试内容长度验证."""
     print("测试: 内容长度验证...")
 
-    from core.groups import validate_content_length
+    from business.groups_service import GroupsService
+    from src.models.group import DEFAULT_GROUP_CONFIGS
 
-    # 测试有效内容
-    valid, msg, _ = validate_content_length("短内容", "features")
+    # 获取 features 和 notes 的配置
+    features_config = DEFAULT_GROUP_CONFIGS["features"]
+    notes_config = DEFAULT_GROUP_CONFIGS["notes"]
+    features_model = GroupsService.validate_group_name("features", DEFAULT_GROUP_CONFIGS)
+
+    # 测试有效内容 - 需要传入 config 对象
+    from src.models.group import UnifiedGroupConfig
+    features_config_model = UnifiedGroupConfig.from_dict(features_config)
+
+    valid, msg, _ = GroupsService.validate_content_length("短内容", features_config_model)
     assert valid, f"短内容应该有效: {msg}"
 
-    # 测试过长内容 (features: 80 tokens = ~240 chars)
-    long_content = "a" * 300
-    valid, msg, _ = validate_content_length(long_content, "features")
+    # 测试过长内容 (features: 4000 bytes limit)
+    long_content = "a" * 4500
+    valid, msg, _ = GroupsService.validate_content_length(long_content, features_config_model)
     assert not valid, "过长内容应该无效"
 
     # 测试 notes 分组的 1 token 最小长度 (3字符 ≈ 1 token)
-    valid, msg, _ = validate_content_length("aaa", "notes", min_tokens=1)
-    assert valid, f"3字符应该满足 min_tokens=1: {msg}"
+    notes_config_model = UnifiedGroupConfig.from_dict(notes_config)
+    valid, msg, _ = GroupsService.validate_content_length("aaa", notes_config_model, min_bytes=3)
+    assert valid, f"3字符应该满足 min_bytes=3: {msg}"
 
     # 测试不满足最小长度
-    valid, msg, _ = validate_content_length("a", "notes", min_tokens=1)
-    assert not valid, "1字符不应该满足 min_tokens=1"
+    valid, msg, _ = GroupsService.validate_content_length("a", notes_config_model, min_bytes=3)
+    assert not valid, "1字符不应该满足 min_bytes=3"
 
     print("  ✓ 内容长度验证测试通过")
-    return True
 
 
 def test_track_calls_decorator():
@@ -116,12 +123,13 @@ def test_track_calls_decorator():
         original_storage = os.environ.get("MCP_STORAGE_DIR")
         os.environ["MCP_STORAGE_DIR"] = temp_dir
 
-        from core.utils import track_calls
+        from business.core.utils import track_calls
 
         # 使用 mock 验证 record_call 被调用
         from unittest.mock import MagicMock
-        with patch("features.instances.call_stats") as mock_stats:
-            mock_stats.record_call = MagicMock()
+        with patch("business.call_stats.CallStats") as MockCallStats:
+            mock_instance = MagicMock()
+            MockCallStats.return_value = mock_instance
 
             @track_calls
             def dummy_func():
@@ -131,14 +139,13 @@ def test_track_calls_decorator():
             result = dummy_func()
 
             assert result == "result", "函数返回值应该不变"
-            mock_stats.record_call.assert_called_once()
-            call_kwargs = mock_stats.record_call.call_args.kwargs
+            mock_instance.record_call.assert_called_once()
+            call_kwargs = mock_instance.record_call.call_args.kwargs
             assert call_kwargs["tool_name"] == "dummy_func"
             assert "client" in call_kwargs
             assert "ip" in call_kwargs
 
         print("  ✓ track_calls 装饰器测试通过")
-        return True
     finally:
         if original_storage is not None:
             os.environ["MCP_STORAGE_DIR"] = original_storage
@@ -151,7 +158,7 @@ def test_validate_view_mode():
     """测试 validate_view_mode 通用函数."""
     print("测试: validate_view_mode...")
 
-    from core.utils import validate_view_mode
+    from business.core.utils import validate_view_mode
 
     # 有效值
     is_valid, error = validate_view_mode("summary")
@@ -169,14 +176,13 @@ def test_validate_view_mode():
     assert not is_valid, "空字符串应无效"
 
     print("  ✓ validate_view_mode 测试通过")
-    return True
 
 
 def test_validate_regex_pattern():
     """测试 validate_regex_pattern 通用函数."""
     print("测试: validate_regex_pattern...")
 
-    from core.utils import validate_regex_pattern
+    from business.core.utils import validate_regex_pattern
 
     # 空字符串
     regex, error = validate_regex_pattern("")
@@ -198,14 +204,13 @@ def test_validate_regex_pattern():
     assert "tag_name_pattern" in error
 
     print("  ✓ validate_regex_pattern 测试通过")
-    return True
 
 
 def test_apply_view_mode():
     """测试 apply_view_mode 通用函数."""
     print("测试: apply_view_mode...")
 
-    from core.utils import apply_view_mode
+    from business.core.utils import apply_view_mode
 
     items = [
         {"id": "1", "name": "test", "summary": "测试", "tags": ["a"]},
@@ -225,7 +230,6 @@ def test_apply_view_mode():
     assert set(result[0].keys()) == {"id", "name", "summary", "tags"}
 
     print("  ✓ apply_view_mode 测试通过")
-    return True
 
 
 def run_all_tests():

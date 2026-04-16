@@ -1,0 +1,136 @@
+# MCP 服务配置
+mcp:
+  host: "0.0.0.0"
+  port: 8000
+  transport: "stdio"
+  log_level: "INFO"
+
+# FastAPI 服务配置
+fastapi:
+  host: "0.0.0.0"
+  port: 8080
+  log_level: "INFO"
+
+# Business 服务配置
+business:
+  host: "0.0.0.0"
+  port: 8000
+  log_level: "INFO"
+
+# 缓存配置
+cache:
+  l1:
+    ttl: 60
+    maxsize: 20
+  l2:
+    ttl: 600
+    maxsize: 100
+  l3:
+    maxsize: 1000
+  hot_threshold: 10
+  promotion_enabled: true
+
+# HTTP连接池配置
+http:
+  max_connections: 100
+  max_keepalive_connections: 20
+  keepalive_expiry: 5.0
+  http2: false
+  timeout: 30.0
+
+# 组默认配置
+groups:
+  features:
+    content_max_bytes: 4000
+    summary_max_bytes: 90
+    allow_related: true
+    allowed_related_to:
+      - "notes"
+    enable_status: true
+    enable_severity: false
+    status_values:
+      - "pending"
+      - "in_progress"
+      - "completed"
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+      - "status"
+    description: "功能特性分组"
+    max_tags: 2
+  fixes:
+    content_max_bytes: 4000
+    summary_max_bytes: 90
+    allow_related: true
+    allowed_related_to:
+      - "features"
+      - "notes"
+    enable_status: true
+    enable_severity: true
+    status_values:
+      - "pending"
+      - "in_progress"
+      - "completed"
+    severity_values:
+      - "critical"
+      - "high"
+      - "medium"
+      - "low"
+    required_fields:
+      - "content"
+      - "summary"
+      - "status"
+      - "severity"
+    description: "缺陷修复分组"
+    max_tags: 2
+  notes:
+    content_max_bytes: 500
+    summary_max_bytes: 50
+    allow_related: false
+    allowed_related_to: []
+    enable_status: false
+    enable_severity: false
+    status_values: []
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+    description: "笔记记录分组"
+    max_tags: 5
+  standards:
+    content_max_bytes: 4000
+    summary_max_bytes: 90
+    allow_related: true
+    allowed_related_to:
+      - "notes"
+    enable_status: false
+    enable_severity: false
+    status_values: []
+    severity_values: []
+    required_fields:
+      - "content"
+      - "summary"
+    description: "规范标准分组"
+    max_tags: 2
+
+# 初始标签注册表（项目注册时自动创建）
+initial_tags:
+  - "implementation"
+  - "enhancement"
+  - "bug"
+  - "docs"
+  - "refactor"
+  - "test"
+  - "ops"
+  - "security"
+
+# 默认关联规则（项目注册时自动创建）
+default_related_rules:
+  features:
+    - "notes"
+  fixes:
+    - "features"
+    - "notes"
+  standards:
+    - "notes"

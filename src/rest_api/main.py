@@ -3,18 +3,17 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from typing import Dict, Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from .mcp_client import get_mcp_client
 from .middleware import RequestTrackerMiddleware
-from .logging_config import setup_logging
+from common.logging_config import setup_logging
+from clients.business_async_client import get_business_async_client, close_business_async_client
 
 # ===================
 # 日志配置（支持滚动删除）
@@ -26,6 +25,7 @@ max_bytes = int(os.getenv("LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 默认 10M
 backup_count = int(os.getenv("LOG_BACKUP_COUNT", "5"))  # 默认保留 5 个文件
 
 setup_logging(
+    service_name="fastapi",
     log_level=log_level,
     log_dir=log_dir,
     max_bytes=max_bytes,
@@ -42,8 +42,14 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """应用生命周期管理."""
     logger.info("FastAPI 应用启动")
+    # 初始化异步客户端
+    app.state.async_client = await get_business_async_client()
+    logger.info("异步客户端已初始化")
     yield
     logger.info("FastAPI 应用关闭")
+    # 关闭异步客户端
+    await close_business_async_client()
+    logger.info("异步客户端已关闭")
 
 
 # ===================
@@ -80,7 +86,23 @@ limiter = Limiter(
     storage_uri="memory://",  # 内存存储（单实例）
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# 自定义速率限制异常处理器（修复类型兼容性）
+async def _rate_limit_handler(request: Request, exc: Exception) -> JSONResponse:
+    """处理速率限制异常."""
+    if isinstance(exc, RateLimitExceeded):
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=ApiResponse.error_response("Rate limit exceeded")
+        )
+    # Fallback for other exceptions
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiResponse.error_response("Internal server error")
+    )
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 
 # ===================
@@ -93,26 +115,7 @@ app.add_middleware(RequestTrackerMiddleware)
 # 统一响应格式
 # ===================
 
-class ApiResponse:
-    """统一 API 响应格式."""
-
-    @staticmethod
-    def success(data: Any = None, message: str = "Success") -> Dict[str, Any]:
-        return {
-            "success": True,
-            "data": data,
-            "message": message
-        }
-
-    @staticmethod
-    def error(error: str, status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR) -> JSONResponse:
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "success": False,
-                "error": error
-            }
-        )
+from src.models import ApiResponse
 
 
 # ===================
@@ -123,9 +126,9 @@ class ApiResponse:
 async def global_exception_handler(request: Request, exc: Exception):
     """全局异常处理."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
-    return ApiResponse.error(
-        error=f"Internal server error: {str(exc)}",
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content=ApiResponse.error_response(f"Internal server error: {str(exc)}")
     )
 
 
@@ -133,9 +136,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def value_error_handler(request: Request, exc: ValueError):
     """参数验证错误处理."""
     logger.warning(f"Validation error: {exc}")
-    return ApiResponse.error(
-        error=str(exc),
-        status_code=status.HTTP_400_BAD_REQUEST
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content=ApiResponse.error_response(str(exc))
     )
 
 
@@ -147,14 +150,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 @limiter.limit(os.getenv("RATE_LIMIT_HEALTH", "60/minute"))
 async def health_check(request: Request):
     """健康检查端点."""
-    return ApiResponse.success(data={"status": "healthy"})
+    return ApiResponse.success_response(data={"status": "healthy"})
 
 
 @app.get("/", tags=["Root"])
 @limiter.limit("30/minute")
 async def root(request: Request):
     """根路径."""
-    return ApiResponse.success(data={
+    return ApiResponse.success_response(data={
         "name": "Project Memory REST API",
         "version": "1.0.0",
         "docs": "/docs",

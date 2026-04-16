@@ -3,14 +3,17 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Query, Path, HTTPException
+from fastapi import APIRouter, Query, Path, HTTPException, Request
 
-from ..mcp_client import get_mcp_client
-from ..main import ApiResponse
+from clients.business_async_client import BusinessApiAsyncClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-mcp_client = get_mcp_client()
+
+
+def _get_async_client(request: Request) -> BusinessApiAsyncClient:
+    """获取异步客户端."""
+    return request.app.state.async_client
 
 # 支持的分组类型
 VALID_GROUPS = ["features", "notes", "fixes", "standards"]
@@ -27,11 +30,143 @@ def _validate_group(group: str) -> str:
 
 
 # ===================
-# 分组管理 API
+# 自定义组管理 API（放在通用路由之前，避免被通用路由匹配）
+# ===================
+
+@router.post("/projects/{project_id}/groups")
+async def create_custom_group(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Query(..., description="自定义组名称"),
+    content_max_bytes: int = Query(240, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(90, description="summary 字段最大字节数"),
+    allow_related: bool = Query(False, description="是否允许关联"),
+    allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(True, description="是否开启 status 字段"),
+    enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+    description: str = Query("", description="组描述"),
+):
+    """创建自定义组."""
+    client = _get_async_client(request)
+    result = await client.create_custom_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+        description=description,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/projects/{project_id}/groups/{group_name}")
+async def update_group(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Path(..., description="组名称"),
+    content_max_bytes: int = Query(None, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(None, description="summary 字段最大字节数"),
+    allow_related: bool = Query(None, description="是否允许关联"),
+    allowed_related_to: str = Query(None, description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(None, description="是否开启 status 字段"),
+    enable_severity: bool = Query(None, description="是否开启 severity 字段"),
+    max_tags: int = Query(None, description="单个item最大标签数量"),
+    status_values: str = Query(None, description="状态值列表（逗号分隔）"),
+    severity_values: str = Query(None, description="严重程度值列表（逗号分隔）"),
+    required_fields: str = Query(None, description="必填字段列表（逗号分隔）"),
+    description: Optional[str] = Query(None, description="组描述"),
+):
+    """更新组配置（支持内置组和自定义组）."""
+    client = _get_async_client(request)
+    result = await client.update_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+        max_tags=max_tags,
+        status_values=status_values,
+        severity_values=severity_values,
+        required_fields=required_fields,
+        description=description,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.delete("/projects/{project_id}/groups/{group_name}")
+async def delete_custom_group(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+    group_name: str = Path(..., description="自定义组名称"),
+):
+    """删除自定义组."""
+    client = _get_async_client(request)
+    result = await client.delete_custom_group(project_id, group_name)
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+# ===================
+# 组设置 API
+# ===================
+
+@router.get("/projects/{project_id}/group-settings")
+async def get_group_settings(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+):
+    """获取组设置."""
+    client = _get_async_client(request)
+    result = await client.get_group_settings(project_id)
+    if result.success:
+        return {"success": True, "data": result.data}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/projects/{project_id}/group-settings")
+async def update_group_settings(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+    default_related_rules: str = Query("", description="默认关联规则（JSON 字符串）"),
+):
+    """更新组设置."""
+    import json
+
+    rules = None
+    if default_related_rules:
+        try:
+            rules = json.loads(default_related_rules)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="default_related_rules JSON 格式无效")
+
+    client = _get_async_client(request)
+    result = await client.update_group_settings(
+        project_id=project_id,
+        default_related_rules=rules,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+# ===================
+# 分组条目管理 API
 # ===================
 
 @router.get("/projects/{project_id}/{group}")
 async def list_group_items(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称 (features/notes/fixes/standards)"),
     status: str = Query("", description="状态过滤 (pending/in_progress/completed)"),
@@ -75,14 +210,16 @@ async def list_group_items(
     if updated_before:
         kwargs["updated_before"] = updated_before
 
-    result = mcp_client.call_tool("project_get", **kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    client = _get_async_client(request)
+    result = await client.project_get(**kwargs)
+    if result.success:
+        return {"success": True, "data": result.data}
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.get("/projects/{project_id}/{group}/{item_id}")
 async def get_group_item(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称"),
     item_id: str = Path(..., description="条目 ID"),
@@ -90,19 +227,20 @@ async def get_group_item(
     """获取单个条目详情."""
     group = _validate_group(group)
 
-    result = mcp_client.call_tool(
-        "project_get",
+    client = _get_async_client(request)
+    result = await client.project_get(
         project_id=project_id,
         group_name=group,
         item_id=item_id,
     )
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"))
-    raise HTTPException(status_code=404, detail=result.get("error"))
+    if result.success:
+        return {"success": True, "data": result.data}
+    raise HTTPException(status_code=404, detail=result.error)
 
 
 @router.post("/projects/{project_id}/{group}")
 async def create_group_item(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称"),
     summary: str = Query(..., description="摘要"),
@@ -131,14 +269,16 @@ async def create_group_item(
     if related:
         kwargs["related"] = related
 
-    result = mcp_client.call_tool("project_add", **kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="条目创建成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    client = _get_async_client(request)
+    result = await client.project_add(**kwargs)
+    if result.success:
+        return {"success": True, "data": result.data, "message": "条目创建成功"}
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/{group}/{item_id}")
 async def update_group_item(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称"),
     item_id: str = Path(..., description="条目 ID"),
@@ -172,14 +312,26 @@ async def update_group_item(
     if related is not None:
         kwargs["related"] = related
 
-    result = mcp_client.call_tool("project_update", **kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="条目更新成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    client = _get_async_client(request)
+    result = await client.project_update(
+        project_id=project_id,
+        group=group,
+        item_id=item_id,
+        content=content,
+        summary=summary,
+        status=status,
+        severity=severity,
+        tags=tags,
+        related=related,
+    )
+    if result.success:
+        return {"success": True, "data": result.data, "message": "条目更新成功"}
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.delete("/projects/{project_id}/{group}/{item_id}")
 async def delete_group_item(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称"),
     item_id: str = Path(..., description="条目 ID"),
@@ -187,19 +339,20 @@ async def delete_group_item(
     """删除分组条目."""
     group = _validate_group(group)
 
-    result = mcp_client.call_tool(
-        "project_delete",
+    client = _get_async_client(request)
+    result = await client.project_delete(
         project_id=project_id,
         group=group,
         item_id=item_id,
     )
-    if result.get("success"):
-        return ApiResponse.success(message="条目删除成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    if result.success:
+        return {"success": True, "message": "条目删除成功"}
+    raise HTTPException(status_code=400, detail=result.error)
 
 
 @router.put("/projects/{project_id}/{group}/{item_id}/tags")
 async def manage_item_tags(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
     group: str = Path(..., description="分组名称"),
     item_id: str = Path(..., description="条目 ID"),
@@ -222,7 +375,113 @@ async def manage_item_tags(
     else:
         kwargs["tag"] = tag
 
-    result = mcp_client.call_tool("project_item_tag_manage", **kwargs)
-    if result.get("success"):
-        return ApiResponse.success(data=result.get("data"), message="标签操作成功")
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    client = _get_async_client(request)
+    result = await client.manage_item_tags(**kwargs)
+    if result.success:
+        return {"success": True, "data": result.data, "message": "标签操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+# ===================
+# 兼容 Business API 路径格式的端点
+# ===================
+
+@router.post("/groups/custom")
+async def create_custom_group_compat(
+    request: Request,
+    project_id: str = Query(..., description="项目 ID"),
+    group_name: str = Query(..., description="自定义组名称"),
+    content_max_bytes: int = Query(240, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(90, description="summary 字段最大字节数"),
+    allow_related: bool = Query(False, description="是否允许关联"),
+    allowed_related_to: str = Query("", description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(True, description="是否开启 status 字段"),
+    enable_severity: bool = Query(False, description="是否开启 severity 字段"),
+    description: str = Query("", description="组描述"),
+):
+    """创建自定义组 (兼容 Business API 路径)."""
+    client = _get_async_client(request)
+    result = await client.create_custom_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+        description=description,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/groups/custom")
+async def update_group_compat(
+    request: Request,
+    project_id: str = Query(..., description="项目 ID"),
+    group_name: str = Query(..., description="组名称"),
+    content_max_bytes: int = Query(None, description="content 字段最大字节数"),
+    summary_max_bytes: int = Query(None, description="summary 字段最大字节数"),
+    allow_related: bool = Query(None, description="是否允许关联"),
+    allowed_related_to: str = Query(None, description="允许关联的目标组列表（逗号分隔）"),
+    enable_status: bool = Query(None, description="是否开启 status 字段"),
+    enable_severity: bool = Query(None, description="是否开启 severity 字段"),
+    description: Optional[str] = Query(None, description="组描述"),
+):
+    """更新组配置（兼容 Business API 路径）."""
+    client = _get_async_client(request)
+    result = await client.update_group(
+        project_id=project_id,
+        group_name=group_name,
+        content_max_bytes=content_max_bytes,
+        summary_max_bytes=summary_max_bytes,
+        allow_related=allow_related,
+        allowed_related_to=allowed_related_to,
+        enable_status=enable_status,
+        enable_severity=enable_severity,
+        description=description,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.get("/groups/settings")
+async def get_group_settings_compat(
+    request: Request,
+    project_id: str = Query(..., description="项目 ID"),
+):
+    """获取组设置 (兼容 Business API 路径)."""
+    client = _get_async_client(request)
+    result = await client.get_group_settings(project_id)
+    if result.success:
+        return {"success": True, "data": result.data}
+    raise HTTPException(status_code=400, detail=result.error)
+
+
+@router.put("/groups/settings")
+async def update_group_settings_compat(
+    request: Request,
+    project_id: str = Query(..., description="项目 ID"),
+    default_related_rules: str = Query(None, description="默认关联规则（JSON 字符串）"),
+):
+    """更新组设置 (兼容 Business API 路径)."""
+    import json
+
+    rules = None
+    if default_related_rules:
+        try:
+            rules = json.loads(default_related_rules)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="default_related_rules JSON 格式无效")
+
+    client = _get_async_client(request)
+    result = await client.update_group_settings(
+        project_id=project_id,
+        default_related_rules=rules,
+    )
+    if result.success:
+        return {"success": True, "message": result.message or "操作成功"}
+    raise HTTPException(status_code=400, detail=result.error)

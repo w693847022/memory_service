@@ -15,6 +15,7 @@ show_usage() {
     echo "  restart   重启服务"
     echo "  status    查看服务状态"
     echo "  logs      查看服务日志"
+    echo "  init      初始化日志目录"
     echo "  build     重新构建镜像"
     echo "  shell     进入容器 shell"
     echo "  clean     清理容器和镜像"
@@ -29,6 +30,47 @@ start_service() {
     docker-compose up -d
     sleep 2
     docker-compose ps
+}
+
+# 初始化日志目录
+init_logs() {
+    echo "🔧 初始化日志目录..."
+    # 读取 .env 中的日志路径
+    if [ -f "$SCRIPT_DIR/.env" ]; then
+        source "$SCRIPT_DIR/.env"
+    fi
+
+    # 默认日志路径
+    LOG_HOST_PATH="${LOG_HOST_PATH:-~/.project_memory_ai/logs}"
+    # 展开波浪号
+    LOG_HOST_PATH="${LOG_HOST_PATH/#\~/$HOME}"
+
+    # 检查目录是否存在且有正确的所有权
+    if [ -d "$LOG_HOST_PATH" ]; then
+        OWNER=$(stat -c "%U:%G" "$LOG_HOST_PATH" 2>/dev/null || echo "unknown")
+        CURRENT_USER=$(whoami)
+        if [[ "$OWNER" == "root:"* ]] && [[ "$CURRENT_USER" != "root" ]]; then
+            echo "⚠️  检测到日志目录权限问题 (当前: $OWNER)"
+            echo "请手动修复权限:"
+            echo "  sudo chown -R \$USER:\$USER $LOG_HOST_PATH"
+            return 1
+        fi
+    fi
+
+    # 创建日志子目录
+    echo "创建日志目录: $LOG_HOST_PATH"
+    mkdir -p "$LOG_HOST_PATH/business"
+    mkdir -p "$LOG_HOST_PATH/mcp"
+    mkdir -p "$LOG_HOST_PATH/fastapi"
+
+    # 设置权限
+    chmod 755 "$LOG_HOST_PATH" 2>/dev/null || true
+    chmod 755 "$LOG_HOST_PATH/business" 2>/dev/null || true
+    chmod 755 "$LOG_HOST_PATH/mcp" 2>/dev/null || true
+    chmod 755 "$LOG_HOST_PATH/fastapi" 2>/dev/null || true
+
+    echo "✅ 日志目录初始化完成"
+    ls -la "$LOG_HOST_PATH"
 }
 
 # 停止服务
@@ -97,6 +139,9 @@ clean() {
 case "${1:-}" in
     start)
         start_service
+        ;;
+    init)
+        init_logs
         ;;
     stop)
         stop_service

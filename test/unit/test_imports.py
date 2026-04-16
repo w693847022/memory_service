@@ -16,14 +16,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 
 def test_features_tools_imports():
-    """测试 api.tools 能够正确导入全局实例.
+    """测试 mcp_server.tools 能够正确导入全局实例.
 
     这个测试验证导入链路:
-    api/tools.py → features/instances.py → features/project.py, features/stats.py
+    mcp_server/tools/*.py → clients/business_client.py
 
-    如果 memory 和 call_stats 的导入路径配置错误，测试将失败。
+    如果 business_client 和 tools 的导入路径配置错误，测试将失败。
     """
-    print("测试: api.tools 导入链路...")
+    print("测试: mcp_server.tools 导入链路...")
 
     temp_dir = tempfile.mkdtemp()
     try:
@@ -31,8 +31,8 @@ def test_features_tools_imports():
         original_storage = os.environ.get("MCP_STORAGE_DIR")
         os.environ["MCP_STORAGE_DIR"] = temp_dir
 
-        # 导入 api.tools 中的关键函数（这会触发对 memory 和 call_stats 的导入）
-        from api.tools import (
+        # 导入 mcp_server.tools 中的关键函数
+        from mcp_server.tools import (
             project_list,
             project_register,
             project_get,
@@ -46,9 +46,6 @@ def test_features_tools_imports():
             tag_update,
             tag_delete,
             tag_merge,
-            project_stats,
-            stats_summary,
-            stats_cleanup,
         )
 
         # 验证导入的工具函数都是可调用的
@@ -65,12 +62,8 @@ def test_features_tools_imports():
         assert callable(tag_update), "tag_update 应该可调用"
         assert callable(tag_delete), "tag_delete 应该可调用"
         assert callable(tag_merge), "tag_merge 应该可调用"
-        assert callable(project_stats), "project_stats 应该可调用"
-        assert callable(stats_summary), "stats_summary 应该可调用"
-        assert callable(stats_cleanup), "stats_cleanup 应该可调用"
 
-        print("  ✓ api.tools 导入链路测试通过")
-        return True
+        print("  ✓ mcp_server.tools 导入链路测试通过")
     finally:
         if original_storage is not None:
             os.environ["MCP_STORAGE_DIR"] = original_storage
@@ -80,30 +73,30 @@ def test_features_tools_imports():
 
 
 def test_instances_imports_memory_and_call_stats():
-    """测试 features.instances 能正确提供 memory 和 call_stats."""
-    print("测试: features.instances 实例提供...")
+    """测试 business 层能正确提供 Storage 和 CallStats."""
+    print("测试: business 层实例提供...")
 
     temp_dir = tempfile.mkdtemp()
     try:
         original_storage = os.environ.get("MCP_STORAGE_DIR")
         os.environ["MCP_STORAGE_DIR"] = temp_dir
 
-        from features.instances import memory, call_stats
+        from business.storage import Storage
+        from business.call_stats import CallStats
 
-        # 验证 memory 和 call_stats 都是有效实例
-        assert memory is not None, "memory 不应为 None"
-        assert call_stats is not None, "call_stats 不应为 None"
+        # 创建实例验证它们可以正常初始化
+        storage = Storage(storage_dir=temp_dir)
+        call_stats = CallStats(storage_dir=temp_dir)
 
-        # 验证 memory 有正确的方法
-        assert hasattr(memory, "register_project"), "memory 应该有 register_project 方法"
-        assert hasattr(memory, "list_projects"), "memory 应该有 list_projects 方法"
+        # 验证 storage 有正确的方法
+        assert hasattr(storage, "get_project_data"), "storage 应该有 get_project_data 方法"
+        assert hasattr(storage, "save_project_data"), "storage 应该有 save_project_data 方法"
 
         # 验证 call_stats 有正确的方法
         assert hasattr(call_stats, "record_call"), "call_stats 应该有 record_call 方法"
         assert hasattr(call_stats, "get_tool_stats"), "call_stats 应该有 get_tool_stats 方法"
 
-        print("  ✓ features.instances 实例测试通过")
-        return True
+        print("  ✓ business 层实例测试通过")
     finally:
         if original_storage is not None:
             os.environ["MCP_STORAGE_DIR"] = original_storage

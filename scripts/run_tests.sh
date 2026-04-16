@@ -18,12 +18,13 @@ fi
 export PYTHONPATH="$PROJECT_ROOT"
 
 # 默认参数
-TEST_PATH="test/unit"
+TEST_PATH="test"
 VERBOSE=""
 COVERAGE=""
 TB="short"
 PARALLEL=""
 PYTEST_ARGS=""
+MARKER=""
 
 # 帮助信息
 show_help() {
@@ -33,8 +34,10 @@ show_help() {
 选项:
     -a, --all          运行所有测试 (包括集成测试)
     -u, --unit         只运行单元测试 (默认)
-    -m, --mcp          只运行 MCP 接口测试
-    -r, --rest         只运行 REST API 测试
+    -e, --e2e          运行端到端测试 (MCP + REST)
+    -m, --mcp          只运行 MCP Server 端到端测试
+    -r, --rest         只运行 REST API 端到端测试
+    -i, --integration  只运行集成测试
     -v, --verbose      详细输出
     -c, --coverage     生成覆盖率报告
     -q, --quiet        简化输出 (无错误回溯)
@@ -43,10 +46,10 @@ show_help() {
 
 示例:
     $(basename "$0")                    # 运行单元测试
-    $(basename "$0") -v                 # 详细输出
-    $(basename "$0") -m -v              # MCP 测试 + 详细输出
+    $(basename "$0") -e                 # 运行端到端测试
+    $(basename "$0") -m -v              # MCP 端到端测试 + 详细输出
+    $(basename "$0") -r -c              # REST API 端到端测试 + 覆盖率
     $(basename "$0") -c                 # 生成覆盖率报告
-    $(basename "$0") test_mcp_project_add.py  # 运行特定测试文件
 EOF
 }
 
@@ -59,18 +62,30 @@ while [[ $# -gt 0 ]]; do
             ;;
         -u|--unit)
             TEST_PATH="test/unit"
+            MARKER="not e2e"
+            shift
+            ;;
+        -e|--e2e)
+            TEST_PATH="test/e2e"
+            MARKER="e2e"
             shift
             ;;
         -m|--mcp)
-            TEST_PATH="test/unit/test_mcp_*.py"
+            TEST_PATH="test/e2e"
+            MARKER="mcp"
             shift
             ;;
         -r|--rest)
-            TEST_PATH="test/unit/test_rest_api/"
+            TEST_PATH="test/e2e"
+            MARKER="rest"
+            shift
+            ;;
+        -i|--integration)
+            TEST_PATH="test/integration"
             shift
             ;;
         -v|--verbose)
-            VERBOSE="-v"
+            VERBOSE="-v -s"
             shift
             ;;
         -c|--coverage)
@@ -105,6 +120,11 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# 添加标记表达式
+if [[ -n "$MARKER" ]]; then
+    PYTEST_ARGS="$PYTEST_ARGS -m $MARKER"
+fi
 
 # 构建 pytest 命令
 PYTEST_CMD="pytest $TEST_PATH $VERBOSE $COVERAGE --tb=$TB $PARALLEL $PYTEST_ARGS"

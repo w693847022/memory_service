@@ -13,7 +13,8 @@ __pycache__/
 # 测试和覆盖率
 .pytest_cache/
 .coverage
-htmlcov/
+htmlcov*/
+*.coverage
 
 # IDE配置
 .vscode/
@@ -26,8 +27,10 @@ htmlcov/
 .project_memory.json
 .project_memory_ai/
 
+# 日志
+logs/
+
 # 临时文件
-*.log
 *.tmp
 .DS_Store
 

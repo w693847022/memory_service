@@ -9,3 +9,4 @@ rich==14.3.3
 tomli>=2.0.0  # fallback for Python < 3.11
 cachetools>=5.3.0  # TTL cache for memory optimization
 requests==2.32.2  # HTTP 客户端（features/search.py 需要）
+httpx==0.27.2  # Business API HTTP 客户端
