@@ -2,9 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Query, HTTPException, Request
+from fastapi import APIRouter, Query, Body, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
+from src.models.response import ApiResponse
+from src.models.requests.stats import StatsCleanupRequest
+from src.rest_api.utils.handlers import handle_result
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,7 +22,7 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 统计 API
 # ===================
 
-@router.get("/stats")
+@router.get("/stats", response_model=ApiResponse)
 async def get_stats(
     request: Request,
     type: str = Query("", description="统计类型 (tool/project/client/ip/daily/full)"),
@@ -31,12 +34,10 @@ async def get_stats(
     else:
         result = await client.project_stats()
 
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result)
 
 
-@router.get("/stats/summary")
+@router.get("/stats/summary", response_model=ApiResponse)
 async def get_stats_summary(
     request: Request,
     type: str = Query("", description="统计类型 (tool/project/client/ip/daily/full)"),
@@ -57,19 +58,15 @@ async def get_stats_summary(
         kwargs["date"] = date
 
     result = await client.stats_summary(**kwargs)
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result)
 
 
-@router.delete("/stats/cleanup")
+@router.delete("/stats/cleanup", response_model=ApiResponse)
 async def cleanup_stats(
     request: Request,
-    retention_days: int = Query(30, ge=1, description="保留天数"),
+    body: StatsCleanupRequest = Body(...),
 ):
     """清理过期统计数据."""
     client = _get_async_client(request)
-    result = await client.stats_cleanup(retention_days=retention_days)
-    if result.success:
-        return {"success": True, "message": "统计数据清理成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    result = await client.stats_cleanup(retention_days=body.retention_days)
+    return await handle_result(result, message="统计数据清理成功")
