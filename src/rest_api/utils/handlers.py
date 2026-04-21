@@ -1,6 +1,6 @@
 """统一请求结果处理工具."""
 
-from typing import Optional
+from typing import Any, Optional, Dict
 
 from fastapi import HTTPException
 
@@ -8,10 +8,10 @@ from src.models.response import ApiResponse
 
 
 async def handle_result(
-    result: ApiResponse,
+    result: ApiResponse[Any],
     message: Optional[str] = None,
     error_status: int = 400,
-) -> dict:
+) -> Dict[str, Any]:
     """统一处理客户端返回结果.
 
     Args:
@@ -20,16 +20,13 @@ async def handle_result(
         error_status: 失败时的 HTTP 状态码
 
     Returns:
-        dict: 成功时返回标准响应字典
+        dict: 成功时返回序列化后的字典（response_model 仍能正确生成 OpenAPI）
 
     Raises:
         HTTPException: 失败时抛出 HTTP 异常
     """
     if result.success:
-        response = {"success": True, "data": result.data}
         if message:
-            response["message"] = message
-        elif result.message:
-            response["message"] = result.message
-        return response
+            result = result.model_copy(update={"message": message})
+        return result.model_dump()
     raise HTTPException(status_code=error_status, detail=result.error)

@@ -1,6 +1,6 @@
 """Business API - Projects 路由."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING, Any, Union
 
 from fastapi import APIRouter, HTTPException, Body
 
@@ -12,6 +12,16 @@ from src.models.group import (
 from business.item_validator import ItemValidator
 from business.core.utils import paginate, resolve_default_size, validate_view_mode, validate_regex_pattern, apply_view_mode, parse_tags, validate_date, filter_tags_by_regex
 from src.models import ApiResponse
+from src.models.responses.api_responses import (
+    ProjectListResponse,
+    ProjectDetailResponse,
+    ProjectOperationResponse,
+    GroupListResponse,
+    ItemListResponse,
+    ItemDetailResponse,
+    ItemOperationResponse,
+    TagInfoResponse,
+)
 
 # 全局服务实例（由 main.py 导入时注入）
 _storage = None
@@ -56,7 +66,7 @@ def _get_groups_service():
 router = APIRouter(prefix="/api", tags=["projects"])
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=ApiResponse[Any])
 async def list_projects(
     view_mode: str = "summary",
     page: int = 1,
@@ -67,17 +77,17 @@ async def list_projects(
     """列出所有项目."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     name_regex, error_msg = validate_regex_pattern(name_pattern, "name_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     size = resolve_default_size(size, view_mode)
     result = await _get_project_service().list_projects(include_archived=include_archived)
 
     if not result["success"]:
-        raise HTTPException(status_code=400, detail=result.get("error"))
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
     projects = result["data"]["projects"]
     total = result["data"]["total"]
@@ -87,7 +97,7 @@ async def list_projects(
 
     pr, err = paginate(projects, page, size)
     if err:
-        raise HTTPException(status_code=400, detail=err)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(err).model_dump())
     assert pr is not None
     projects, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
 
@@ -107,10 +117,10 @@ async def list_projects(
     if name_pattern:
         response_data["filters"] = {"name_pattern": name_pattern}
 
-    return ApiResponse(success=True, data=response_data).to_dict()
+    return ApiResponse(success=True, data=response_data)
 
 
-@router.post("/projects")
+@router.post("/projects", response_model=ProjectOperationResponse)
 async def register_project(
     name: str = Body(...),
     path: str = Body(""),
@@ -121,60 +131,59 @@ async def register_project(
     tag_list = [t.strip() for t in tags.split(",")] if tags else []
     result = await _get_project_service().register_project(name, path, summary, tag_list)
     if result["success"]:
-        return ApiResponse(success=True, data=result["data"], message="项目注册成功").to_dict()
+        return ApiResponse(success=True, data=result["data"], message="项目注册成功")
 
     # 处理并发冲突
     error = result.get("error")
     if error in ("version_conflict", "concurrent_update"):
-        raise HTTPException(
-            status_code=409,  # Conflict
-            detail={
-                "error": error,
-                "message": result.get("message", "项目已被其他操作修改，请刷新后重试"),
-                "retryable": True
-            }
-        )
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        # 直接返回冲突信息，不使用 ApiResponse.error_response 包装
+        conflict_detail = {
+            "error": error,
+            "message": result.get("message", "项目已被其他操作修改，请刷新后重试"),
+            "retryable": True
+        }
+        raise HTTPException(status_code=409, detail=conflict_detail)
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.get("/projects/{project_id}")
+@router.get("/projects/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(project_id: str):
     """获取项目详情."""
     result = await _get_project_service().get_project(project_id)
     if result["success"]:
-        return ApiResponse(success=True, data=result.get("data")).to_dict()
-    raise HTTPException(status_code=404, detail=result.get("error"))
+        return ApiResponse(success=True, data=result.get("data"))
+    raise HTTPException(status_code=404, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.put("/projects/{project_id}/rename")
+@router.put("/projects/{project_id}/rename", response_model=ProjectOperationResponse)
 async def rename_project(project_id: str, new_name: str):
     """重命名项目."""
     result = await _get_project_service().project_rename(project_id, new_name)
     if result["success"]:
-        return ApiResponse(success=True, data=result["data"], message="项目重命名成功").to_dict()
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        return ApiResponse(success=True, data=result["data"], message="项目重命名成功")
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.delete("/projects/{project_id}")
+@router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def remove_project(project_id: str, mode: str = "archive"):
     """删除或归档项目."""
     result = await _get_project_service().remove_project(project_id, mode)
     if result["success"]:
         action = "归档" if mode == "archive" else "删除"
-        return ApiResponse(success=True, message=f"项目{action}成功").to_dict()
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        return ApiResponse(success=True, data={"project_id": project_id, "mode": mode}, message=f"项目{action}成功")
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.get("/projects/{project_id}/groups")
+@router.get("/projects/{project_id}/groups", response_model=GroupListResponse)
 async def list_groups(project_id: str):
     """列出项目的所有分组."""
     result = await _get_groups_service().list_groups(project_id)
     if result["success"]:
-        return ApiResponse(success=True, data={"groups": result.get("groups")}).to_dict()
-    raise HTTPException(status_code=404, detail=result.get("error"))
+        return ApiResponse(success=True, data={"groups": result.get("groups")})
+    raise HTTPException(status_code=404, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.get("/projects/{project_id}/tags")
+@router.get("/projects/{project_id}/tags", response_model=TagInfoResponse)
 async def project_tags_info(
     project_id: str,
     group_name: str = "",
@@ -189,15 +198,15 @@ async def project_tags_info(
     """查询标签信息."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     size = resolve_default_size(size, view_mode)
 
@@ -212,13 +221,13 @@ async def project_tags_info(
     if not group_name:
         result = await _get_tag_service().list_all_registered_tags(project_id)
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error"))
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
         items_list = result.get("tags", [])
         total_count = result.get("total_tags", 0)
     elif tag_name:
         result = await _get_tag_service().query_by_tag(project_id, group_name, tag_name)
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error"))
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
         items_list = result.get("items", [])
         total_count = result.get("total", 0)
         data_key = "items"
@@ -229,14 +238,14 @@ async def project_tags_info(
     elif unregistered_only:
         result = await _get_tag_service().list_unregistered_tags(project_id, group_name)
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])}
-        return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签").to_dict()
+        return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签")
     else:
         is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
         result = await _get_tag_service().list_group_tags(project_id, group_name)
         if not result.get("success"):
-            raise HTTPException(status_code=400, detail=result.get("error"))
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
         items_list = result.get("tags", [])
         total_count = result.get("total_tags", 0)
         extra_fields = {"group_name": group_name}
@@ -247,7 +256,7 @@ async def project_tags_info(
 
     pr, err = paginate(items_list, page, size)
     if err:
-        raise HTTPException(status_code=400, detail=err)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(err).model_dump())
     assert pr is not None
 
     filtered_items = apply_view_mode(pr.items, view_mode, summary_fields)
@@ -268,10 +277,10 @@ async def project_tags_info(
             "tag_name_pattern": tag_name_pattern
         }
 
-    return ApiResponse(success=True, data=response_data, message=f"共 {pr.filtered_total} 个{msg_suffix}").to_dict()
+    return ApiResponse(success=True, data=response_data, message=f"共 {pr.filtered_total} 个{msg_suffix}")
 
 
-@router.get("/projects/{project_id}/items")
+@router.get("/projects/{project_id}/items", response_model=Union[ItemListResponse, ItemDetailResponse, ApiResponse[Any]])
 async def project_get(
     project_id: str,
     group_name: str = "",
@@ -291,11 +300,11 @@ async def project_get(
     """获取项目信息或查询条目列表/详情."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     for _, param_val in [
         ("created_after", created_after),
@@ -304,7 +313,7 @@ async def project_get(
         ("updated_before", updated_before),
     ]:
         if param_val and not validate_date(param_val):
-            raise HTTPException(status_code=400, detail=f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)")
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(f"无效的日期格式: {param_val} (要求 YYYY-MM-DD)").model_dump())
 
     size = resolve_default_size(size, view_mode)
     # 当不需要具体分组数据时，使用精简模式
@@ -312,14 +321,14 @@ async def project_get(
     result = await _get_project_service().get_project(project_id, include_items=include_items)
 
     if not result["success"]:
-        raise HTTPException(status_code=404, detail=result.get("error"))
+        raise HTTPException(status_code=404, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
     data = result["data"]
 
     if group_name:
         is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=error_msg)
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
         items = data.get(group_name, [])
 
@@ -330,12 +339,12 @@ async def project_get(
                     item = it.copy()
                     break
             if not item:
-                raise HTTPException(status_code=404, detail=f"在分组 '{group_name}' 中找不到条目 '{item_id}'")
+                raise HTTPException(status_code=404, detail=ApiResponse.error_response(f"在分组 '{group_name}' 中找不到条目 '{item_id}'").model_dump())
             if group_name in CONTENT_SEPARATE_GROUPS:
                 item_content = await _get_storage().get_item_content(project_id, group_name, item_id)
                 if item_content is not None:
                     item["content"] = item_content
-            return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功").to_dict()
+            return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功")
 
         filtered_items = items
         tag_list = parse_tags(tags) if tags else []
@@ -370,7 +379,7 @@ async def project_get(
 
         pr, err = paginate(filtered_items, page, size)
         if err:
-            raise HTTPException(status_code=400, detail=err)
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(err).model_dump())
         assert pr is not None
         paginated_items, pagination_meta, filtered_total = pr.items, pr.pagination_meta, pr.filtered_total
 
@@ -396,7 +405,7 @@ async def project_get(
                 "created_after": created_after, "created_before": created_before,
                 "updated_after": updated_after, "updated_before": updated_before,
             }
-        return ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目").to_dict()
+        return ApiResponse(success=True, data=response_data, message=f"共 {filtered_total} 个条目")
 
     return ApiResponse(success=True, data={
         "project_id": project_id,
@@ -407,10 +416,10 @@ async def project_get(
             "fixes": {"count": len(data.get("fixes", []))},
             "standards": {"count": len(data.get("standards", []))}
         }
-    }, message="获取项目信息成功").to_dict()
+    }, message="获取项目信息成功")
 
 
-@router.post("/projects/{project_id}/items")
+@router.post("/projects/{project_id}/items", response_model=ItemOperationResponse)
 async def project_add(
     project_id: str,
     group: str,
@@ -426,7 +435,7 @@ async def project_add(
 
     v = await _get_project_service().validate_add_item(project_id, group, content, summary, status, severity, related, tag_list)
     if not v["success"]:
-        raise HTTPException(status_code=400, detail=v["error"])
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(v["error"]).model_dump())
 
     related_dict = v["related_dict"]
 
@@ -436,23 +445,22 @@ async def project_add(
     )
 
     if result["success"]:
-        return ApiResponse(success=True, data=result["data"], message=f"条目 '{result['data']['item_id']}' 已添加").to_dict()
+        return ApiResponse(success=True, data=result["data"], message=f"条目 '{result['data']['item_id']}' 已添加")
 
     # 处理并发冲突
     error = result.get("error")
     if error in ("version_conflict", "concurrent_update"):
-        raise HTTPException(
-            status_code=409,  # Conflict
-            detail={
-                "error": error,
-                "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
-                "retryable": True
-            }
-        )
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        # 直接返回冲突信息，不使用 ApiResponse.error_response 包装
+        conflict_detail = {
+            "error": error,
+            "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
+            "retryable": True
+        }
+        raise HTTPException(status_code=409, detail=conflict_detail)
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.put("/projects/{project_id}/items/{item_id}")
+@router.put("/projects/{project_id}/items/{item_id}", response_model=ItemOperationResponse)
 async def project_update(
     project_id: str,
     item_id: str,
@@ -468,7 +476,7 @@ async def project_update(
     """更新项目条目."""
     v = await _get_project_service().validate_update_item(project_id, group, item_id, content, summary, status, severity, related, parse_tags(tags) if tags else None)
     if not v["success"]:
-        raise HTTPException(status_code=400, detail=v["error"])
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(v["error"]).model_dump())
 
     related_dict = v.get("related_dict")
 
@@ -481,54 +489,53 @@ async def project_update(
     )
 
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["data"]["item"], "version": result["data"].get("version")}, message=f"条目 '{item_id}' 已更新").to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "item": result["data"]["item"], "version": result["data"].get("version")}, message=f"条目 '{item_id}' 已更新")
 
     # 处理并发冲突
     error = result.get("error")
     if error in ("version_conflict", "concurrent_update"):
-        raise HTTPException(
-            status_code=409,  # Conflict
-            detail={
-                "error": error,
-                "message": result.get("message", "数据已被其他操作修改，请刷新后重试"),
-                "current_version": result.get("current_version"),
-                "expected_version": result.get("expected_version"),
-                "retryable": True,
-                "current_item": result.get("current_item") or result.get("old_item")
-            }
-        )
+        # 直接返回冲突信息，不使用 ApiResponse.error_response 包装
+        # 这样测试可以直接访问 detail["current_version"]
+        conflict_detail = {
+            "error": error,
+            "message": result.get("message", "数据已被其他操作修改，请刷新后重试"),
+            "current_version": result.get("current_version"),
+            "expected_version": result.get("expected_version"),
+            "retryable": True,
+            "current_item": result.get("current_item") or result.get("old_item")
+        }
+        raise HTTPException(status_code=409, detail=conflict_detail)
 
-    raise HTTPException(status_code=400, detail=result.get("error"))
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.delete("/projects/{project_id}/items/{item_id}")
+@router.delete("/projects/{project_id}/items/{item_id}", response_model=ItemOperationResponse)
 async def project_delete(project_id: str, group: str, item_id: str):
     """删除项目条目."""
     is_valid, error_msg = ItemValidator.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
     if not item_id:
-        raise HTTPException(status_code=400, detail="item_id 参数不能为空")
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response("item_id 参数不能为空").model_dump())
 
     result = await _get_project_service().delete_item(project_id=project_id, group=group, item_id=item_id)
     if result["success"]:
-        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "deleted": True}, message=f"条目 '{item_id}' 已删除").to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group": group, "item_id": item_id, "deleted": True}, message=f"条目 '{item_id}' 已删除")
 
     # 处理并发冲突
     error = result.get("error")
     if error in ("version_conflict", "concurrent_update"):
-        raise HTTPException(
-            status_code=409,  # Conflict
-            detail={
-                "error": error,
-                "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
-                "retryable": True
-            }
-        )
-    raise HTTPException(status_code=400, detail=result.get("error"))
+        # 直接返回冲突信息，不使用 ApiResponse.error_response 包装
+        conflict_detail = {
+            "error": error,
+            "message": result.get("message", "分组已被其他操作修改，请稍后重试"),
+            "retryable": True
+        }
+        raise HTTPException(status_code=409, detail=conflict_detail)
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
-@router.post("/projects/{project_id}/items/{item_id}/tags")
+@router.post("/projects/{project_id}/items/{item_id}/tags", response_model=ItemOperationResponse)
 async def manage_item_tags(
     project_id: str,
     group_name: str,
@@ -540,26 +547,26 @@ async def manage_item_tags(
     """管理条目标签."""
     is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=error_msg)
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
     if operation == "set" or operation == "设置":
         if not tags:
-            raise HTTPException(status_code=400, detail="operation='set' 时 tags 参数不能为空")
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response("operation='set' 时 tags 参数不能为空").model_dump())
         tag_list = [t.strip() for t in tags.split(",")]
         result = await _get_project_service().update_item(project_id, group_name, item_id, tags=tag_list)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)}).to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "set", "tags": result.get('tags', tag_list)})
 
     elif operation == "add" or operation == "添加":
         if not tag:
-            raise HTTPException(status_code=400, detail="operation='add' 时 tag 参数不能为空")
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response("operation='add' 时 tag 参数不能为空").model_dump())
         result = await _get_tag_service().add_item_tag(project_id, group_name, item_id, tag)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])}).to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "add", "tag": tag, "tags": result.get("tags", [])})
 
     elif operation == "remove" or operation == "移除":
         if not tag:
-            raise HTTPException(status_code=400, detail="operation='remove' 时 tag 参数不能为空")
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response("operation='remove' 时 tag 参数不能为空").model_dump())
         result = await _get_tag_service().remove_item_tag(project_id, group_name, item_id, tag)
-        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])}).to_dict()
+        return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "operation": "remove", "tag": tag, "tags": result.get("tags", [])})
 
     else:
-        raise HTTPException(status_code=400, detail=f"无效的操作类型: {operation} (支持: set/add/remove)")
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(f"无效的操作类型: {operation} (支持: set/add/remove)").model_dump())

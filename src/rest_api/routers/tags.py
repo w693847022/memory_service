@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Query, Path, Body, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
-from src.models.response import ApiResponse
+from src.models.responses.api_responses import TagInfoResponse, TagOperationResponse
 from src.models.requests.tag import (
     TagRegisterRequest,
     TagUpdateRequest,
@@ -27,7 +27,7 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 兼容 Business API 路径格式的端点
 # ===================
 
-@router.post("/tags/register", response_model=ApiResponse)
+@router.post("/tags/register", response_model=TagOperationResponse)
 async def register_tag_compat(
     request: Request,
     body: TagRegisterRequest = Body(...),
@@ -43,7 +43,7 @@ async def register_tag_compat(
     return await handle_result(result, message="标签注册成功")
 
 
-@router.put("/tags/update", response_model=ApiResponse)
+@router.put("/tags/update", response_model=TagOperationResponse)
 async def update_tag_compat(
     request: Request,
     body: TagUpdateRequest = Body(...),
@@ -58,7 +58,7 @@ async def update_tag_compat(
     return await handle_result(result, message="标签更新成功")
 
 
-@router.delete("/tags/delete", response_model=ApiResponse)
+@router.delete("/tags/delete", response_model=TagOperationResponse)
 async def delete_tag_compat(
     request: Request,
     body: TagDeleteRequest = Body(...),
@@ -73,7 +73,7 @@ async def delete_tag_compat(
     return await handle_result(result, message="标签删除成功")
 
 
-@router.post("/tags/merge", response_model=ApiResponse)
+@router.post("/tags/merge", response_model=TagOperationResponse)
 async def merge_tags_compat(
     request: Request,
     body: TagMergeRequest = Body(...),
@@ -92,7 +92,7 @@ async def merge_tags_compat(
 # 原有标签管理 API
 # ===================
 
-@router.get("/tags", response_model=ApiResponse)
+@router.get("/tags", response_model=TagInfoResponse)
 async def list_tags(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),
@@ -117,7 +117,7 @@ async def list_tags(
     return await handle_result(result)
 
 
-@router.post("/tags", response_model=ApiResponse)
+@router.post("/tags", response_model=TagOperationResponse)
 async def register_tag(
     request: Request,
     body: TagRegisterRequest = Body(...),
@@ -133,7 +133,7 @@ async def register_tag(
     return await handle_result(result, message="标签注册成功")
 
 
-@router.put("/tags/{tag_name}", response_model=ApiResponse)
+@router.put("/tags/{tag_name}", response_model=TagOperationResponse)
 async def update_tag(
     request: Request,
     tag_name: str = Path(..., description="标签名称"),
@@ -149,7 +149,7 @@ async def update_tag(
     return await handle_result(result, message="标签更新成功")
 
 
-@router.delete("/tags/{tag_name}", response_model=ApiResponse)
+@router.delete("/tags/{tag_name}", response_model=TagOperationResponse)
 async def delete_tag(
     request: Request,
     tag_name: str = Path(..., description="标签名称"),

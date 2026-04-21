@@ -5,7 +5,6 @@ import logging
 from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
-from src.models.response import ApiResponse
 from src.models.requests.group import (
     GroupCreateRequest,
     GroupUpdateRequest,
@@ -13,6 +12,15 @@ from src.models.requests.group import (
     ItemCreateRequest,
     ItemUpdateRequest,
     ItemTagManageRequest,
+)
+from src.models.responses.api_responses import (
+    GroupListResponse,
+    GroupSettingsResponse,
+    GroupOperationResponse,
+    ItemListResponse,
+    ItemDetailResponse,
+    ItemOperationResponse,
+    MessageResponse,
 )
 from src.rest_api.utils.handlers import handle_result
 
@@ -43,7 +51,7 @@ def _validate_group(group: str) -> str:
 # 自定义组管理 API（放在通用路由之前，避免被通用路由匹配）
 # ===================
 
-@router.post("/projects/{project_id}/groups", response_model=ApiResponse)
+@router.post("/projects/{project_id}/groups", response_model=GroupOperationResponse)
 async def create_custom_group(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -65,7 +73,7 @@ async def create_custom_group(
     return await handle_result(result)
 
 
-@router.put("/projects/{project_id}/groups/{group_name}", response_model=ApiResponse)
+@router.put("/projects/{project_id}/groups/{group_name}", response_model=GroupOperationResponse)
 async def update_group(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -92,7 +100,7 @@ async def update_group(
     return await handle_result(result)
 
 
-@router.delete("/projects/{project_id}/groups/{group_name}", response_model=ApiResponse)
+@router.delete("/projects/{project_id}/groups/{group_name}", response_model=GroupOperationResponse)
 async def delete_custom_group(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -108,7 +116,7 @@ async def delete_custom_group(
 # 组设置 API
 # ===================
 
-@router.get("/projects/{project_id}/group-settings", response_model=ApiResponse)
+@router.get("/projects/{project_id}/group-settings", response_model=GroupSettingsResponse)
 async def get_group_settings(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -119,7 +127,7 @@ async def get_group_settings(
     return await handle_result(result)
 
 
-@router.put("/projects/{project_id}/group-settings", response_model=ApiResponse)
+@router.put("/projects/{project_id}/group-settings", response_model=GroupOperationResponse)
 async def update_group_settings(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -147,7 +155,7 @@ async def update_group_settings(
 # 分组条目管理 API
 # ===================
 
-@router.get("/projects/{project_id}/{group}", response_model=ApiResponse)
+@router.get("/projects/{project_id}/{group}", response_model=ItemListResponse)
 async def list_group_items(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -197,7 +205,7 @@ async def list_group_items(
     return await handle_result(result)
 
 
-@router.get("/projects/{project_id}/{group}/{item_id}", response_model=ApiResponse)
+@router.get("/projects/{project_id}/{group}/{item_id}", response_model=ItemDetailResponse)
 async def get_group_item(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -216,7 +224,7 @@ async def get_group_item(
     return await handle_result(result, error_status=404)
 
 
-@router.post("/projects/{project_id}/{group}", response_model=ApiResponse)
+@router.post("/projects/{project_id}/{group}", response_model=ItemOperationResponse)
 async def create_group_item(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -246,7 +254,7 @@ async def create_group_item(
     return await handle_result(result, message="条目创建成功")
 
 
-@router.put("/projects/{project_id}/{group}/{item_id}", response_model=ApiResponse)
+@router.put("/projects/{project_id}/{group}/{item_id}", response_model=ItemOperationResponse)
 async def update_group_item(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -272,7 +280,7 @@ async def update_group_item(
     return await handle_result(result, message="条目更新成功")
 
 
-@router.delete("/projects/{project_id}/{group}/{item_id}", response_model=ApiResponse)
+@router.delete("/projects/{project_id}/{group}/{item_id}", response_model=ItemOperationResponse)
 async def delete_group_item(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -291,7 +299,7 @@ async def delete_group_item(
     return await handle_result(result, message="条目删除成功")
 
 
-@router.put("/projects/{project_id}/{group}/{item_id}/tags", response_model=ApiResponse)
+@router.put("/projects/{project_id}/{group}/{item_id}/tags", response_model=ItemOperationResponse)
 async def manage_item_tags(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -323,7 +331,7 @@ async def manage_item_tags(
 # 兼容 Business API 路径格式的端点
 # ===================
 
-@router.post("/groups/custom", response_model=ApiResponse)
+@router.post("/groups/custom", response_model=GroupOperationResponse)
 async def create_custom_group_compat(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),
@@ -352,7 +360,7 @@ async def create_custom_group_compat(
     return await handle_result(result)
 
 
-@router.put("/groups/custom", response_model=ApiResponse)
+@router.put("/groups/custom", response_model=GroupOperationResponse)
 async def update_group_compat(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),
@@ -381,7 +389,7 @@ async def update_group_compat(
     return await handle_result(result)
 
 
-@router.get("/groups/settings", response_model=ApiResponse)
+@router.get("/groups/settings", response_model=GroupSettingsResponse)
 async def get_group_settings_compat(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),
@@ -392,7 +400,7 @@ async def get_group_settings_compat(
     return await handle_result(result)
 
 
-@router.put("/groups/settings", response_model=ApiResponse)
+@router.put("/groups/settings", response_model=GroupOperationResponse)
 async def update_group_settings_compat(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),

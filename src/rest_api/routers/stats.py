@@ -5,8 +5,8 @@ import logging
 from fastapi import APIRouter, Query, Body, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
-from src.models.response import ApiResponse
 from src.models.requests.stats import StatsCleanupRequest
+from src.models.responses.api_responses import StatsResponse, MessageResponse
 from src.rest_api.utils.handlers import handle_result
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 统计 API
 # ===================
 
-@router.get("/stats", response_model=ApiResponse)
+@router.get("/stats", response_model=StatsResponse)
 async def get_stats(
     request: Request,
     type: str = Query("", description="统计类型 (tool/project/client/ip/daily/full)"),
@@ -37,7 +37,7 @@ async def get_stats(
     return await handle_result(result)
 
 
-@router.get("/stats/summary", response_model=ApiResponse)
+@router.get("/stats/summary", response_model=StatsResponse)
 async def get_stats_summary(
     request: Request,
     type: str = Query("", description="统计类型 (tool/project/client/ip/daily/full)"),
@@ -61,7 +61,7 @@ async def get_stats_summary(
     return await handle_result(result)
 
 
-@router.delete("/stats/cleanup", response_model=ApiResponse)
+@router.delete("/stats/cleanup", response_model=MessageResponse)
 async def cleanup_stats(
     request: Request,
     body: StatsCleanupRequest = Body(...),

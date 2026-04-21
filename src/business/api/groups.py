@@ -1,12 +1,21 @@
 """Business API - Groups 路由."""
 
-from typing import Optional
+from typing import Optional, Union
 
 from fastapi import APIRouter, HTTPException, Body
 
 from src.models.group import UnifiedGroupConfig
 from src.models.enums import GroupType
 from src.models import ApiResponse
+from src.models.responses.api_responses import (
+    GroupListResponse,
+    GroupSettingsResponse,
+    GroupOperationResponse,
+    ItemListResponse,
+    ItemDetailResponse,
+    ItemOperationResponse,
+    MessageResponse,
+)
 
 # 全局服务实例
 _storage = None
@@ -58,7 +67,7 @@ async def _create_custom_group(
     )
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result.get("error", "创建自定义组失败"))
-    return result
+    return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name}, message=result.get("message", "自定义组创建成功"))
 
 
 async def _update_group(
@@ -105,7 +114,7 @@ async def _update_group(
         error_msg = result.get("error", "更新组配置失败")
         status_code = 404 if "不存在" in error_msg or "无效的分组类型" in error_msg else 400
         raise HTTPException(status_code=status_code, detail=error_msg)
-    return result
+    return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "updated": True}, message=result.get("message", "组配置更新成功"))
 
 
 async def _delete_custom_group(project_id: str, group_name: str):
@@ -115,7 +124,7 @@ async def _delete_custom_group(project_id: str, group_name: str):
         error_msg = result.get("error", "删除自定义组失败")
         status_code = 404 if "不存在" in error_msg else 400
         raise HTTPException(status_code=status_code, detail=error_msg)
-    return result
+    return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "deleted": True}, message=result.get("message", "自定义组删除成功"))
 
 
 async def _update_group_settings(project_id: str, default_related_rules: Optional[dict] = None):
@@ -123,11 +132,12 @@ async def _update_group_settings(project_id: str, default_related_rules: Optiona
     result = await _get_groups_service().update_group_settings(project_id, default_related_rules)
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result.get("error", "更新组设置失败"))
-    return result
+    # 返回 ApiResponse 以保持一致性
+    return ApiResponse(success=True, data=result.get("data", {}), message=result.get("message", "组设置更新成功"))
 
 
 # 路由函数（调用内部函数）
-@router.post("/groups/custom")
+@router.post("/groups/custom", response_model=GroupOperationResponse)
 async def create_custom_group(
     project_id: str,
     group_name: str,
@@ -147,7 +157,7 @@ async def create_custom_group(
     )
 
 
-@router.put("/groups/custom")
+@router.put("/groups/custom", response_model=GroupOperationResponse)
 async def update_group(
     project_id: str,
     group_name: str,
@@ -171,13 +181,13 @@ async def update_group(
     )
 
 
-@router.delete("/groups/custom")
+@router.delete("/groups/custom", response_model=GroupOperationResponse)
 async def delete_custom_group(project_id: str, group_name: str):
     """删除自定义组."""
     return await _delete_custom_group(project_id, group_name)
 
 
-@router.get("/groups/settings")
+@router.get("/groups/settings", response_model=GroupSettingsResponse)
 async def get_group_settings(project_id: str, group: str = ""):
     """获取组设置（支持单组查询）."""
     if group:
@@ -186,16 +196,16 @@ async def get_group_settings(project_id: str, group: str = ""):
             raise HTTPException(status_code=500, detail="组服务未初始化")
         result = await _get_groups_service().get_group_config_for_api(project_id, group)
         if result["success"]:
-            return ApiResponse(success=True, data={"config": result.get("config")}).to_dict()
-        raise HTTPException(status_code=404, detail=result.get("error"))
+            return ApiResponse(success=True, data={"config": result.get("config")})
+        raise HTTPException(status_code=404, detail=result.get("error") or "Unknown error")
     else:
         # 获取全局设置（保持向后兼容）
         group_configs = await _get_storage().get_group_configs(project_id)
         settings = group_configs.get("group_settings", {})
-        return ApiResponse(success=True, data={"settings": settings}).to_dict()
+        return ApiResponse(success=True, data={"settings": settings})
 
 
-@router.put("/groups/settings")
+@router.put("/groups/settings", response_model=MessageResponse)
 async def update_group_settings(
     project_id: str,
     group: str = "",
@@ -211,8 +221,8 @@ async def update_group_settings(
             raise HTTPException(status_code=500, detail="组服务未初始化")
         result = await _get_groups_service().update_group_config(project_id, group, config)
         if result["success"]:
-            return ApiResponse(success=True, message=result.get("message")).to_dict()
-        raise HTTPException(status_code=400, detail=result.get("error"))
+            return ApiResponse(success=True, message=result.get("message"))
+        raise HTTPException(status_code=400, detail=result.get("error") or "Unknown error")
     else:
         # 更新全局设置（保持向后兼容）
         return await _update_group_settings(project_id, default_related_rules)

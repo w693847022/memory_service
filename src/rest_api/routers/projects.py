@@ -5,8 +5,14 @@ import logging
 from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
-from src.models.response import ApiResponse
 from src.models.requests.project import ProjectRegisterRequest, ProjectRenameRequest
+from src.models.responses.api_responses import (
+    ProjectListResponse,
+    ProjectDetailResponse,
+    ProjectOperationResponse,
+    GroupListResponse,
+    TagInfoResponse,
+)
 from src.rest_api.utils.handlers import handle_result
 
 logger = logging.getLogger(__name__)
@@ -22,7 +28,7 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 项目管理 API
 # ===================
 
-@router.get("/projects", response_model=ApiResponse)
+@router.get("/projects", response_model=ProjectListResponse)
 async def list_projects(
     request: Request,
     page: int = Query(1, ge=1, description="页码"),
@@ -43,7 +49,7 @@ async def list_projects(
     return await handle_result(result)
 
 
-@router.post("/projects", response_model=ApiResponse)
+@router.post("/projects", response_model=ProjectOperationResponse)
 async def register_project(
     request: Request,
     body: ProjectRegisterRequest = Body(...),
@@ -59,7 +65,7 @@ async def register_project(
     return await handle_result(result, message="项目注册成功")
 
 
-@router.get("/projects/{project_id}", response_model=ApiResponse)
+@router.get("/projects/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -70,7 +76,7 @@ async def get_project(
     return await handle_result(result, error_status=404)
 
 
-@router.put("/projects/{project_id}", response_model=ApiResponse)
+@router.put("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def update_project(
     project_id: str = Path(..., description="项目 ID"),
 ):
@@ -78,7 +84,7 @@ async def update_project(
     raise HTTPException(status_code=400, detail="此接口暂不支持，请使用 /projects/{project_id}/rename 重命名项目")
 
 
-@router.delete("/projects/{project_id}", response_model=ApiResponse)
+@router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def delete_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -94,7 +100,7 @@ async def delete_project(
     return await handle_result(result, message=f"项目{action}成功")
 
 
-@router.put("/projects/{project_id}/rename", response_model=ApiResponse)
+@router.put("/projects/{project_id}/rename", response_model=ProjectOperationResponse)
 async def rename_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -109,7 +115,7 @@ async def rename_project(
     return await handle_result(result, message="项目重命名成功")
 
 
-@router.get("/projects/{project_id}/groups", response_model=ApiResponse)
+@router.get("/projects/{project_id}/groups", response_model=GroupListResponse)
 async def list_project_groups(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -120,7 +126,7 @@ async def list_project_groups(
     return await handle_result(result, error_status=404)
 
 
-@router.get("/projects/{project_id}/tags", response_model=ApiResponse)
+@router.get("/projects/{project_id}/tags", response_model=TagInfoResponse)
 async def list_project_tags(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),

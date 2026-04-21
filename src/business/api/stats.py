@@ -3,6 +3,17 @@
 from fastapi import APIRouter, HTTPException
 
 from src.models import ApiResponse
+from src.models.responses.api_responses import (
+    StatsResponse,
+    MessageResponse,
+)
+from src.models.responses.data_types import (
+    GlobalStatsData,
+    ToolStatsData,
+    ProjectStatsData,
+    DailyStatsData,
+    StatsCleanupResult,
+)
 
 # 全局服务实例
 _storage = None
@@ -31,7 +42,7 @@ def _get_stats_service():
 router = APIRouter(prefix="/api", tags=["stats"])
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=StatsResponse)
 async def project_stats():
     """获取全局统计信息."""
     await _get_storage().refresh_projects_cache()
@@ -78,81 +89,111 @@ async def project_stats():
         "top_note_tags": sorted(note_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     }
 
-    return ApiResponse(success=True, data=stats, message="获取统计成功").to_dict()
+    return StatsResponse(success=True, data=stats, message="获取统计成功")
 
 
-@router.get("/stats/summary")
+@router.get("/stats/summary", response_model=StatsResponse)
 async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "", date: str = ""):
     """获取统计摘要."""
     if type == "tool" or type == "工具":
         if tool_name:
             result = _get_stats_service().get_tool_stats(tool_name)
             if not result["success"]:
-                raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={
+                error_msg = result.get("error")
+                if error_msg is None:
+                    error_msg = "获取工具统计失败"
+                raise HTTPException(status_code=400, detail=error_msg)
+            return StatsResponse(success=True, data={
                 "type": "tool", "tool_name": tool_name, "total": result['total'],
                 "first_called": result.get('first_called'), "last_called": result.get('last_called'),
                 "by_project": result.get("by_project", {}), "by_client": result.get("by_client", {}),
                 "by_ip": result.get("by_ip", {})
-            }, message=f"工具 '{tool_name}' 调用统计").to_dict()
+            }, message=f"工具 '{tool_name}' 调用统计")
         else:
             result = _get_stats_service().get_tool_stats()
             if not result["success"]:
-                raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计").to_dict()
+                error_msg = result.get("error")
+                if error_msg is None:
+                    error_msg = "获取工具统计失败"
+                raise HTTPException(status_code=400, detail=error_msg)
+            return StatsResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计")
 
     elif type == "project" or type == "项目":
         if not project_id:
             raise HTTPException(status_code=400, detail="project_id 参数不能为空")
         result = _get_stats_service().get_project_stats(project_id)
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计").to_dict()
+            error_msg = result.get("error")
+            if error_msg is None:
+                error_msg = "获取项目统计失败"
+            raise HTTPException(status_code=400, detail=error_msg)
+        return StatsResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计")
 
     elif type == "client" or type == "客户端":
         result = _get_stats_service().get_client_stats()
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计").to_dict()
+            error_msg = result.get("error")
+            if error_msg is None:
+                error_msg = "获取客户端统计失败"
+            raise HTTPException(status_code=400, detail=error_msg)
+        return StatsResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计")
 
     elif type == "ip" or type == "IP":
         result = _get_stats_service().get_ip_stats()
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计").to_dict()
+            error_msg = result.get("error")
+            if error_msg is None:
+                error_msg = "获取IP统计失败"
+            raise HTTPException(status_code=400, detail=error_msg)
+        return StatsResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计")
 
     elif type == "daily" or type == "每日":
         if date:
             result = _get_stats_service().get_daily_stats(date)
             if not result["success"]:
-                raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计").to_dict()
+                error_msg = result.get("error")
+                if error_msg is None:
+                    error_msg = "获取每日统计失败"
+                raise HTTPException(status_code=400, detail=error_msg)
+            return StatsResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计")
         else:
             result = _get_stats_service().get_daily_stats()
             if not result["success"]:
-                raise HTTPException(status_code=400, detail=result.get("error"))
-            return ApiResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计").to_dict()
+                error_msg = result.get("error")
+                if error_msg is None:
+                    error_msg = "获取每日统计失败"
+                raise HTTPException(status_code=400, detail=error_msg)
+            return StatsResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计")
 
     elif type == "full" or type == "完整":
         result = _get_stats_service().get_full_summary()
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计").to_dict()
+            error_msg = result.get("error")
+            if error_msg is None:
+                error_msg = "获取完整统计失败"
+            raise HTTPException(status_code=400, detail=error_msg)
+        return StatsResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计")
 
     else:
         result = _get_stats_service().get_full_summary()
         if not result["success"]:
-            raise HTTPException(status_code=400, detail=result.get("error"))
-        return ApiResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要").to_dict()
+            error_msg = result.get("error")
+            if error_msg is None:
+                error_msg = "获取统计摘要失败"
+            raise HTTPException(status_code=400, detail=error_msg)
+        return StatsResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要")
 
 
-@router.delete("/stats/cleanup")
+@router.delete("/stats/cleanup", response_model=StatsResponse)
 async def stats_cleanup(retention_days: int = 30):
     """清理过期统计数据."""
     result = _get_stats_service().cleanup_stats(retention_days)
     if not result["success"]:
-        raise HTTPException(status_code=400, detail=result.get("error"))
-    return ApiResponse(success=True, data={
+        error_msg = result.get("error")
+        if error_msg is None:
+            error_msg = "清理统计数据失败"
+        raise HTTPException(status_code=400, detail=error_msg)
+    return StatsResponse(success=True, data={
         "retention_days": retention_days,
         "cutoff_date": result["cleanup_result"]['cutoff_date'],
         "cleanup_details": {
@@ -164,4 +205,4 @@ async def stats_cleanup(retention_days: int = 30):
         },
         "storage_before": result["before"],
         "storage_after": result["after"]
-    }, message="统计数据清理完成").to_dict()
+    }, message="统计数据清理完成")

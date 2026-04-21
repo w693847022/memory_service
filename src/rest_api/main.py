@@ -116,6 +116,7 @@ app.add_middleware(RequestTrackerMiddleware)
 # ===================
 
 from src.models import ApiResponse
+from src.models.responses.api_responses import MessageResponse
 
 
 # ===================
@@ -128,7 +129,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content=ApiResponse.error_response(f"Internal server error: {str(exc)}")
+        content=ApiResponse.error_response(f"Internal server error: {str(exc)}").model_dump()
     )
 
 
@@ -138,7 +139,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     logger.warning(f"Validation error: {exc}")
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
-        content=ApiResponse.error_response(str(exc))
+        content=ApiResponse.error_response(str(exc)).model_dump()
     )
 
 
@@ -146,14 +147,14 @@ async def value_error_handler(request: Request, exc: ValueError):
 # 健康检查
 # ===================
 
-@app.get("/health", tags=["Health"])
+@app.get("/health", tags=["Health"], response_model=MessageResponse)
 @limiter.limit(os.getenv("RATE_LIMIT_HEALTH", "60/minute"))
 async def health_check(request: Request):
     """健康检查端点."""
     return ApiResponse.success_response(data={"status": "healthy"})
 
 
-@app.get("/", tags=["Root"])
+@app.get("/", tags=["Root"], response_model=MessageResponse)
 @limiter.limit("30/minute")
 async def root(request: Request):
     """根路径."""
