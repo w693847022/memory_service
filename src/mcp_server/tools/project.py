@@ -5,7 +5,7 @@
 
 from typing import Optional, Union, Dict, List
 
-from ._shared import _get_client, _tool_response
+from ._shared import _get_client, _tool_response, _check_mcp_access, _error_response
 
 
 # ==================== 参数说明 ====================
@@ -162,18 +162,21 @@ def project_groups_list(project_id: str) -> str:
 
     Returns:
         JSON 格式的分组列表，每个分组包含：
-        - name: 分组名称
+        - name: 分组名称（用于标识和引用分组）
         - count: 该分组下的条目数量
-        - is_builtin: 是否为内置分组
-        - content_max_bytes: 内容最大字节数
-        - summary_max_bytes: 摘要最大字节数
-        - allow_related: 是否允许关联其他分组
-        - allowed_related_to: 允许关联的分组列表
-        - enable_status: 是否启用状态字段
-        - enable_severity: 是否启用严重程度字段
-        - status_values: 支持的状态值列表
-        - severity_values: 支持的严重程度值列表
-        - required_fields: 必填字段列表
+        - is_builtin: 是否为内置分组（内置组不可删除）
+        - content_max_bytes: 内容最大字节数（条目content字段的长度限制）
+        - summary_max_bytes: 摘要最大字节数（条目summary字段的长度限制）
+        - allow_related: 是否允许关联其他分组（控制related字段是否可用）
+        - allowed_related_to: 允许关联的分组列表（related字段可引用的目标分组）
+        - enable_status: 是否启用状态字段（控制status字段是否可用）
+        - enable_severity: 是否启用严重程度字段（控制severity字段是否可用）
+        - status_values: 支持的状态值列表（status字段的可选值）
+        - severity_values: 支持的严重程度值列表（severity字段的可选值）
+        - required_fields: 必填字段列表（添加条目时必须提供的字段）
+        - description: 分组描述（说明该分组的用途）
+        - max_tags: 单个条目最大标签数量
+        - mcp_access: MCP访问控制（writable=可读写, readable=只读, disabled=不可访问）
     """
     client = _get_client()
     # list_groups 现在返回完整配置 + settings
@@ -227,6 +230,10 @@ def project_tags_info(
     Returns:
         JSON 格式的标签信息
     """
+    if group_name:
+        access_error = _check_mcp_access(project_id, group_name, "read")
+        if access_error:
+            return _error_response(access_error)
     client = _get_client()
     result = client.project_tags_info(
         project_id=project_id,
@@ -287,6 +294,9 @@ def project_add(
     Returns:
         JSON 格式的操作结果，包含新生成的 item_id
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.project_add(
         project_id=project_id,
@@ -353,6 +363,9 @@ def project_update(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     import json
     # 如果 related 是字典，转换为 JSON 字符串
     related_str = json.dumps(related) if isinstance(related, dict) else related
@@ -392,6 +405,9 @@ def project_delete(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.project_delete(project_id=project_id, group=group, item_id=item_id)
     return _tool_response(result)
@@ -453,6 +469,9 @@ def project_item_tag_manage(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group_name, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.manage_item_tags(
         project_id=project_id,
@@ -536,6 +555,10 @@ def project_get(
     Returns:
         JSON 格式的项目信息、条目列表或单个条目详情
     """
+    if group_name:
+        access_error = _check_mcp_access(project_id, group_name, "read")
+        if access_error:
+            return _error_response(access_error)
     client = _get_client()
     result = client.project_get(
         project_id=project_id,

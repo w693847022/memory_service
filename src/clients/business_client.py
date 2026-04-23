@@ -386,7 +386,8 @@ class BusinessApiClient:
         allowed_related_to: str = "",
         enable_status: bool = True,
         enable_severity: bool = False,
-        description: str = ""
+        description: str = "",
+        mcp_access: str = "writable"
     ) -> ApiResponse:
         """创建自定义组."""
         params = {
@@ -398,7 +399,8 @@ class BusinessApiClient:
             "allowed_related_to": allowed_related_to,
             "enable_status": enable_status,
             "enable_severity": enable_severity,
-            "description": description
+            "description": description,
+            "mcp_access": mcp_access
         }
         return self._post("/api/groups/custom", params=params)
 
@@ -416,7 +418,8 @@ class BusinessApiClient:
         status_values: Optional[str] = None,
         severity_values: Optional[str] = None,
         required_fields: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        mcp_access: Optional[str] = None
     ) -> ApiResponse:
         """更新组配置."""
         params = {"project_id": project_id, "group_name": group_name}
@@ -425,7 +428,7 @@ class BusinessApiClient:
                      ("enable_status", enable_status), ("enable_severity", enable_severity),
                      ("max_tags", max_tags), ("status_values", status_values),
                      ("severity_values", severity_values), ("required_fields", required_fields),
-                     ("description", description)]:
+                     ("description", description), ("mcp_access", mcp_access)]:
             if v is not None:
                 params[k] = v
         return self._put("/api/groups/custom", params=params)

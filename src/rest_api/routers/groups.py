@@ -1,6 +1,7 @@
 """分组管理 API 路由."""
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
 
@@ -69,6 +70,7 @@ async def create_custom_group(
         enable_status=body.enable_status,
         enable_severity=body.enable_severity,
         description=body.description,
+        mcp_access=body.mcp_access,
     )
     return await handle_result(result)
 
@@ -96,6 +98,7 @@ async def update_group(
         severity_values=body.severity_values,
         required_fields=body.required_fields,
         description=body.description,
+        mcp_access=body.mcp_access,
     )
     return await handle_result(result)
 
@@ -343,6 +346,7 @@ async def create_custom_group_compat(
     enable_status: bool = Query(True, description="是否开启 status 字段"),
     enable_severity: bool = Query(False, description="是否开启 severity 字段"),
     description: str = Query("", description="组描述"),
+    mcp_access: str = Query("writable", description="MCP访问控制: writable/readable/disabled"),
 ):
     """创建自定义组 (兼容 Business API 路径)."""
     client = _get_async_client(request)
@@ -356,6 +360,7 @@ async def create_custom_group_compat(
         enable_status=enable_status,
         enable_severity=enable_severity,
         description=description,
+        mcp_access=mcp_access,
     )
     return await handle_result(result)
 
@@ -372,6 +377,7 @@ async def update_group_compat(
     enable_status: bool = Query(None, description="是否开启 status 字段"),
     enable_severity: bool = Query(None, description="是否开启 severity 字段"),
     description: str = Query(None, description="组描述"),
+    mcp_access: Optional[str] = Query(None, description="MCP访问控制: writable/readable/disabled"),
 ):
     """更新组配置（兼容 Business API 路径）."""
     client = _get_async_client(request)
@@ -385,6 +391,7 @@ async def update_group_compat(
         enable_status=enable_status,
         enable_severity=enable_severity,
         description=description,
+        mcp_access=mcp_access,
     )
     return await handle_result(result)
 

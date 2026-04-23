@@ -57,13 +57,14 @@ async def _create_custom_group(
     enable_status: bool = True,
     enable_severity: bool = False,
     max_tags: int = 2,
-    description: str = ""
+    description: str = "",
+    mcp_access: str = "writable"
 ):
     """创建自定义组（内部函数）."""
     allowed_list = [g.strip() for g in allowed_related_to.split(",") if g.strip()] if allowed_related_to else []
     result = await _get_groups_service().create_custom_group(
         project_id, group_name, content_max_bytes, summary_max_bytes,
-        allow_related, allowed_list, enable_status, enable_severity, max_tags, description
+        allow_related, allowed_list, enable_status, enable_severity, max_tags, description, mcp_access
     )
     if not result.get("success", False):
         raise HTTPException(status_code=400, detail=result.get("error", "创建自定义组失败"))
@@ -83,7 +84,8 @@ async def _update_group(
     status_values: Optional[str] = None,
     severity_values: Optional[str] = None,
     required_fields: Optional[str] = None,
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    mcp_access: Optional[str] = None
 ):
     """更新组配置（内部函数）."""
     config_data = {}
@@ -109,6 +111,8 @@ async def _update_group(
         config_data["required_fields"] = [f.strip() for f in required_fields.split(",") if f.strip()]
     if description is not None:
         config_data["description"] = description
+    if mcp_access is not None:
+        config_data["mcp_access"] = mcp_access
     result = await _get_groups_service().update_group_config(project_id, group_name, config_data)
     if not result.get("success", False):
         error_msg = result.get("error", "更新组配置失败")
@@ -148,12 +152,13 @@ async def create_custom_group(
     enable_status: bool = True,
     enable_severity: bool = False,
     max_tags: int = 2,
-    description: str = ""
+    description: str = "",
+    mcp_access: str = "writable"
 ):
     """创建自定义组."""
     return await _create_custom_group(
         project_id, group_name, content_max_bytes, summary_max_bytes,
-        allow_related, allowed_related_to, enable_status, enable_severity, max_tags, description
+        allow_related, allowed_related_to, enable_status, enable_severity, max_tags, description, mcp_access
     )
 
 
@@ -171,13 +176,14 @@ async def update_group(
     status_values: Optional[str] = None,
     severity_values: Optional[str] = None,
     required_fields: Optional[str] = None,
-    description: Optional[str] = None
+    description: Optional[str] = None,
+    mcp_access: Optional[str] = None
 ):
     """更新组配置."""
     return await _update_group(
         project_id, group_name, content_max_bytes, summary_max_bytes,
         allow_related, allowed_related_to, enable_status, enable_severity, max_tags,
-        status_values, severity_values, required_fields, description
+        status_values, severity_values, required_fields, description, mcp_access
     )
 
 

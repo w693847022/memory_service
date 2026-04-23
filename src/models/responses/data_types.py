@@ -1,6 +1,6 @@
 """API 响应 data 字段的具体类型定义."""
 
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Literal
 from pydantic import BaseModel, Field
 
 
@@ -301,6 +301,7 @@ class GroupConfigDetail(BaseModel):
     severity_values: List[str] = Field(default_factory=list, description="严重程度值列表")
     required_fields: List[str] = Field(default_factory=list, description="必填字段")
     description: str = Field(default="", description="分组描述")
+    mcp_access: Literal["writable", "readable", "disabled"] = Field(default="writable", description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)")
 
 
 class GroupListData(BaseModel):

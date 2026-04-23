@@ -59,6 +59,7 @@ groups:
       - "status"
     description: "功能特性分组"
     max_tags: 2
+    mcp_access: "writable"
   fixes:
     content_max_bytes: 4000
     summary_max_bytes: 90
@@ -84,6 +85,7 @@ groups:
       - "severity"
     description: "缺陷修复分组"
     max_tags: 2
+    mcp_access: "writable"
   notes:
     content_max_bytes: 500
     summary_max_bytes: 50
@@ -98,6 +100,7 @@ groups:
       - "summary"
     description: "笔记记录分组"
     max_tags: 5
+    mcp_access: "writable"
   standards:
     content_max_bytes: 4000
     summary_max_bytes: 90
@@ -113,6 +116,7 @@ groups:
       - "summary"
     description: "规范标准分组"
     max_tags: 2
+    mcp_access: "writable"
 
 # 初始标签注册表（项目注册时自动创建）
 initial_tags:

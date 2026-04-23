@@ -1,6 +1,6 @@
 """分组管理请求模型."""
 
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -39,6 +39,10 @@ class GroupCreateRequest(BaseModel):
     description: str = Field(
         default="",
         description="组描述",
+    )
+    mcp_access: Literal["writable", "readable", "disabled"] = Field(
+        default="writable",
+        description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)",
     )
 
 
@@ -88,6 +92,10 @@ class GroupUpdateRequest(BaseModel):
     description: Optional[str] = Field(
         default=None,
         description="组描述",
+    )
+    mcp_access: Optional[Literal["writable", "readable", "disabled"]] = Field(
+        default=None,
+        description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)",
     )
 
 
