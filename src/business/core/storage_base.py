@@ -902,7 +902,7 @@ class ProjectStorage:
                 "fix": "fixes",
                 "std": "standards"
             }
-            items_list = prefix_to_list.get(prefix, "features")
+            items_list = prefix_to_list.get(prefix, prefix)
             prefix_with_date = f"{prefix}_{date_str}_"
 
             # 支持 ProjectData 模型和 dict 两种输入

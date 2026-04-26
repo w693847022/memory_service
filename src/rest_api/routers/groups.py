@@ -34,20 +34,6 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
     return request.app.state.async_client
 
 
-# 支持的分组类型
-VALID_GROUPS = ["features", "notes", "fixes", "standards"]
-
-
-def _validate_group(group: str) -> str:
-    """验证分组名称."""
-    if group not in VALID_GROUPS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"无效的分组类型: {group}，必须是 {VALID_GROUPS} 之一"
-        )
-    return group
-
-
 # ===================
 # 自定义组管理 API（放在通用路由之前，避免被通用路由匹配）
 # ===================
@@ -164,7 +150,7 @@ async def update_group_settings(
 async def list_group_items(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
-    group: str = Path(..., description="分组名称 (features/notes/fixes/standards)"),
+    group: str = Path(..., description="分组名称"),
     status: str = Query("", description="状态过滤 (pending/in_progress/completed)"),
     severity: str = Query("", description="严重程度过滤 (critical/high/medium/low)"),
     tags: str = Query("", description="标签过滤（逗号分隔，OR 逻辑）"),
@@ -178,8 +164,6 @@ async def list_group_items(
     updated_before: str = Query("", description="修改时间截止 (YYYY-MM-DD)"),
 ):
     """获取分组内的条目列表."""
-    group = _validate_group(group)
-
     kwargs = {
         "project_id": project_id,
         "group_name": group,
@@ -218,8 +202,6 @@ async def get_group_item(
     item_id: str = Path(..., description="条目 ID"),
 ):
     """获取单个条目详情."""
-    group = _validate_group(group)
-
     client = _get_async_client(request)
     result = await client.project_get(
         project_id=project_id,
@@ -237,8 +219,6 @@ async def create_group_item(
     body: ItemCreateRequest = Body(...),
 ):
     """创建分组条目."""
-    group = _validate_group(group)
-
     kwargs = {
         "project_id": project_id,
         "group": group,
@@ -268,8 +248,6 @@ async def update_group_item(
     body: ItemUpdateRequest = Body(...),
 ):
     """更新分组条目."""
-    group = _validate_group(group)
-
     client = _get_async_client(request)
     result = await client.project_update(
         project_id=project_id,
@@ -293,8 +271,6 @@ async def delete_group_item(
     item_id: str = Path(..., description="条目 ID"),
 ):
     """删除分组条目."""
-    group = _validate_group(group)
-
     client = _get_async_client(request)
     result = await client.project_delete(
         project_id=project_id,
@@ -313,8 +289,6 @@ async def manage_item_tags(
     body: ItemTagManageRequest = Body(...),
 ):
     """管理条目标签."""
-    group = _validate_group(group)
-
     kwargs = {
         "project_id": project_id,
         "group_name": group,

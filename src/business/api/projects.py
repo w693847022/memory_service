@@ -240,7 +240,8 @@ async def project_tags_info(
         data = {"project_id": project_id, "group_name": group_name, "total_tags": result.get("total_tags", 0), "tags": result.get("tags", [])}
         return ApiResponse(success=True, data=data, message=f"共 {result.get('total_tags', 0)} 个未注册标签")
     else:
-        is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+        all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
+        is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
         if not is_valid:
             raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
         result = await _get_tag_service().list_group_tags(project_id, group_name)
@@ -326,7 +327,8 @@ async def project_get(
     data = result["data"]
 
     if group_name:
-        is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+        all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
+        is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
         if not is_valid:
             raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
@@ -349,7 +351,8 @@ async def project_get(
         filtered_items = items
         tag_list = parse_tags(tags) if tags else []
 
-        group_config = UnifiedGroupConfig.from_dict(DEFAULT_GROUP_CONFIGS.get(group_name, {}))
+        all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
+        group_config = UnifiedGroupConfig.from_dict(all_configs.get(group_name, {}))
         if group_config.enable_status and group_config.status_values:
             if status:
                 filtered_items = [f for f in filtered_items if f.get("status") == status]
@@ -512,7 +515,8 @@ async def project_update(
 @router.delete("/projects/{project_id}/items/{item_id}", response_model=ItemOperationResponse)
 async def project_delete(project_id: str, group: str, item_id: str):
     """删除项目条目."""
-    is_valid, error_msg = ItemValidator.validate_group_name(group, DEFAULT_GROUP_CONFIGS)
+    all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
+    is_valid, error_msg = ItemValidator.validate_group_name(group, all_configs)
     if not is_valid:
         raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
     if not item_id:
@@ -545,7 +549,8 @@ async def manage_item_tags(
     tags: str = ""
 ):
     """管理条目标签."""
-    is_valid, error_msg = ItemValidator.validate_group_name(group_name, DEFAULT_GROUP_CONFIGS)
+    all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
+    is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
     if not is_valid:
         raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
 
