@@ -163,32 +163,39 @@ class TestCustomGroupItemCRUD:
         assert result["success"] is True, f"删除条目失败: {result}"
 
     def test_manage_tags_in_custom_group(self, rest_client: RestClient, mcp_client: McpClient):
-        """通过 REST API 管理自定义组条目的标签."""
+        """通过 REST API 管理自定义组条目的标签，覆盖 TagService add/remove 路径."""
         ctx = _setup_project_and_group(
             rest_client, mcp_client, "e2e_custom_item_tags", "my_tagged"
         )
 
-        # 创建条目
+        # 注册第二个标签供 add 操作使用
+        _register_tag(mcp_client, ctx["project_id"], "test2")
+
+        # 创建条目（带一个标签）
         create_result = rest_client.post(
             f"/api/projects/{ctx['project_id']}/{ctx['group_name']}",
             json={"summary": "标签测试", "content": "标签内容", "status": "pending", "tags": "test"},
         )
         assert create_result["success"] is True
         item_id = create_result["data"]["item"]["id"]
+        assert create_result["data"]["item"]["tags"] == ["test"]
 
-        # 设置标签
+        # 添加新标签（走 TagService.add_item_tag，标签不在 item.tags 中，会触发 save）
         result = rest_client.put(
             f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}/tags",
-            json={"operation": "set", "tags": "test"},
-        )
-        assert result["success"] is True, f"设置标签失败: {result}"
-
-        # 添加标签
-        result = rest_client.put(
-            f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}/tags",
-            json={"operation": "add", "tag": "test"},
+            json={"operation": "add", "tag": "test2"},
         )
         assert result["success"] is True, f"添加标签失败: {result}"
+        assert "test2" in result["data"]["tags"]
+
+        # 移除标签（走 TagService.remove_item_tag，标签在 item.tags 中，会触发 save）
+        result = rest_client.put(
+            f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}/tags",
+            json={"operation": "remove", "tag": "test2"},
+        )
+        assert result["success"] is True, f"移除标签失败: {result}"
+        assert "test2" not in result["data"]["tags"]
+        assert "test" in result["data"]["tags"]
 
 
 @pytest.mark.e2e
@@ -241,6 +248,40 @@ class TestFrontendGroupItemCRUD:
             f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}",
         )
         assert delete["success"] is True
+
+    def test_manage_tags_in_frontend_group(self, rest_client: RestClient, mcp_client: McpClient):
+        """在 frontend_ 前缀组中通过 TagService 添加/移除标签."""
+        ctx = _setup_project_and_group(
+            rest_client, mcp_client, "e2e_frontend_item_tags", "frontend_tagged"
+        )
+
+        # 注册额外标签
+        _register_tag(mcp_client, ctx["project_id"], "frontend_tag")
+
+        # 创建条目
+        create = rest_client.post(
+            f"/api/projects/{ctx['project_id']}/{ctx['group_name']}",
+            json={"summary": "前端标签测试", "content": "内容", "status": "pending", "tags": "test"},
+        )
+        assert create["success"] is True
+        item_id = create["data"]["item"]["id"]
+
+        # 添加标签（走 TagService.add_item_tag）
+        add = rest_client.put(
+            f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}/tags",
+            json={"operation": "add", "tag": "frontend_tag"},
+        )
+        assert add["success"] is True, f"前端组添加标签失败: {add}"
+        assert "frontend_tag" in add["data"]["tags"]
+
+        # 移除标签（走 TagService.remove_item_tag）
+        remove = rest_client.put(
+            f"/api/projects/{ctx['project_id']}/{ctx['group_name']}/{item_id}/tags",
+            json={"operation": "remove", "tag": "frontend_tag"},
+        )
+        assert remove["success"] is True, f"前端组移除标签失败: {remove}"
+        assert "frontend_tag" not in remove["data"]["tags"]
+        assert "test" in remove["data"]["tags"]
 
     def test_invalid_group_returns_error(self, rest_client: RestClient):
         """通过 REST API 操作不存在的分组应返回错误（由 Business 层处理）."""
