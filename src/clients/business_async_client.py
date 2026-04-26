@@ -389,7 +389,9 @@ class BusinessApiAsyncClient:
         enable_status: bool = True,
         enable_severity: bool = False,
         description: str = "",
-        mcp_access: str = "writable"
+        mcp_access: str = "writable",
+        max_items: int = 0,
+        max_tags: int = 2
     ) -> ApiResponse:
         """创建自定义组."""
         params = {
@@ -402,7 +404,9 @@ class BusinessApiAsyncClient:
             "enable_status": enable_status,
             "enable_severity": enable_severity,
             "description": description,
-            "mcp_access": mcp_access
+            "mcp_access": mcp_access,
+            "max_items": max_items,
+            "max_tags": max_tags
         }
         return await self._post("/api/groups/custom", params=params)
 
@@ -421,7 +425,8 @@ class BusinessApiAsyncClient:
         severity_values: Optional[str] = None,
         required_fields: Optional[str] = None,
         description: Optional[str] = None,
-        mcp_access: Optional[str] = None
+        mcp_access: Optional[str] = None,
+        max_items: Optional[int] = None
     ) -> ApiResponse:
         """更新组配置."""
         params = {"project_id": project_id, "group_name": group_name}
@@ -430,7 +435,8 @@ class BusinessApiAsyncClient:
                      ("enable_status", enable_status), ("enable_severity", enable_severity),
                      ("max_tags", max_tags), ("status_values", status_values),
                      ("severity_values", severity_values), ("required_fields", required_fields),
-                     ("description", description), ("mcp_access", mcp_access)]:
+                     ("description", description), ("mcp_access", mcp_access),
+                     ("max_items", max_items)]:
             if v is not None:
                 params[k] = v
         return await self._put("/api/groups/custom", params=params)

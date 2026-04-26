@@ -302,6 +302,7 @@ class GroupConfigDetail(BaseModel):
     required_fields: List[str] = Field(default_factory=list, description="必填字段")
     description: str = Field(default="", description="分组描述")
     mcp_access: Literal["writable", "readable", "disabled"] = Field(default="writable", description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)")
+    max_items: int = Field(default=0, ge=0, description="最大条目数量，0表示无限制")
 
 
 class GroupListData(BaseModel):

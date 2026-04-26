@@ -60,6 +60,7 @@ class GroupsService:
         max_tags: int = 2,
         description: str = "",
         mcp_access: Literal["writable", "readable", "disabled"] = "writable",
+        max_items: int = 0,
     ) -> Dict[str, Any]:
         """创建自定义组."""
         group_configs = await self.storage.get_group_configs(project_id)
@@ -78,6 +79,7 @@ class GroupsService:
             max_tags=max_tags,
             description=description,
             mcp_access=mcp_access,
+            max_items=max_items,
         )
 
         groups[group_name] = new_group

@@ -24,6 +24,7 @@ from .tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,
     project_add, project_update, project_delete, project_remove, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
+    create_custom_group,
     project_get,
 )
 
@@ -91,6 +92,9 @@ def _get_server():
         _server.tool()(tag_update)
         _server.tool()(tag_delete)
         _server.tool()(tag_merge)
+
+        # Group Management Tools
+        _server.tool()(create_custom_group)
 
         # Query Tools
         _server.tool()(project_get)

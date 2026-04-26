@@ -24,6 +24,10 @@ from .project import (
     project_get,
 )
 
+from .group import (
+    create_custom_group,
+)
+
 from .tag import (
     tag_register,
     tag_update,
@@ -49,6 +53,8 @@ __all__ = [
     "project_remove",
     "project_item_tag_manage",
     "project_get",
+    # Group
+    "create_custom_group",
     # Tag
     "tag_register",
     "tag_update",

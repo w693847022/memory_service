@@ -44,6 +44,16 @@ class GroupCreateRequest(BaseModel):
         default="writable",
         description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)",
     )
+    max_tags: int = Field(
+        default=2,
+        ge=0,
+        description="单个item最大标签数量",
+    )
+    max_items: int = Field(
+        default=0,
+        ge=0,
+        description="最大条目数量，0表示无限制",
+    )
 
 
 class GroupUpdateRequest(BaseModel):
@@ -96,6 +106,11 @@ class GroupUpdateRequest(BaseModel):
     mcp_access: Optional[Literal["writable", "readable", "disabled"]] = Field(
         default=None,
         description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)",
+    )
+    max_items: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="最大条目数量，0表示无限制",
     )
 
 

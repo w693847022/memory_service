@@ -71,6 +71,7 @@ async def create_custom_group(
         enable_severity=body.enable_severity,
         description=body.description,
         mcp_access=body.mcp_access,
+        max_items=body.max_items,
     )
     return await handle_result(result)
 
@@ -99,6 +100,7 @@ async def update_group(
         required_fields=body.required_fields,
         description=body.description,
         mcp_access=body.mcp_access,
+        max_items=body.max_items,
     )
     return await handle_result(result)
 
@@ -347,6 +349,7 @@ async def create_custom_group_compat(
     enable_severity: bool = Query(False, description="是否开启 severity 字段"),
     description: str = Query("", description="组描述"),
     mcp_access: str = Query("writable", description="MCP访问控制: writable/readable/disabled"),
+    max_items: int = Query(0, description="最大条目数量，0表示无限制"),
 ):
     """创建自定义组 (兼容 Business API 路径)."""
     client = _get_async_client(request)
@@ -361,6 +364,7 @@ async def create_custom_group_compat(
         enable_severity=enable_severity,
         description=description,
         mcp_access=mcp_access,
+        max_items=max_items,
     )
     return await handle_result(result)
 
@@ -378,6 +382,7 @@ async def update_group_compat(
     enable_severity: bool = Query(None, description="是否开启 severity 字段"),
     description: str = Query(None, description="组描述"),
     mcp_access: Optional[str] = Query(None, description="MCP访问控制: writable/readable/disabled"),
+    max_items: Optional[int] = Query(None, description="最大条目数量，0表示无限制"),
 ):
     """更新组配置（兼容 Business API 路径）."""
     client = _get_async_client(request)
@@ -392,6 +397,7 @@ async def update_group_compat(
         enable_severity=enable_severity,
         description=description,
         mcp_access=mcp_access,
+        max_items=max_items,
     )
     return await handle_result(result)
 

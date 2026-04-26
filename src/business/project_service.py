@@ -385,6 +385,14 @@ class ProjectService:
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
+        # 验证 max_items 限制
+        if config and config.max_items > 0:
+            current_count = len(project_data.get_items(group))
+            if current_count >= config.max_items:
+                return ResponseBuilder.error(
+                    f"分组 '{group}' 已达最大条目数量限制 ({config.max_items})"
+                ).to_dict()
+
         prefix_map = {"features": "feat", "notes": "note", "fixes": "fix", "standards": "std"}
         prefix = prefix_map.get(group, "feat")
 
