@@ -394,7 +394,7 @@ class ProjectService:
                 ).to_dict()
 
         prefix_map = {"features": "feat", "notes": "note", "fixes": "fix", "standards": "std"}
-        prefix = prefix_map.get(group, group.replace("_", "-"))
+        prefix = prefix_map.get(group, group)
 
         item_id = self.storage.generate_item_id(prefix, project_id, project_data)
 
