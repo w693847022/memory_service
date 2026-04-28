@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from business.storage import Storage
 from business.project_service import ProjectService
+from src.models.config import SettingsLoader
 
 
 @pytest.mark.asyncio
@@ -22,10 +23,12 @@ async def test_status_severity_update():
     """测试 status 和 severity 参数能否正确更新."""
     print("测试: status/severity 参数更新...")
 
+    # 重置 SettingsLoader 单例，避免其他测试修改后干扰
+    SettingsLoader._instance = None
+
     temp_dir = tempfile.mkdtemp()
     try:
-        os.environ["MCP_STORAGE_DIR"] = temp_dir
-        storage = Storage()
+        storage = Storage(storage_dir=temp_dir)
         service = ProjectService(storage)
 
         # 1. 注册项目

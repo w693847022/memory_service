@@ -19,8 +19,6 @@ RESERVED_FIELDS = ["id", "info", "tag_registry"]
 # 前端保留前缀（MCP不允许创建此前缀的自定义组，仅REST API可创建）
 FRONTEND_GROUP_PREFIX = "frontend_"
 
-# 使用独立文件存储 content 的默认组
-CONTENT_SEPARATE_GROUPS = {"features", "fixes", "notes", "standards"}
 
 def get_default_group_configs() -> Dict[str, Dict[str, Any]]:
     """获取默认组配置（从Settings加载，供项目注册初始化使用）."""

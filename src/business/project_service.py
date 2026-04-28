@@ -13,7 +13,6 @@ from src.models.group import (
     get_default_tags,
     get_default_group_configs,
     get_default_related_rules,
-    CONTENT_SEPARATE_GROUPS,
 )
 from src.models.group import UnifiedGroupConfig
 from business.item_validator import ItemValidator
@@ -435,9 +434,6 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS:
-                await self.storage.save_item_content(project_id, group, item_id, content)
-
             return ResponseBuilder.success(
                 data={
                     "project_id": project_id,
@@ -546,10 +542,7 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS and content is not None:
-                await self.storage.save_item_content(project_id, group, item_id, content)
-
-            item_data = item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set())
+            item_data = item.model_dump(exclude={"content"})
             result = ResponseBuilder.success(
                 data={
                     "project_id": project_id,
@@ -593,8 +586,7 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS:
-                self.storage.delete_item_content(project_id, group, item_id)
+            self.storage.delete_item_content(project_id, group, item_id)
 
             return ResponseBuilder.success(
                 data={"project_id": project_id, "group": group, "item_id": item_id},

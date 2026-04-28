@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, Body
 
 from src.models.group import (
     UnifiedGroupConfig,
-    CONTENT_SEPARATE_GROUPS,
     DEFAULT_GROUP_CONFIGS,
 )
 from business.item_validator import ItemValidator
@@ -77,11 +76,11 @@ async def list_projects(
     """列出所有项目."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     name_regex, error_msg = validate_regex_pattern(name_pattern, "name_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     size = resolve_default_size(size, view_mode)
     result = await _get_project_service().list_projects(include_archived=include_archived)
@@ -198,15 +197,15 @@ async def project_tags_info(
     """查询标签信息."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     tag_name_regex, error_msg = validate_regex_pattern(tag_name_pattern, "tag_name_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     size = resolve_default_size(size, view_mode)
 
@@ -243,7 +242,7 @@ async def project_tags_info(
         all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
         is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
         result = await _get_tag_service().list_group_tags(project_id, group_name)
         if not result.get("success"):
             raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
@@ -301,11 +300,11 @@ async def project_get(
     """获取项目信息或查询条目列表/详情."""
     is_valid, error_msg = validate_view_mode(view_mode)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     summary_regex, error_msg = validate_regex_pattern(summary_pattern, "summary_pattern")
     if error_msg:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     for _, param_val in [
         ("created_after", created_after),
@@ -330,7 +329,7 @@ async def project_get(
         all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
         is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
         if not is_valid:
-            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+            raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
         items = data.get(group_name, [])
 
@@ -342,10 +341,9 @@ async def project_get(
                     break
             if not item:
                 raise HTTPException(status_code=404, detail=ApiResponse.error_response(f"在分组 '{group_name}' 中找不到条目 '{item_id}'").model_dump())
-            if group_name in CONTENT_SEPARATE_GROUPS:
-                item_content = await _get_storage().get_item_content(project_id, group_name, item_id)
-                if item_content is not None:
-                    item["content"] = item_content
+            item_content = await _get_storage().get_item_content(project_id, group_name, item_id)
+            if item_content is not None:
+                item["content"] = item_content
             return ApiResponse(success=True, data={"project_id": project_id, "group_name": group_name, "item_id": item_id, "item": item}, message="获取条目详情成功")
 
         filtered_items = items
@@ -518,7 +516,7 @@ async def project_delete(project_id: str, group: str, item_id: str):
     all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
     is_valid, error_msg = ItemValidator.validate_group_name(group, all_configs)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
     if not item_id:
         raise HTTPException(status_code=400, detail=ApiResponse.error_response("item_id 参数不能为空").model_dump())
 
@@ -552,7 +550,7 @@ async def manage_item_tags(
     all_configs = await _get_project_service().item_validator.get_all_configs(project_id)
     is_valid, error_msg = ItemValidator.validate_group_name(group_name, all_configs)
     if not is_valid:
-        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg).model_dump())
+        raise HTTPException(status_code=400, detail=ApiResponse.error_response(error_msg or "Unknown error").model_dump())
 
     if operation == "set" or operation == "设置":
         if not tags:

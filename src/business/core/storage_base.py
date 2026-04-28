@@ -19,7 +19,7 @@ from typing import Optional, Dict, List, Any, Union
 from cachetools import TTLCache
 import aiofiles
 
-from src.models.storage import ProjectData
+from src.models.storage import ProjectData, _STORAGE_RESERVED_KEYS
 from business.core.barrier_decorator import BarrierManager, get_barrier_manager
 from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 
@@ -27,8 +27,6 @@ from business.core.smart_cache import SmartCache, CacheConfig, CacheLevel
 CACHE_TTL_SECONDS = 300
 CACHE_MAX_SIZE = 50
 
-# 已知分组（用于版本迁移补全）
-KNOWN_GROUPS = ["features", "fixes", "notes", "standards"]
 
 
 class ProjectStorage:
@@ -91,11 +89,27 @@ class ProjectStorage:
         v = data["_versions"]
         v.setdefault("project", 1)
         v.setdefault("tag_registry", 1)
-        for group_name in KNOWN_GROUPS:
-            v.setdefault(group_name, 1)
+        # 为所有分组（内置+自定义）设置默认版本号
+        for key in data.keys():
+            if key not in _STORAGE_RESERVED_KEYS and isinstance(data.get(key), list):
+                v.setdefault(key, 1)
         if "_group_configs" in data and data["_group_configs"] is not None:
             if isinstance(data["_group_configs"], dict):
                 data["_group_configs"].setdefault("_v", 1)
+
+    def _get_group_names_from_data(self, data: Dict[str, Any]) -> List[str]:
+        """从存储数据 dict 中提取所有分组名（排除保留键）."""
+        return [k for k in data.keys() if k not in _STORAGE_RESERVED_KEYS and isinstance(data.get(k), list)]
+
+    def _get_group_names_from_disk(self, project_id: str) -> List[str]:
+        """从磁盘目录结构中发现所有已有数据的分组."""
+        project_dir = self._get_project_dir(project_id)
+        groups = []
+        if project_dir.exists():
+            for entry in project_dir.iterdir():
+                if entry.is_dir() and (entry / "_index.json").exists():
+                    groups.append(entry.name)
+        return groups
 
     def _get_project_dir(self, project_id: str) -> Path:
         """获取项目目录路径（按项目名称存储）.
@@ -308,9 +322,8 @@ class ProjectStorage:
                 note["summary"] = ""
 
         # 兼容旧格式：将内联 content 迁移到独立文件
-        from src.models.group import CONTENT_SEPARATE_GROUPS
         need_save = False
-        for group_name in CONTENT_SEPARATE_GROUPS:
+        for group_name in self._get_group_names_from_data(data):
             for item in data.get(group_name, []):
                 if "content" in item and item["content"]:
                     await self._save_item_content(project_id, group_name, item["id"], item["content"])
@@ -345,12 +358,11 @@ class ProjectStorage:
     async def _save_project_dict(self, project_id: str, data: Dict[str, Any]) -> bool:
         """保存原始 dict 格式的项目数据（仅用于内部迁移）."""
         try:
-            from src.models.group import CONTENT_SEPARATE_GROUPS
-
             project_dir = self._get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
 
-            for group_name in CONTENT_SEPARATE_GROUPS:
+            group_names = self._get_group_names_from_data(data)
+            for group_name in group_names:
                 self._get_group_content_dir(project_id, group_name)
 
             # 1. 保存元数据到 _project.json
@@ -381,7 +393,7 @@ class ProjectStorage:
                 return False
 
             # 3. 保存各分组的 _index.json
-            for group_name in CONTENT_SEPARATE_GROUPS:
+            for group_name in group_names:
                 items = data.get(group_name, [])
                 group_version = data.get("_versions", {}).get(group_name, 1)
                 index_data = {"_version": group_version, "items": []}
@@ -410,10 +422,10 @@ class ProjectStorage:
             if tags_data is None:
                 tags_data = {"_version": 1, "tags": {}}
 
-            # 3. 加载各分组的 _index.json
-            from src.models.group import CONTENT_SEPARATE_GROUPS
+            # 3. 动态发现并加载所有分组的 _index.json
+            group_names = self._get_group_names_from_disk(project_id)
             groups_data = {}
-            for group_name in CONTENT_SEPARATE_GROUPS:
+            for group_name in group_names:
                 index_data = await self._load_group_index(project_id, group_name)
                 if index_data is None:
                     groups_data[group_name] = []
@@ -446,8 +458,6 @@ class ProjectStorage:
         将 ProjectData 模型转换为存储格式 dict，然后写入拆分文件。
         """
         try:
-            from src.models.group import CONTENT_SEPARATE_GROUPS
-
             # 转换为存储格式 dict
             data = project_data.to_storage()
 
@@ -455,8 +465,11 @@ class ProjectStorage:
             project_dir = self._get_project_dir(project_id)
             project_dir.mkdir(parents=True, exist_ok=True)
 
-            # 确保所有默认组的 content 目录存在
-            for group_name in CONTENT_SEPARATE_GROUPS:
+            # 动态获取所有分组名
+            group_names = self._get_group_names_from_data(data)
+
+            # 确保所有分组的 content 目录存在
+            for group_name in group_names:
                 self._get_group_content_dir(project_id, group_name)
 
             # 1. 保存元数据到 _project.json
@@ -488,7 +501,7 @@ class ProjectStorage:
                 return False
 
             # 3. 保存各分组的 _index.json
-            for group_name in CONTENT_SEPARATE_GROUPS:
+            for group_name in group_names:
                 items = data.get(group_name, [])
 
                 # 获取分组版本号
@@ -930,9 +943,8 @@ class ProjectStorage:
     def _migrate_to_version_control(self, project_id: str, project_data: Dict[str, Any]) -> bool:
         """迁移项目数据到版本控制结构（为所有条目添加 version 字段）."""
         need_save = False
-        default_groups = ["features", "fixes", "notes", "standards"]
 
-        for group_name in default_groups:
+        for group_name in self._get_group_names_from_data(project_data):
             for item in project_data.get(group_name, []):
                 if "version" not in item:
                     item["version"] = 1

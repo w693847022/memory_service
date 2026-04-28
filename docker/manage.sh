@@ -85,7 +85,8 @@ stop_service() {
 restart_service() {
     cd "$SCRIPT_DIR"
     echo "🔄 重启 MCP Memory Server..."
-    docker-compose restart
+    docker-compose down
+    docker-compose up -d
     sleep 2
     docker-compose ps
 }

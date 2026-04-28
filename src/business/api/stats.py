@@ -89,7 +89,7 @@ async def project_stats():
         "top_note_tags": sorted(note_tag_counts.items(), key=lambda x: x[1], reverse=True)[:10]
     }
 
-    return StatsResponse(success=True, data=stats, message="获取统计成功")
+    return StatsResponse(success=True, data=stats, message="获取统计成功", error=None)
 
 
 @router.get("/stats/summary", response_model=StatsResponse)
@@ -108,7 +108,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
                 "first_called": result.get('first_called'), "last_called": result.get('last_called'),
                 "by_project": result.get("by_project", {}), "by_client": result.get("by_client", {}),
                 "by_ip": result.get("by_ip", {})
-            }, message=f"工具 '{tool_name}' 调用统计")
+            }, message=f"工具 '{tool_name}' 调用统计", error=None)
         else:
             result = _get_stats_service().get_tool_stats()
             if not result["success"]:
@@ -116,7 +116,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
                 if error_msg is None:
                     error_msg = "获取工具统计失败"
                 raise HTTPException(status_code=400, detail=error_msg)
-            return StatsResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计")
+            return StatsResponse(success=True, data={"type": "tool", "tools": result["tools"]}, message="所有工具调用统计", error=None)
 
     elif type == "project" or type == "项目":
         if not project_id:
@@ -127,7 +127,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
             if error_msg is None:
                 error_msg = "获取项目统计失败"
             raise HTTPException(status_code=400, detail=error_msg)
-        return StatsResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计")
+        return StatsResponse(success=True, data={"type": "project", "project_id": project_id, "total_calls": result['total_calls'], "tools_called": result["tools_called"]}, message=f"项目 '{project_id}' 调用统计", error=None)
 
     elif type == "client" or type == "客户端":
         result = _get_stats_service().get_client_stats()
@@ -136,7 +136,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
             if error_msg is None:
                 error_msg = "获取客户端统计失败"
             raise HTTPException(status_code=400, detail=error_msg)
-        return StatsResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计")
+        return StatsResponse(success=True, data={"type": "client", "clients": result["clients"]}, message="客户端调用统计", error=None)
 
     elif type == "ip" or type == "IP":
         result = _get_stats_service().get_ip_stats()
@@ -145,7 +145,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
             if error_msg is None:
                 error_msg = "获取IP统计失败"
             raise HTTPException(status_code=400, detail=error_msg)
-        return StatsResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计")
+        return StatsResponse(success=True, data={"type": "ip", "ips": result["ips"]}, message="IP地址调用统计", error=None)
 
     elif type == "daily" or type == "每日":
         if date:
@@ -155,7 +155,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
                 if error_msg is None:
                     error_msg = "获取每日统计失败"
                 raise HTTPException(status_code=400, detail=error_msg)
-            return StatsResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计")
+            return StatsResponse(success=True, data={"type": "daily", "date": date, "total_calls": result['total_calls'], "tools": result["tools"]}, message=f"日期 '{date}' 统计", error=None)
         else:
             result = _get_stats_service().get_daily_stats()
             if not result["success"]:
@@ -163,7 +163,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
                 if error_msg is None:
                     error_msg = "获取每日统计失败"
                 raise HTTPException(status_code=400, detail=error_msg)
-            return StatsResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计")
+            return StatsResponse(success=True, data={"type": "daily", "recent_days": result["recent_days"], "stats": result["stats"]}, message="最近7天统计", error=None)
 
     elif type == "full" or type == "完整":
         result = _get_stats_service().get_full_summary()
@@ -172,7 +172,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
             if error_msg is None:
                 error_msg = "获取完整统计失败"
             raise HTTPException(status_code=400, detail=error_msg)
-        return StatsResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计")
+        return StatsResponse(success=True, data={"type": "full", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "ip_stats": result["ip_stats"], "daily_stats": result["daily_stats"]}, message="完整统计", error=None)
 
     else:
         result = _get_stats_service().get_full_summary()
@@ -181,7 +181,7 @@ async def stats_summary(type: str = "", tool_name: str = "", project_id: str = "
             if error_msg is None:
                 error_msg = "获取统计摘要失败"
             raise HTTPException(status_code=400, detail=error_msg)
-        return StatsResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要")
+        return StatsResponse(success=True, data={"type": "summary", "metadata": result["metadata"], "tool_stats": result["tool_stats"], "client_stats": result["client_stats"], "daily_stats": result["daily_stats"]}, message="统计摘要", error=None)
 
 
 @router.delete("/stats/cleanup", response_model=StatsResponse)
@@ -205,4 +205,4 @@ async def stats_cleanup(retention_days: int = 30):
         },
         "storage_before": result["before"],
         "storage_after": result["after"]
-    }, message="统计数据清理完成")
+    }, message="统计数据清理完成", error=None)

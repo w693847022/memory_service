@@ -158,6 +158,7 @@ class StatsResponse(BaseModel):
         ClientListData,
         IpListData,
         DailyListData,
+        Dict[str, Any],
     ] = Field(..., description="统计数据")
     message: Optional[str] = Field(None, description="操作消息")
     error: Optional[str] = Field(None, description="错误信息")
