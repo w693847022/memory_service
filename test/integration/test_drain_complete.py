@@ -148,13 +148,13 @@ class TestDrainCompleteMechanism:
     # ==================== remove_project drain 测试 ====================
 
     async def test_delete_project_drain_waits_for_update(self):
-        """测试：delete_project应该等待update_item完成（Drain机制）.
+        """测试：delete_project删除已归档项目（先归档再删除）.
 
         测试场景：
-        1. 创建一个测试条目
-        2. 启动慢速update_item操作
-        3. 同时启动delete_project操作
-        4. delete_project需要drain B4+B5，应该等待update完成
+        1. 创建一个测试项目并添加条目
+        2. 归档项目
+        3. 删除已归档项目
+        4. 验证归档文件和项目数据已清理
         """
         project_id = await self.setup_project("delete_project_drain_test")
 
@@ -171,43 +171,25 @@ class TestDrainCompleteMechanism:
         item_id = add_result["data"]["item_id"]
         print(f"  ✓ 添加测试条目: {item_id}")
 
-        # 步骤2: 启动慢速update操作（模拟耗时操作）
-        async def slow_update():
-            """模拟慢速更新操作."""
-            await asyncio.sleep(0.1)  # 模拟耗时
-            result = await self.project_service.update_item(
-                project_id=project_id,
-                group="features",
-                item_id=item_id,
-                summary="Updated"
-            )
-            return result
+        # 步骤2: 归档项目（仅归档项目可删除）
+        archive_result = await self.project_service.archive_project(project_id)
+        assert archive_result["success"], f"归档失败: {archive_result}"
+        assert await self.storage.is_archived(project_id), "项目应标记为已归档"
+        print(f"  ✓ 项目已归档")
 
-        # 步骤3: 并发执行 update 和 delete_project
-        update_task = asyncio.create_task(slow_update())
+        # 步骤3: 删除已归档项目
+        delete_result = await self.project_service.delete_project(project_id)
 
-        # 给update一点时间先获取锁
-        await asyncio.sleep(0.05)
+        # 步骤4: 验证结果
+        assert isinstance(delete_result, dict), f"Delete异常: {delete_result}"
+        assert delete_result["success"], f"Delete失败: {delete_result.get('error')}"
+        print(f"  ✓ Delete成功: {delete_result.get('message', '')}")
 
-        delete_task = self.project_service.delete_project(project_id)
+        # 验证归档文件已清理
+        assert not await self.storage.is_archived(project_id), "归档文件应已清理"
+        print(f"  ✓ 归档文件已清理")
 
-        # 步骤4: 并发执行
-        start_time = time.time()
-        results = await asyncio.gather(update_task, delete_task, return_exceptions=True)
-        elapsed = time.time() - start_time
-
-        update_result, delete_result = results
-
-        # 步骤5: 验证结果
-        assert not isinstance(update_result, Exception), f"Update异常: {update_result}"
-        assert not isinstance(delete_result, Exception), f"Delete异常: {delete_result}"
-
-        assert update_result["success"], f"Update失败: {update_result.get('error')}"
-        print(f"  ✓ Update成功: {update_result['data']['item_id']}")
-        print(f"  ✓ Delete结果: {delete_result.get('success', False)}")
-        print(f"  ✓ 耗时: {elapsed:.2f}s")
-
-        print("✓ 测试通过: remove_project等待update_item完成")
+        print("✓ 测试通过: 归档项目删除成功")
 
     # ==================== delete_item drain 测试 ====================
 

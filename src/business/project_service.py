@@ -601,12 +601,20 @@ class ProjectService:
     async def archive_project(self, project_id: str) -> Dict[str, Any]:
         """归档项目（压缩并移至 .archived/）.
 
+        仅 active 状态的项目可归档；已归档项目重复调用视为成功（幂等）。
+
         Args:
             project_id: 项目ID
 
         Returns:
             Dict: 操作结果
         """
+        # 检查是否已归档（幂等处理）
+        if await self.storage.is_archived(project_id):
+            return ResponseBuilder.success(
+                message=f"项目 '{project_id}' 已归档，无需重复操作"
+            ).to_dict()
+
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(
@@ -620,7 +628,9 @@ class ProjectService:
 
     @barrier(level=OperationLevel.L1, files=["_index.json"])
     async def delete_project(self, project_id: str) -> Dict[str, Any]:
-        """永久删除项目目录.
+        """永久删除已归档项目.
+
+        仅 archived 状态的项目可删除；active 项目需先归档再删除。
 
         Args:
             project_id: 项目ID
@@ -628,15 +638,20 @@ class ProjectService:
         Returns:
             Dict: 操作结果
         """
-        project_data = await self.storage.get_project_data(project_id)
-        if project_data is None:
-            return ResponseBuilder.error(
-                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
-            ).to_dict()
+        # 检查是否已归档
+        if await self.storage.is_archived(project_id):
+            if await self.storage.delete_archived_project(project_id):
+                await self.storage.refresh_projects_cache()
+                return ResponseBuilder.success(
+                    message=f"项目 '{project_id}' 已永久删除"
+                ).to_dict()
+            return ResponseBuilder.error(f"删除项目 '{project_id}' 的归档文件失败").to_dict()
 
-        project_dir = self.storage._get_project_dir(project_id)
-        if project_dir.exists():
-            import shutil
-            shutil.rmtree(project_dir)
-        await self.storage.refresh_projects_cache()
-        return ResponseBuilder.success(message=f"项目 '{project_id}' 已永久删除").to_dict()
+        # 未归档：检查项目是否存在
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is not None:
+            return ResponseBuilder.error("项目当前为激活状态，请先归档后再删除").to_dict()
+
+        return ResponseBuilder.error(
+            ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+        ).to_dict()

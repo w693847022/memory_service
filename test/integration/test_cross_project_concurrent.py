@@ -141,7 +141,15 @@ class TestCrossProjectConcurrent:
 
         print(f"已注册 {len(project_ids)} 个项目，开始并发删除...")
 
-        # 并发删除所有项目
+        # 先归档所有项目（仅归档项目可删除）
+        archive_tasks = [self.project_service.archive_project(pid) for pid in project_ids]
+        archive_results = await asyncio.gather(*archive_tasks, return_exceptions=True)
+        for i, result in enumerate(archive_results):
+            assert not isinstance(result, Exception), f"归档项目 {i} 异常: {result}"
+            assert result["success"], f"归档项目 {i} 失败: {result.get('error')}"
+        print(f"✓ 所有 {len(project_ids)} 个项目已归档")
+
+        # 并发删除所有已归档项目
         tasks = []
         for pid in project_ids:
             task = self.project_service.delete_project(pid)
@@ -349,6 +357,11 @@ class TestCrossProjectConcurrent:
         assert result_b["success"]
         project_id_b = result_b["data"]["project_id"]
         print(f"✓ 注册项目B: {project_id_b}")
+
+        # 先归档项目B（仅归档项目可删除）
+        archive_result = await self.project_service.archive_project(project_id_b)
+        assert archive_result["success"], f"归档项目B失败: {archive_result.get('error')}"
+        print(f"✓ 项目B已归档")
 
         # 并发执行：项目A rename + 项目B delete
         rename_task = self.project_service.project_rename(

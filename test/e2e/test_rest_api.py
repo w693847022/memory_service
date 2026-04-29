@@ -85,14 +85,20 @@ class TestRestProjects:
         assert get_result["data"]["info"]["name"] == "rest_rename_new"
 
     def test_delete_project(self, rest_client: RestClient):
-        """测试删除项目."""
+        """测试删除已归档项目."""
         # 先注册项目
         register_result = rest_client.post("/api/projects", json={
             "name": "待删除项目"
         })
         project_id = register_result["data"]["project_id"]
 
-        # 删除项目
+        # 先归档项目（仅归档项目可删除）
+        archive_result = rest_client.post(
+            f"/api/projects/{project_id}/archive",
+        )
+        assert archive_result["success"] is True
+
+        # 删除已归档项目
         result = rest_client.delete(
             f"/api/projects/{project_id}",
         )

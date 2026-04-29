@@ -102,7 +102,7 @@ async def delete_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
 ):
-    """永久删除项目."""
+    """永久删除已归档项目。仅 archived 状态的项目可删除，active 项目需先调用归档接口后再删除."""
     client = _get_async_client(request)
     result = await client.delete_project(
         project_id=project_id,
