@@ -151,7 +151,9 @@ class ProjectService:
                     "name": name,
                     "summary": project_data.metadata.summary,
                     "tags": project_data.metadata.tags,
-                    "status": "archived" if await self.storage.is_archived(project_id) else "active"
+                    "status": "archived" if await self.storage.is_archived(project_id) else "active",
+                    "created_at": project_data.metadata.created_at,
+                    "updated_at": project_data.metadata.updated_at,
                 })
 
         if include_archived:
@@ -162,7 +164,9 @@ class ProjectService:
                     "summary": archived.get("summary", ""),
                     "tags": archived.get("tags", []),
                     "status": "archived",
-                    "archived_at": archived.get("archived_at", "")
+                    "archived_at": archived.get("archived_at", ""),
+                    "created_at": archived.get("created_at", ""),
+                    "updated_at": archived.get("updated_at", ""),
                 })
 
         return ResponseBuilder.success(

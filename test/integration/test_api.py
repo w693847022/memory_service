@@ -67,6 +67,13 @@ class TestApiIntegration:
         assert "项目B" in names, "项目B 不在列表中"
         assert "项目C" in names, "项目C 不在列表中"
 
+        # 验证 created_at 和 updated_at 字段
+        for p in projects:
+            assert "created_at" in p, f"项目 {p['name']} 缺少 created_at 字段"
+            assert "updated_at" in p, f"项目 {p['name']} 缺少 updated_at 字段"
+            assert p["created_at"], f"项目 {p['name']} 的 created_at 为空"
+            assert p["updated_at"], f"项目 {p['name']} 的 updated_at 为空"
+
         print(f"✓ 项目列表接口测试通过 (共 {result['data']['total']} 个项目)")
 
     async def test_project_get_with_tags(self):

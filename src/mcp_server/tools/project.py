@@ -135,7 +135,9 @@ def project_list(
             - 默认: False
 
     Returns:
-        JSON 格式的项目列表，包含项目的 id、name、path 等信息
+        JSON 格式的项目列表，包含项目的 id、name、summary、tags、status 等信息
+        - summary 模式: 返回 id, name, summary, tags, status
+        - detail 模式: 额外包含 created_at, updated_at
     """
     client = _get_client()
     result = client.project_list(
