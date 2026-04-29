@@ -8,13 +8,13 @@ mcp:
 # FastAPI 服务配置
 fastapi:
   host: "0.0.0.0"
-  port: 8080
+  port: 8001
   log_level: "INFO"
 
 # Business 服务配置
 business:
   host: "0.0.0.0"
-  port: 8000
+  port: 8002
   log_level: "INFO"
 
 # 缓存配置
