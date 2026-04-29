@@ -13,7 +13,7 @@ if str(src_dir) not in sys.path:
 
 from api.tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,
-    project_add, project_update, project_delete, project_remove, project_item_tag_manage,
+    project_add, project_update, project_delete, project_archive, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
     project_get, project_stats,
     stats_summary, stats_cleanup,
@@ -31,7 +31,7 @@ TOOLS = {
     "project_add": project_add,
     "project_update": project_update,
     "project_delete": project_delete,
-    "project_remove": project_remove,
+    "project_archive": project_archive,
     "project_item_tag_manage": project_item_tag_manage,
     # 标签管理
     "tag_register": tag_register,

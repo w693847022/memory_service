@@ -147,16 +147,16 @@ class TestDrainCompleteMechanism:
 
     # ==================== remove_project drain 测试 ====================
 
-    async def test_remove_project_drain_waits_for_update(self):
-        """测试：remove_project应该等待update_item完成（Drain机制）.
+    async def test_delete_project_drain_waits_for_update(self):
+        """测试：delete_project应该等待update_item完成（Drain机制）.
 
         测试场景：
         1. 创建一个测试条目
         2. 启动慢速update_item操作
-        3. 同时启动remove_project操作
-        4. remove_project需要drain B4+B5，应该等待update完成
+        3. 同时启动delete_project操作
+        4. delete_project需要drain B4+B5，应该等待update完成
         """
-        project_id = await self.setup_project("remove_project_drain_test")
+        project_id = await self.setup_project("delete_project_drain_test")
 
         # 步骤1: 添加一个测试条目
         add_result = await self.project_service.add_item(
@@ -183,28 +183,28 @@ class TestDrainCompleteMechanism:
             )
             return result
 
-        # 步骤3: 并发执行 update 和 remove_project
+        # 步骤3: 并发执行 update 和 delete_project
         update_task = asyncio.create_task(slow_update())
 
         # 给update一点时间先获取锁
         await asyncio.sleep(0.05)
 
-        remove_task = self.project_service.remove_project(project_id, mode="delete")
+        delete_task = self.project_service.delete_project(project_id)
 
         # 步骤4: 并发执行
         start_time = time.time()
-        results = await asyncio.gather(update_task, remove_task, return_exceptions=True)
+        results = await asyncio.gather(update_task, delete_task, return_exceptions=True)
         elapsed = time.time() - start_time
 
-        update_result, remove_result = results
+        update_result, delete_result = results
 
         # 步骤5: 验证结果
         assert not isinstance(update_result, Exception), f"Update异常: {update_result}"
-        assert not isinstance(remove_result, Exception), f"Remove异常: {remove_result}"
+        assert not isinstance(delete_result, Exception), f"Delete异常: {delete_result}"
 
         assert update_result["success"], f"Update失败: {update_result.get('error')}"
         print(f"  ✓ Update成功: {update_result['data']['item_id']}")
-        print(f"  ✓ Remove结果: {remove_result.get('success', False)}")
+        print(f"  ✓ Delete结果: {delete_result.get('success', False)}")
         print(f"  ✓ 耗时: {elapsed:.2f}s")
 
         print("✓ 测试通过: remove_project等待update_item完成")

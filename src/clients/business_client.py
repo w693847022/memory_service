@@ -151,9 +151,13 @@ class BusinessApiClient:
         """重命名项目."""
         return self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
 
-    def remove_project(self, project_id: str, mode: str = "archive") -> ApiResponse:
-        """删除或归档项目."""
-        return self._delete(f"/api/projects/{project_id}", params={"mode": mode})
+    def archive_project(self, project_id: str) -> ApiResponse:
+        """归档项目."""
+        return self._post(f"/api/projects/{project_id}/archive")
+
+    def delete_project(self, project_id: str) -> ApiResponse:
+        """永久删除项目."""
+        return self._delete(f"/api/projects/{project_id}")
 
     def list_groups(self, project_id: str) -> ApiResponse:
         """列出项目的所有分组."""

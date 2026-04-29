@@ -164,12 +164,20 @@ async def rename_project(project_id: str, new_name: str):
 
 
 @router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
-async def remove_project(project_id: str, mode: str = "archive"):
-    """删除或归档项目."""
-    result = await _get_project_service().remove_project(project_id, mode)
+async def delete_project(project_id: str):
+    """永久删除项目."""
+    result = await _get_project_service().delete_project(project_id)
     if result["success"]:
-        action = "归档" if mode == "archive" else "删除"
-        return ApiResponse(success=True, data={"project_id": project_id, "mode": mode}, message=f"项目{action}成功")
+        return ApiResponse(success=True, data={"project_id": project_id}, message="项目删除成功")
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
+
+
+@router.post("/projects/{project_id}/archive", response_model=ProjectOperationResponse)
+async def archive_project(project_id: str):
+    """归档项目."""
+    result = await _get_project_service().archive_project(project_id)
+    if result["success"]:
+        return ApiResponse(success=True, data={"project_id": project_id, "mode": "archive"}, message="项目归档成功")
     raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 

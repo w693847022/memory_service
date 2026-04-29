@@ -613,7 +613,7 @@ class TestConcurrentOperations:
         # 清理所有项目
         for pid in project_ids:
             try:
-                await self.project_service.remove_project(pid, mode="delete")
+                await self.project_service.delete_project(pid)
             except:
                 pass
 

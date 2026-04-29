@@ -84,20 +84,30 @@ async def update_project(
     raise HTTPException(status_code=400, detail="此接口暂不支持，请使用 /projects/{project_id}/rename 重命名项目")
 
 
+@router.post("/projects/{project_id}/archive", response_model=ProjectOperationResponse)
+async def archive_project(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+):
+    """归档项目."""
+    client = _get_async_client(request)
+    result = await client.archive_project(
+        project_id=project_id,
+    )
+    return await handle_result(result, message="项目归档成功")
+
+
 @router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def delete_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
-    mode: str = Query("archive", pattern="^(archive|delete)$", description="操作模式"),
 ):
-    """删除或归档项目."""
+    """永久删除项目."""
     client = _get_async_client(request)
-    result = await client.remove_project(
+    result = await client.delete_project(
         project_id=project_id,
-        mode=mode,
     )
-    action = "归档" if mode == "archive" else "删除"
-    return await handle_result(result, message=f"项目{action}成功")
+    return await handle_result(result, message="项目删除成功")
 
 
 @router.put("/projects/{project_id}/rename", response_model=ProjectOperationResponse)

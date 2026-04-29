@@ -186,7 +186,7 @@ Please use MCP [memory] to list all projects
 | `project_list` | List all projects |
 | `project_get` | Get project info or query entries |
 | `project_rename` | Rename project |
-| `project_remove` | Archive or delete project |
+| `project_archive` | Archive project (MCP only) |
 
 ### Entry Management
 

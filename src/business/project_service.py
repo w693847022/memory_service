@@ -598,24 +598,45 @@ class ProjectService:
     # ==================== 项目归档/删除 ====================
 
     @barrier(level=OperationLevel.L1, files=["_index.json"])
-    async def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
+    async def archive_project(self, project_id: str) -> Dict[str, Any]:
+        """归档项目（压缩并移至 .archived/）.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            Dict: 操作结果
+        """
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
-        from src.common.consts import OperationModes
-
-        if mode == OperationModes.DELETE:
-            project_dir = self.storage._get_project_dir(project_id)
-            if project_dir.exists():
-                import shutil
-                shutil.rmtree(project_dir)
-            await self.storage.refresh_projects_cache()
-            return ResponseBuilder.success(message=f"项目 '{project_id}' 已永久删除").to_dict()
-
         result = await self.storage.archive_project(project_id)
         if result.get("success"):
             await self.storage.refresh_projects_cache()
         return result
+
+    @barrier(level=OperationLevel.L1, files=["_index.json"])
+    async def delete_project(self, project_id: str) -> Dict[str, Any]:
+        """永久删除项目目录.
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            Dict: 操作结果
+        """
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
+
+        project_dir = self.storage._get_project_dir(project_id)
+        if project_dir.exists():
+            import shutil
+            shutil.rmtree(project_dir)
+        await self.storage.refresh_projects_cache()
+        return ResponseBuilder.success(message=f"项目 '{project_id}' 已永久删除").to_dict()

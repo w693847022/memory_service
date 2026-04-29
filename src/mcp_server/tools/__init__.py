@@ -19,7 +19,7 @@ from .project import (
     project_add,
     project_update,
     project_delete,
-    project_remove,
+    project_archive,
     project_item_tag_manage,
     project_get,
 )
@@ -50,7 +50,7 @@ __all__ = [
     "project_add",
     "project_update",
     "project_delete",
-    "project_remove",
+    "project_archive",
     "project_item_tag_manage",
     "project_get",
     # Group

@@ -22,7 +22,7 @@ from common.config import parse_args
 # 导入 MCP 工具
 from .tools import (
     project_register, project_rename, project_list, project_groups_list, project_tags_info,
-    project_add, project_update, project_delete, project_remove, project_item_tag_manage,
+    project_add, project_update, project_delete, project_archive, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
     create_custom_group,
     project_get,
@@ -84,7 +84,7 @@ def _get_server():
         _server.tool()(project_add)
         _server.tool()(project_update)
         _server.tool()(project_delete)
-        _server.tool()(project_remove)
+        _server.tool()(project_archive)
         _server.tool()(project_item_tag_manage)
 
         # Tag Management Tools

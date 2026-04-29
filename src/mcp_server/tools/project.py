@@ -54,11 +54,7 @@ from ._shared import _get_client, _tool_response, _check_mcp_access, _error_resp
 9. operation (标签操作类型)
    - 允许值: set (设置), add (添加), remove (移除)
 
-10. mode (删除/归档模式)
-    - 允许值: archive (归档), delete (永久删除)
-    - 默认值: archive
-
-11. 日期格式
+10. 日期格式
     - created_after, created_before, updated_after, updated_before
     - 格式: YYYY-MM-DD (如: "2026-04-01")
 
@@ -413,25 +409,21 @@ def project_delete(
     return _tool_response(result)
 
 
-def project_remove(
-    project_id: str,
-    mode: str = "archive"
+def project_archive(
+    project_id: str
 ) -> str:
-    """归档或永久删除项目（统一接口）.
+    """归档项目.
 
     Args:
         project_id: 项目ID (必填)
             - 获取方式: project_list() 返回结果中的 "id" 字段
-        mode: 操作模式 (可选)
-            - 允许值: "archive"(归档), "delete"(永久删除)
-            - 默认: "archive"
-            - 注意: "delete" 操作不可逆
+            - 格式: UUID 字符串
 
     Returns:
         JSON 格式的操作结果
     """
     client = _get_client()
-    result = client.remove_project(project_id=project_id, mode=mode)
+    result = client.archive_project(project_id=project_id)
     return _tool_response(result)
 
 

@@ -157,9 +157,13 @@ class BusinessApiAsyncClient:
         """重命名项目."""
         return await self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
 
-    async def remove_project(self, project_id: str, mode: str = "archive") -> ApiResponse:
-        """删除或归档项目."""
-        return await self._delete(f"/api/projects/{project_id}", params={"mode": mode})
+    async def archive_project(self, project_id: str) -> ApiResponse:
+        """归档项目."""
+        return await self._post(f"/api/projects/{project_id}/archive")
+
+    async def delete_project(self, project_id: str) -> ApiResponse:
+        """永久删除项目."""
+        return await self._delete(f"/api/projects/{project_id}")
 
     async def list_groups(self, project_id: str) -> ApiResponse:
         """列出项目的所有分组."""

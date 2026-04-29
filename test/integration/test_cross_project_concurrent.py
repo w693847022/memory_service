@@ -45,7 +45,7 @@ class TestCrossProjectConcurrent:
         if self.project_service and self.project_ids:
             for pid in self.project_ids:
                 try:
-                    await self.project_service.remove_project(pid, mode="delete")
+                    await self.project_service.delete_project(pid)
                 except Exception as e:
                     print(f"清理项目 {pid} 失败: {e}")
         # 清理临时目录
@@ -144,10 +144,7 @@ class TestCrossProjectConcurrent:
         # 并发删除所有项目
         tasks = []
         for pid in project_ids:
-            task = self.project_service.remove_project(
-                project_id=pid,
-                mode="delete"
-            )
+            task = self.project_service.delete_project(pid)
             tasks.append(task)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -359,10 +356,7 @@ class TestCrossProjectConcurrent:
             new_name="renamed_test_a"
         )
 
-        delete_task = self.project_service.remove_project(
-            project_id=project_id_b,
-            mode="delete"
-        )
+        delete_task = self.project_service.delete_project(project_id=project_id_b)
 
         print("开始并发执行：项目A rename + 项目B delete...")
         results = await asyncio.gather(rename_task, delete_task, return_exceptions=True)

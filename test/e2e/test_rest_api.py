@@ -95,7 +95,21 @@ class TestRestProjects:
         # 删除项目
         result = rest_client.delete(
             f"/api/projects/{project_id}",
-            params={"mode": "delete"}
+        )
+
+        assert result["success"] is True
+
+    def test_archive_project(self, rest_client: RestClient):
+        """测试归档项目."""
+        # 先注册项目
+        register_result = rest_client.post("/api/projects", json={
+            "name": "待归档项目"
+        })
+        project_id = register_result["data"]["project_id"]
+
+        # 归档项目
+        result = rest_client.post(
+            f"/api/projects/{project_id}/archive",
         )
 
         assert result["success"] is True
