@@ -68,6 +68,14 @@ class ProjectService:
     ) -> Dict[str, Any]:
         from src.models.project import ProjectInitialData
 
+        # 校验标签名格式
+        if tags:
+            for tag in tags:
+                if not self._validate_tag_name(tag):
+                    return ResponseBuilder.error(
+                        ErrorMessages.INVALID_TAG_NAME.format(tag=tag)
+                    ).to_dict()
+
         project_id = self.storage._generate_id(name)
 
         initial_data = ProjectInitialData.create(

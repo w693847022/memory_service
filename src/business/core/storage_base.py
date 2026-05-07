@@ -793,6 +793,8 @@ class ProjectStorage:
                 "name": project_name,
                 "summary": project_data.metadata.summary,
                 "tags": project_data.metadata.tags,
+                "created_at": project_data.metadata.created_at,
+                "updated_at": project_data.metadata.updated_at,
                 "archived_at": datetime.now().isoformat(),
                 "archive_file": archive_file.name
             }

@@ -59,12 +59,6 @@ def create_test_project(storage: Storage, project_id: str, project_name: str) ->
     metadata = {
         "id": project_id,
         "name": project_name,
-        "summary": "测试项目",
-        "tags": ["test"],
-        "status": "active",
-        "created_at": now,
-        "updated_at": now,
-        "path": None,
         "_version": 1,
         "_versions": {
             "project": 1,
@@ -73,6 +67,16 @@ def create_test_project(storage: Storage, project_id: str, project_name: str) ->
             "fixes": 1,
             "notes": 1,
             "standards": 1
+        },
+        "info": {
+            "id": project_id,
+            "name": project_name,
+            "summary": "测试项目",
+            "tags": ["test"],
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "path": None
         }
     }
 
@@ -225,6 +229,10 @@ async def test_archive_creates_metadata():
         assert meta_data["name"] == project_name, "元数据应该包含正确的项目名称"
         assert "archived_at" in meta_data, "元数据应该包含归档时间"
         assert "archive_file" in meta_data, "元数据应该包含归档文件名"
+        assert "created_at" in meta_data, "元数据应该包含创建时间"
+        assert "updated_at" in meta_data, "元数据应该包含更新时间"
+        assert meta_data["created_at"], "元数据 created_at 不应为空"
+        assert meta_data["updated_at"], "元数据 updated_at 不应为空"
         print(f"  ✓ 元数据内容正确")
 
 
