@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
-from src.models.requests.project import ProjectRegisterRequest, ProjectRenameRequest
+from src.models.requests.project import ProjectRegisterRequest, ProjectRenameRequest, ProjectUpdateInfoRequest
 from src.models.responses.api_responses import (
     ProjectListResponse,
     ProjectDetailResponse,
@@ -78,10 +78,19 @@ async def get_project(
 
 @router.put("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def update_project(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
+    body: ProjectUpdateInfoRequest = Body(...),
 ):
-    """更新项目信息."""
-    raise HTTPException(status_code=400, detail="此接口暂不支持，请使用 /projects/{project_id}/rename 重命名项目")
+    """更新项目信息（描述、标签、路径）."""
+    client = _get_async_client(request)
+    result = await client.update_project_info(
+        project_id=project_id,
+        summary=body.summary,
+        tags=body.tags,
+        path=body.path,
+    )
+    return await handle_result(result, message="项目信息更新成功")
 
 
 @router.post("/projects/{project_id}/archive", response_model=ProjectOperationResponse)

@@ -163,6 +163,23 @@ async def rename_project(project_id: str, new_name: str):
     raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
 
 
+@router.put("/projects/{project_id}/info", response_model=ProjectOperationResponse)
+async def update_project_info(
+    project_id: str,
+    summary: Optional[str] = Body(None),
+    tags: str = Body(None),
+    path: Optional[str] = Body(None)
+):
+    """更新项目信息（描述、标签、路径）."""
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    result = await _get_project_service().project_update_info(
+        project_id, summary=summary, tags=tag_list, path=path
+    )
+    if result["success"]:
+        return ApiResponse(success=True, data=result["data"], message="项目信息更新成功")
+    raise HTTPException(status_code=400, detail=ApiResponse.error_response(result.get("error") or "Unknown error").model_dump())
+
+
 @router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def delete_project(project_id: str):
     """永久删除项目."""

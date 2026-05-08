@@ -21,7 +21,7 @@ from common.config import parse_args
 
 # 导入 MCP 工具
 from .tools import (
-    project_register, project_rename, project_list, project_groups_list, project_tags_info,
+    project_register, project_rename, project_update_info, project_list, project_groups_list, project_tags_info,
     project_add, project_update, project_delete, project_archive, project_item_tag_manage,
     tag_register, tag_update, tag_delete, tag_merge,
     create_custom_group,
@@ -76,6 +76,7 @@ def _get_server():
         # Register Tools
         _server.tool()(project_register)
         _server.tool()(project_rename)
+        _server.tool()(project_update_info)
         _server.tool()(project_list)
         _server.tool()(project_groups_list)
         _server.tool()(project_tags_info)

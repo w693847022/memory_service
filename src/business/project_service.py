@@ -101,6 +101,65 @@ class ProjectService:
         return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
 
     @barrier(level=OperationLevel.L2, files=["_project.json"], key="{project_id}")
+    async def project_update_info(
+        self,
+        project_id: str,
+        summary: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        path: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """更新项目信息（描述、标签、路径）.
+
+        仅 active 状态的项目可修改，只更新传入的非 None 字段。
+
+        Args:
+            project_id: 项目ID
+            summary: 新的项目摘要
+            tags: 新的项目标签列表
+            path: 新的项目路径
+
+        Returns:
+            Dict: 操作结果
+        """
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
+
+        if await self.storage.is_archived(project_id):
+            return ResponseBuilder.error("已归档的项目不能修改信息").to_dict()
+
+        updated_fields = {}
+        if summary is not None:
+            project_data.metadata.summary = summary
+            updated_fields["summary"] = summary
+        if tags is not None:
+            project_data.metadata.tags = tags
+            updated_fields["tags"] = tags
+        if path is not None:
+            project_data.metadata.path = path
+            updated_fields["path"] = path
+
+        if not updated_fields:
+            return ResponseBuilder.error("未指定需要更新的字段").to_dict()
+
+        project_data.touch()
+        project_data.increment_version("project")
+
+        if await self.storage.save_project_data(project_id, project_data):
+            return ResponseBuilder.success(
+                data={
+                    "project_id": project_id,
+                    "updated_fields": list(updated_fields.keys()),
+                    "info": project_data.metadata.model_dump()
+                },
+                message=f"项目信息已更新: {', '.join(updated_fields.keys())}"
+            ).to_dict()
+
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
+
+    @barrier(level=OperationLevel.L2, files=["_project.json"], key="{project_id}")
     async def project_rename(self, project_id: str, new_name: str) -> Dict[str, Any]:
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:

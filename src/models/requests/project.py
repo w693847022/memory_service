@@ -37,3 +37,21 @@ class ProjectRenameRequest(BaseModel):
         max_length=100,
         description="新项目名称",
     )
+
+
+class ProjectUpdateInfoRequest(BaseModel):
+    """更新项目信息请求（描述、标签、路径）."""
+
+    summary: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="项目摘要",
+    )
+    tags: Optional[str] = Field(
+        default=None,
+        description="项目标签（逗号分隔）",
+    )
+    path: Optional[str] = Field(
+        default=None,
+        description="项目路径",
+    )

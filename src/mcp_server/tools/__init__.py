@@ -13,6 +13,7 @@ from ._shared import (
 from .project import (
     project_register,
     project_rename,
+    project_update_info,
     project_list,
     project_groups_list,
     project_tags_info,
@@ -44,6 +45,7 @@ __all__ = [
     # Project
     "project_register",
     "project_rename",
+    "project_update_info",
     "project_list",
     "project_groups_list",
     "project_tags_info",

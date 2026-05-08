@@ -108,6 +108,45 @@ def project_rename(project_id: str, new_name: str) -> str:
     return _tool_response(result)
 
 
+def project_update_info(
+    project_id: str,
+    summary: Optional[str] = None,
+    tags: Optional[str] = None,
+    path: Optional[str] = None
+) -> str:
+    """更新项目信息（描述、标签、路径）.
+
+    仅 active 状态的项目可修改，传入 None 的字段不会被更新。
+
+    Args:
+        project_id: 项目ID (必填)
+            - 获取方式: project_list() 返回结果中的 "id" 字段
+            - 格式: UUID 字符串
+        summary: 项目摘要 (可选)
+            - 传入 None 表示不更新
+            - 建议: 简短描述项目用途，10-50字
+            - 最大长度: 500 字符
+        tags: 项目标签 (可选)
+            - 格式: 逗号分隔 (如: "web,api,service")
+            - 传入 None 表示不更新
+            - 传入空字符串 "" 表示清空标签
+        path: 项目路径 (可选)
+            - 格式: 绝对路径或相对路径 (如: "/home/user/myproject")
+            - 传入 None 表示不更新
+
+    Returns:
+        JSON 格式的操作结果，包含更新后的项目信息
+    """
+    client = _get_client()
+    result = client.update_project_info(
+        project_id=project_id,
+        summary=summary,
+        tags=tags,
+        path=path
+    )
+    return _tool_response(result)
+
+
 def project_list(
     view_mode: str = "summary",
     page: int = 1,

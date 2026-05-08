@@ -151,6 +151,23 @@ class BusinessApiClient:
         """重命名项目."""
         return self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
 
+    def update_project_info(
+        self,
+        project_id: str,
+        summary: Optional[str] = None,
+        tags: Optional[str] = None,
+        path: Optional[str] = None
+    ) -> ApiResponse:
+        """更新项目信息（描述、标签、路径）."""
+        data = {}
+        if summary is not None:
+            data["summary"] = summary
+        if tags is not None:
+            data["tags"] = tags
+        if path is not None:
+            data["path"] = path
+        return self._put(f"/api/projects/{project_id}/info", json=data)
+
     def archive_project(self, project_id: str) -> ApiResponse:
         """归档项目."""
         return self._post(f"/api/projects/{project_id}/archive")
