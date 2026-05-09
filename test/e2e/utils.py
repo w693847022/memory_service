@@ -339,6 +339,54 @@ class McpClient:
         text_content = content_list[0].get("text", "")
         return json.loads(text_content)
 
+    def read_resource(self, uri: str) -> Dict[str, Any]:
+        """读取 MCP 资源.
+
+        Args:
+            uri: 资源 URI
+
+        Returns:
+            资源内容（JSON 解析后的字典）
+        """
+        request_payload = {
+            "jsonrpc": "2.0",
+            "id": self._get_request_id(),
+            "method": "resources/read",
+            "params": {
+                "uri": uri
+            }
+        }
+
+        response = self._client.post(
+            self.server_url,
+            json=request_payload,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+        )
+        response.raise_for_status()
+
+        data = response.json()
+
+        # 检查错误
+        if "error" in data:
+            return {
+                "success": False,
+                "error": data["error"].get("message", "MCP resource read failed")
+            }
+
+        # 从 MCP 响应中提取资源内容
+        result = data.get("result", {})
+        contents = result.get("contents", [])
+
+        if not contents:
+            return {"success": False, "error": "Empty resource response"}
+
+        import json
+        text_content = contents[0].get("text", "")
+        return json.loads(text_content)
+
     def close(self):
         """关闭客户端."""
         self._client.close()

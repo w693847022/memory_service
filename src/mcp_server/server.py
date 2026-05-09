@@ -28,6 +28,9 @@ from .tools import (
     project_get,
 )
 
+# 导入指南构建函数
+from .guidelines import _build_guidelines_content
+
 # 导入版本信息
 from __init__ import __version__
 
@@ -99,6 +102,29 @@ def _get_server():
 
         # Query Tools
         _server.tool()(project_get)
+
+        # Register Resources
+        def get_guidelines(lang: str) -> dict:
+            """获取指定语言的使用指南."""
+            return _build_guidelines_content(lang)
+
+        # 静态资源 - 默认中文指南，可通过 resources/list 直接发现
+        _server.resource(
+            "resource://guidelines",
+            name="guidelines",
+            title="使用指南 / Usage Guidelines",
+            description="项目记忆服务使用指南（默认中文），可通过 resource://guidelines/{lang} 获取其他语言版本",
+            mime_type="application/json"
+        )(lambda: _build_guidelines_content("zh"))
+
+        # 模板资源 - 按语言获取指南
+        _server.resource(
+            "resource://guidelines/{lang}",
+            name="guidelines",
+            title="使用指南 / Usage Guidelines",
+            description="项目记忆服务使用指南，支持 zh/en 两种语言",
+            mime_type="application/json"
+        )(get_guidelines)
 
     return _server
 
