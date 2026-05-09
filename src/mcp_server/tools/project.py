@@ -307,6 +307,8 @@ def project_add(
             - 获取方式: project_groups_list(project_id) 返回的 groups 列表
         content: 补充描述 (必填)
             - 格式: Markdown 格式文本
+            - 自定义语法: 支持条目引用链接 [显示文本](条目ID)，条目ID格式为 前缀_YYYYMMDD_N
+              (前缀: feat->features, fix->fixes, note->notes, std->standards，其他匹配自定义组名)
             - 限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
             - 默认: 空
         summary: 摘要 (必填)
@@ -372,6 +374,7 @@ def project_update(
             - 获取方式: project_get(project_id, group_name) 返回结果中的 "id" 字段
         content: 内容更新 (可选)
             - 传入 None 表示不更新，传入空字符串 "" 表示清空
+            - 格式: Markdown 格式文本，支持条目引用链接 [显示文本](条目ID)
             - 长度限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
         summary: 摘要更新 (可选)
             - 传入 None 表示不更新

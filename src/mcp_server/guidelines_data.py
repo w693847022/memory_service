@@ -15,7 +15,7 @@ TRANSLATIONS = {
             "用户确认: '我的项目叫 Project X'",
         ],
         "groups_title": "分组说明",
-        "groups_description": "项目记忆分为4个分组，用于不同类型的内容管理",
+        "groups_description": "项目记忆分为内置分组和自定义分组，用于不同类型的内容管理",
         "groups_list": [
             {
                 "name": "features",
@@ -58,12 +58,12 @@ TRANSLATIONS = {
             "security": "安全",
             "performance": "性能优化",
         },
-        "tag_limits_recommendation": "每条记录的tag数量最好不超过5个",
+        "tag_limits_recommendation": "每条记录的tag数量受分组 max_tags 配置限制（默认为2）",
         "workflow_title": "记忆工作流",
         "workflow_description": "统一的使用流程，包含查询、记录和维护",
         "query_flow": [
             "步骤0: 获取项目列表确定 project_id → project_list",
-            "步骤1: 查看分组概览 → project_groups_list(project_id) → 了解features/notes/fixes/standards分组",
+            "步骤1: 查看分组概览 → project_groups_list(project_id) → 了解内置分组(features/notes/fixes/standards)和自定义分组",
             "步骤2: 查询标签信息 → project_tags_info(project_id) → 查看已注册标签",
             "步骤3: 按标签查询 → project_get(project_id, group_name, tags='tag1,tag2') → 服务端过滤获取列表",
             "步骤4: 查询详情 → project_get(project_id, group_name, item_id) → 获取具体条目详情",
@@ -80,8 +80,32 @@ TRANSLATIONS = {
             "standards": "确定项目规范时记录",
         },
         "recording_guide_tag_registration": "新标签必须先注册: tag_register(project_id, tag_name, description, 10-50字描述)",
-        "recording_guide_content": "语言简练，关键信息为主",
-        "recording_guide_tags": "1-5个，必须先注册",
+        "recording_guide_content": {
+            "format": "Markdown 格式",
+            "style": "语言简练，关键信息为主",
+            "custom_syntax": [
+                {
+                    "name": "条目引用链接",
+                    "syntax": "[显示文本](条目ID)",
+                    "description": "引用其他条目，在预览中生成可点击链接",
+                    "id_format": "前缀_YYYYMMDD_N",
+                    "prefix_map": {
+                        "feat": "features",
+                        "fix": "fixes",
+                        "note": "notes",
+                        "std": "standards",
+                    },
+                    "note": "其他前缀直接匹配自定义组名",
+                    "examples": [
+                        "[用户登录功能](feat_20260403_2)",
+                        "[修复详情](fix_20260323_1)",
+                        "[设计笔记](note_20260324_1)",
+                        "[API规范](std_20260329_1)",
+                    ],
+                },
+            ],
+        },
+        "recording_guide_tags": "受分组 max_tags 限制（默认2个），必须先注册",
         "cleanup": [
             "1. 查看所有标签: project_tags_info(project_id)",
             "2. 合并重复标签: tag_merge(project_id, old_tag, new_tag)",
@@ -91,7 +115,7 @@ TRANSLATIONS = {
         "best_practices": [
             "使用英文标签，便于国际化",
             "标签命名遵循 '小写+短词' 原则",
-            "避免过度标签化（每条≤5个）",
+            "避免过度标签化（受分组 max_tags 限制）",
             "查询时优先使用 tags 参数服务端过滤，而非全量获取后手动筛选",
             "定期整理标签，移除不再使用的",
         ],
@@ -110,7 +134,7 @@ TRANSLATIONS = {
             "User confirms: 'My project is Project X'",
         ],
         "groups_title": "Groups Description",
-        "groups_description": "Project memory is divided into 4 groups for different types of content",
+        "groups_description": "Project memory is divided into built-in groups and custom groups for different types of content",
         "groups_list": [
             {
                 "name": "features",
@@ -153,12 +177,12 @@ TRANSLATIONS = {
             "security": "Security",
             "performance": "Performance optimization",
         },
-        "tag_limits_recommendation": "Best to keep tags per item ≤ 5",
+        "tag_limits_recommendation": "Tags per item are limited by group max_tags config (default is 2)",
         "workflow_title": "Memory Workflow",
         "workflow_description": "Unified workflow covering query, recording, and maintenance",
         "query_flow": [
             "Step 0: Get project list to identify project_id → project_list",
-            "Step 1: View group overview → project_groups_list(project_id) → understand features/notes/fixes/standards groups",
+            "Step 1: View group overview → project_groups_list(project_id) → understand built-in groups (features/notes/fixes/standards) and custom groups",
             "Step 2: Query tag info → project_tags_info(project_id) → view registered tags",
             "Step 3: Query by tags → project_get(project_id, group_name, tags='tag1,tag2') → server-side filtered list",
             "Step 4: Query details → project_get(project_id, group_name, item_id) → get specific item details",
@@ -175,8 +199,32 @@ TRANSLATIONS = {
             "standards": "Record when establishing project standards",
         },
         "recording_guide_tag_registration": "New tags must be registered first: tag_register(project_id, tag_name, description, 10-50 char description)",
-        "recording_guide_content": "Keep it concise, focus on key information",
-        "recording_guide_tags": "1-5 tags, must register first",
+        "recording_guide_content": {
+            "format": "Markdown format",
+            "style": "Keep it concise, focus on key information",
+            "custom_syntax": [
+                {
+                    "name": "Item Reference Link",
+                    "syntax": "[display text](item_id)",
+                    "description": "Reference other items, generates clickable links in preview",
+                    "id_format": "prefix_YYYYMMDD_N",
+                    "prefix_map": {
+                        "feat": "features",
+                        "fix": "fixes",
+                        "note": "notes",
+                        "std": "standards",
+                    },
+                    "note": "Other prefixes match custom group names directly",
+                    "examples": [
+                        "[User Login](feat_20260403_2)",
+                        "[Fix Details](fix_20260323_1)",
+                        "[Design Notes](note_20260324_1)",
+                        "[API Standard](std_20260329_1)",
+                    ],
+                },
+            ],
+        },
+        "recording_guide_tags": "Limited by group max_tags (default 2), must register first",
         "cleanup": [
             "1. View all tags: project_tags_info(project_id)",
             "2. Merge duplicate tags: tag_merge(project_id, old_tag, new_tag)",
@@ -186,7 +234,7 @@ TRANSLATIONS = {
         "best_practices": [
             "Use English tags for internationalization",
             "Follow 'lowercase+short-word' naming convention",
-            "Avoid over-tagging (≤5 per item)",
+            "Avoid over-tagging (limited by group max_tags)",
             "Use tags parameter for server-side filtering instead of fetching full data",
             "Regularly organize tags and remove unused ones",
         ],

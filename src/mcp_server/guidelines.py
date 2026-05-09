@@ -14,8 +14,8 @@ def _build_guidelines(lang: str) -> dict:
     """
     t = TRANSLATIONS[lang]
     return {
-        "version": "1.1",
-        "last_updated": "2026-03-22",
+        "version": "1.2",
+        "last_updated": "2026-05-09",
         "language": lang,
         "guidelines": {
             "project_naming": {
@@ -33,7 +33,7 @@ def _build_guidelines(lang: str) -> dict:
                 "title": t["tag_standards_title"],
                 "standard_tags": t["standard_tags"],
                 "tag_limits": {
-                    "max_per_item": 5,
+                    "max_per_item": 2,
                     "recommendation": t["tag_limits_recommendation"],
                 },
             },
