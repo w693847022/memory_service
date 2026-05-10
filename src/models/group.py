@@ -4,7 +4,7 @@
 所有组相关的模型定义集中在此文件。
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -16,8 +16,9 @@ from src.models.config import get_settings
 # 系统保留字段（不能用作自定义组名）
 RESERVED_FIELDS = ["id", "info", "tag_registry"]
 
-# 使用独立文件存储 content 的默认组
-CONTENT_SEPARATE_GROUPS = {"features", "fixes", "notes", "standards"}
+# 前端保留前缀（MCP不允许创建此前缀的自定义组，仅REST API可创建）
+FRONTEND_GROUP_PREFIX = "frontend_"
+
 
 def get_default_group_configs() -> Dict[str, Dict[str, Any]]:
     """获取默认组配置（从Settings加载，供项目注册初始化使用）."""
@@ -77,6 +78,8 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
         "description": "功能特性分组",
         "max_tags": 2,
+        "mcp_access": "writable",
+        "max_items": 0,
     },
     "fixes": {
         "content_max_bytes": 4000,
@@ -91,6 +94,8 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
         "description": "缺陷修复分组",
         "max_tags": 2,
+        "mcp_access": "writable",
+        "max_items": 0,
     },
     "notes": {
         "content_max_bytes": 4000,
@@ -105,6 +110,8 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
         "description": "笔记记录分组",
         "max_tags": 2,
+        "mcp_access": "writable",
+        "max_items": 0,
     },
     "standards": {
         "content_max_bytes": 4000,
@@ -119,6 +126,8 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "is_builtin": True,
         "description": "规范标准分组",
         "max_tags": 2,
+        "mcp_access": "writable",
+        "max_items": 0,
     },
 }
 
@@ -155,6 +164,8 @@ class UnifiedGroupConfig(BaseModel):
     is_builtin: bool = Field(default=False, description="是否为内置组")
     description: str = Field(default="", description="组描述")
     max_tags: int = Field(default=2, ge=0, description="单个item最大标签数量")
+    mcp_access: Literal["writable", "readable", "disabled"] = Field(default="writable", description="MCP访问控制: writable(可读写)/readable(只读)/disabled(不可访问)")
+    max_items: int = Field(default=0, ge=0, description="最大条目数量，0表示无限制")
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典以便 JSON 序列化."""
@@ -178,6 +189,8 @@ class UnifiedGroupConfig(BaseModel):
             is_builtin=data.get("is_builtin", False),
             description=data.get("description", ""),
             max_tags=data.get("max_tags", 2),
+            mcp_access=data.get("mcp_access", "writable"),
+            max_items=data.get("max_items", 0),
         )
 
 

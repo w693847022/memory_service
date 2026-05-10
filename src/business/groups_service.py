@@ -4,7 +4,7 @@
 所有涉及 IO 的方法均为 async，使用 barrier_manager 进行并发控制。
 """
 
-from typing import Optional, List, Dict, Any
+from typing import Literal, Optional, List, Dict, Any
 
 from src.models.group import (
     UnifiedGroupConfig,
@@ -59,6 +59,8 @@ class GroupsService:
         enable_severity: bool = False,
         max_tags: int = 2,
         description: str = "",
+        mcp_access: Literal["writable", "readable", "disabled"] = "writable",
+        max_items: int = 0,
     ) -> Dict[str, Any]:
         """创建自定义组."""
         group_configs = await self.storage.get_group_configs(project_id)
@@ -76,6 +78,8 @@ class GroupsService:
             enable_severity=enable_severity,
             max_tags=max_tags,
             description=description,
+            mcp_access=mcp_access,
+            max_items=max_items,
         )
 
         groups[group_name] = new_group

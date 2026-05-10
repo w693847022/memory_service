@@ -186,7 +186,7 @@ python scripts/start_fastapi.py
 | `project_list` | 列出所有项目 |
 | `project_get` | 获取项目信息或查询条目 |
 | `project_rename` | 重命名项目 |
-| `project_remove` | 归档或删除项目 |
+| `project_archive` | 归档项目（MCP 仅支持归档） |
 
 ### 条目管理
 

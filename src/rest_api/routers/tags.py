@@ -2,9 +2,17 @@
 
 import logging
 
-from fastapi import APIRouter, Query, Path, HTTPException, Request
+from fastapi import APIRouter, Query, Path, Body, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
+from src.models.responses.api_responses import TagInfoResponse, TagOperationResponse
+from src.models.requests.tag import (
+    TagRegisterRequest,
+    TagUpdateRequest,
+    TagDeleteRequest,
+    TagMergeRequest,
+)
+from src.rest_api.utils.handlers import handle_result
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -19,89 +27,72 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 兼容 Business API 路径格式的端点
 # ===================
 
-@router.post("/tags/register")
+@router.post("/tags/register", response_model=TagOperationResponse)
 async def register_tag_compat(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
-    tag_name: str = Query(..., description="标签名称"),
-    summary: str = Query(..., description="标签语义摘要"),
-    aliases: str = Query("", description="别名（逗号分隔）"),
+    body: TagRegisterRequest = Body(...),
 ):
     """注册项目标签 (兼容 Business API 路径)."""
     client = _get_async_client(request)
     result = await client.tag_register(
-        project_id=project_id,
-        tag_name=tag_name,
-        summary=summary,
-        aliases=aliases,
+        project_id=body.project_id,
+        tag_name=body.tag_name,
+        summary=body.summary,
+        aliases=body.aliases,
     )
-    if result.success:
-        return {"success": True, "data": result.data, "message": "标签注册成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签注册成功")
 
 
-@router.put("/tags/update")
+@router.put("/tags/update", response_model=TagOperationResponse)
 async def update_tag_compat(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
-    tag_name: str = Query(..., description="标签名称"),
-    summary: str = Query(..., description="新摘要"),
+    body: TagUpdateRequest = Body(...),
 ):
     """更新已注册标签的语义信息 (兼容 Business API 路径)."""
     client = _get_async_client(request)
     result = await client.tag_update(
-        project_id=project_id,
-        tag_name=tag_name,
-        summary=summary,
+        project_id=body.project_id,
+        tag_name=body.tag_name,
+        summary=body.summary,
     )
-    if result.success:
-        return {"success": True, "message": "标签更新成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签更新成功")
 
 
-@router.delete("/tags/delete")
+@router.delete("/tags/delete", response_model=TagOperationResponse)
 async def delete_tag_compat(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
-    tag_name: str = Query(..., description="标签名称"),
-    force: str = Query("false", description="是否强制删除"),
+    body: TagDeleteRequest = Body(...),
 ):
     """删除标签注册 (兼容 Business API 路径)."""
     client = _get_async_client(request)
     result = await client.tag_delete(
-        project_id=project_id,
-        tag_name=tag_name,
-        force=force,
+        project_id=body.project_id,
+        tag_name=body.tag_name,
+        force=body.force,
     )
-    if result.success:
-        return {"success": True, "message": "标签删除成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签删除成功")
 
 
-@router.post("/tags/merge")
+@router.post("/tags/merge", response_model=TagOperationResponse)
 async def merge_tags_compat(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
-    old_tag: str = Query(..., description="旧标签名称"),
-    new_tag: str = Query(..., description="新标签名称"),
+    body: TagMergeRequest = Body(...),
 ):
     """合并标签：将所有 old_tag 的引用迁移到 new_tag (兼容 Business API 路径)."""
     client = _get_async_client(request)
     result = await client.tag_merge(
-        project_id=project_id,
-        old_tag=old_tag,
-        new_tag=new_tag,
+        project_id=body.project_id,
+        old_tag=body.old_tag,
+        new_tag=body.new_tag,
     )
-    if result.success:
-        return {"success": True, "data": result.data, "message": "标签合并成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签合并成功")
 
 
 # ===================
 # 原有标签管理 API
 # ===================
 
-@router.get("/tags")
+@router.get("/tags", response_model=TagInfoResponse)
 async def list_tags(
     request: Request,
     project_id: str = Query(..., description="项目 ID"),
@@ -123,65 +114,52 @@ async def list_tags(
         summary_pattern=summary_pattern,
         tag_name_pattern=tag_name_pattern,
     )
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result)
 
 
-@router.post("/tags")
+@router.post("/tags", response_model=TagOperationResponse)
 async def register_tag(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
-    tag_name: str = Query(..., description="标签名称"),
-    summary: str = Query(..., description="标签语义摘要"),
-    aliases: str = Query("", description="别名（逗号分隔）"),
+    body: TagRegisterRequest = Body(...),
 ):
     """注册项目标签."""
     client = _get_async_client(request)
     result = await client.tag_register(
-        project_id=project_id,
-        tag_name=tag_name,
-        summary=summary,
-        aliases=aliases,
+        project_id=body.project_id,
+        tag_name=body.tag_name,
+        summary=body.summary,
+        aliases=body.aliases,
     )
-    if result.success:
-        return {"success": True, "data": result.data, "message": "标签注册成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签注册成功")
 
 
-@router.put("/tags/{tag_name}")
+@router.put("/tags/{tag_name}", response_model=TagOperationResponse)
 async def update_tag(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
     tag_name: str = Path(..., description="标签名称"),
-    summary: str = Query(..., description="新摘要"),
+    body: TagUpdateRequest = Body(...),
 ):
     """更新已注册标签的语义信息."""
     client = _get_async_client(request)
     result = await client.tag_update(
-        project_id=project_id,
+        project_id=body.project_id,
         tag_name=tag_name,
-        summary=summary,
+        summary=body.summary,
     )
-    if result.success:
-        return {"success": True, "message": "标签更新成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签更新成功")
 
 
-@router.delete("/tags/{tag_name}")
+@router.delete("/tags/{tag_name}", response_model=TagOperationResponse)
 async def delete_tag(
     request: Request,
-    project_id: str = Query(..., description="项目 ID"),
     tag_name: str = Path(..., description="标签名称"),
-    force: str = Query("false", description="是否强制删除"),
+    body: TagDeleteRequest = Body(...),
 ):
     """删除标签注册."""
     client = _get_async_client(request)
     result = await client.tag_delete(
-        project_id=project_id,
+        project_id=body.project_id,
         tag_name=tag_name,
-        force=force,
+        force=body.force,
     )
-    if result.success:
-        return {"success": True, "message": "标签删除成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="标签删除成功")

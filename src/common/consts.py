@@ -57,6 +57,7 @@ class ErrorMessages:
     INVALID_SEVERITY = "无效的 severity 值: {severity} (有效值: {valid_values})"
     CONTENT_TOO_LONG = "内容过长：{bytes} 字节，最大允许 {max_bytes} 字节"
     SUMMARY_TOO_LONG = "摘要过长：{bytes} 字节，最大允许 {max_bytes} 字节"
+    INVALID_TAG_NAME = "标签名 '{tag}' 格式无效，只允许小写字母、数字、下划线和连字符"
 
 
 class SuccessMessages:

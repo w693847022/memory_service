@@ -1,7 +1,7 @@
 ---
 name: mcp-test
 description: 对 memory_mcp 全部 MCP 接口执行冒烟测试，验证服务可用性
-allowed-tools: Agent, mcp__memory_mcp__project_register, mcp__memory_mcp__project_get, mcp__memory_mcp__project_list, mcp__memory_mcp__project_groups_list, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_rename, mcp__memory_mcp__project_remove, mcp__memory_mcp__project_item_tag_manage, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, mcp__memory_mcp__tag_update, mcp__memory_mcp__tag_delete
+allowed-tools: Agent, mcp__memory_mcp__project_register, mcp__memory_mcp__project_get, mcp__memory_mcp__project_list, mcp__memory_mcp__project_groups_list, mcp__memory_mcp__project_add, mcp__memory_mcp__project_update, mcp__memory_mcp__project_rename, mcp__memory_mcp__project_archive, mcp__memory_mcp__project_item_tag_manage, mcp__memory_mcp__project_tags_info, mcp__memory_mcp__tag_register, mcp__memory_mcp__tag_update, mcp__memory_mcp__tag_delete
 ---
 
 对 memory_mcp 全部 MCP 接口执行冒烟测试，验证服务可用性。
@@ -114,12 +114,11 @@ allowed-tools: Agent, mcp__memory_mcp__project_register, mcp__memory_mcp__projec
 
 验证重命名成功。
 
-#### 14. 项目清理 - project_remove
-调用 `project_remove`，参数：
+#### 14. 项目归档 - project_archive
+调用 `project_archive`，参数：
 - project_id: 测试项目 ID
-- mode: "delete"
 
-验证删除成功（永久删除测试数据）。
+验证归档成功。
 
 ### 汇总报告
 全部步骤完成后，输出格式如下的汇总报告：
@@ -144,7 +143,7 @@ MCP 接口冒烟测试报告
  11. tag_update             : PASS / FAIL
  12. project_item_tag_manage: PASS / FAIL
  13. project_rename         : PASS / FAIL
- 14. project_remove         : PASS / FAIL
+ 14. project_archive        : PASS / FAIL
 --------------------
 通过: X/14  失败: X/14
 ====================

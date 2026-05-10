@@ -71,7 +71,7 @@ def mock_groups_service():
 
     # 创建上下文感知的 mock 方法，根据参数和状态返回相应的响应
     async def _create_custom_group(project_id, group_name, content_max_bytes=240, summary_max_bytes=90,
-                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, max_tags=2, description=""):
+                                   allow_related=False, allowed_related_to=None, enable_status=True, enable_severity=False, max_tags=2, description="", mcp_access="writable", max_items=0):
         # 需要访问存储来检查组是否已存在
         if mock._storage_ref:
             group_configs = await mock._storage_ref.get_group_configs(project_id)
@@ -233,10 +233,9 @@ class TestCreateCustomGroup:
             enable_severity=False
         )
 
-        data = response
-        assert "success" in data
-        assert data["success"] is True
-        assert "apis" in data["message"]
+        # response 是 ApiResponse 对象，直接访问属性
+        assert response.success is True
+        assert "apis" in response.message
         mock_storage.get_group_configs.assert_called_once_with("proj_001")
         mock_storage.save_group_configs.assert_called_once()
 
@@ -252,8 +251,7 @@ class TestCreateCustomGroup:
             description="这是一个测试描述"
         )
 
-        data = response
-        assert data["success"] is True
+        assert response.success is True
 
         # 验证 description 被正确保存
         call_args = mock_storage.save_group_configs.call_args
@@ -305,7 +303,7 @@ class TestCreateCustomGroup:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证 allowed_related_to 被正确解析为空列表
         call_args = mock_storage.save_group_configs.call_args
@@ -330,8 +328,8 @@ class TestUpdateGroup:
         )
 
         data = response
-        assert data["success"] is True
-        assert "custom_api" in data["message"]
+        assert data.success is True
+        assert "custom_api" in data.message
 
         # 验证更新后的值
         call_args = mock_storage_with_groups.save_group_configs.call_args
@@ -384,7 +382,7 @@ class TestUpdateGroup:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证 allowed_related_to 被正确解析
         call_args = mock_storage_with_groups.save_group_configs.call_args
@@ -404,7 +402,7 @@ class TestUpdateGroup:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证其他字段保持不变
         call_args = mock_storage_with_groups.save_group_configs.call_args
@@ -427,7 +425,7 @@ class TestUpdateGroup:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证 description 被更新
         call_args = mock_storage_with_groups.save_group_configs.call_args
@@ -450,8 +448,8 @@ class TestDeleteCustomGroup:
         )
 
         data = response
-        assert data["success"] is True
-        assert "已删除" in data["message"] and "历史记录条目已保留" in data["message"]
+        assert data.success is True
+        assert "已删除" in data.message and "历史记录条目已保留" in data.message
 
         # 验证组已被删除
         call_args = mock_storage_with_groups.save_group_configs.call_args
@@ -526,9 +524,9 @@ class TestGetGroupSettings:
         response = await get_group_settings(project_id="proj_001")
 
         data = response
-        assert data["success"] is True
-        assert "settings" in data["data"]
-        assert "default_related_rules" in data["data"]["settings"]
+        assert data.success is True
+        assert "settings" in data.data
+        assert "default_related_rules" in data.data["settings"]
 
     @pytest.mark.asyncio
     async def test_get_group_settings_empty(self, mock_storage, mock_groups_service):
@@ -543,8 +541,8 @@ class TestGetGroupSettings:
         response = await get_group_settings(project_id="proj_001")
 
         data = response
-        assert data["success"] is True
-        assert data["data"]["settings"] == {}
+        assert data.success is True
+        assert data.data["settings"] == {}
 
     @pytest.mark.asyncio
     async def test_get_group_settings_with_rules(self, mock_storage_with_groups, mock_groups_service):
@@ -555,8 +553,8 @@ class TestGetGroupSettings:
         response = await get_group_settings(project_id="proj_001")
 
         data = response
-        assert data["success"] is True
-        rules = data["data"]["settings"]["default_related_rules"]
+        assert data.success is True
+        rules = data.data["settings"]["default_related_rules"]
         assert rules["features"] == ["notes"]
 
 
@@ -576,8 +574,8 @@ class TestUpdateGroupSettings:
         )
 
         data = response
-        assert data["success"] is True
-        assert "更新成功" in data["message"]
+        assert data.success is True
+        assert "更新成功" in data.message
 
         # 验证保存的值
         call_args = mock_storage.save_group_configs.call_args
@@ -612,7 +610,7 @@ class TestUpdateGroupSettings:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证保存的值
         call_args = mock_storage.save_group_configs.call_args
@@ -632,7 +630,7 @@ class TestUpdateGroupSettings:
         )
 
         data = response
-        assert data["success"] is True
+        assert data.success is True
 
         # 验证更新了现有配置
         call_args = mock_storage_with_groups.save_group_configs.call_args

@@ -13,7 +13,6 @@ from src.models.group import (
     get_default_tags,
     get_default_group_configs,
     get_default_related_rules,
-    CONTENT_SEPARATE_GROUPS,
 )
 from src.models.group import UnifiedGroupConfig
 from business.item_validator import ItemValidator
@@ -69,6 +68,14 @@ class ProjectService:
     ) -> Dict[str, Any]:
         from src.models.project import ProjectInitialData
 
+        # 校验标签名格式
+        if tags:
+            for tag in tags:
+                if not self._validate_tag_name(tag):
+                    return ResponseBuilder.error(
+                        ErrorMessages.INVALID_TAG_NAME.format(tag=tag)
+                    ).to_dict()
+
         project_id = self.storage._generate_id(name)
 
         initial_data = ProjectInitialData.create(
@@ -89,6 +96,65 @@ class ProjectService:
             return ResponseBuilder.success(
                 data={"project_id": project_id},
                 message=SuccessMessages.PROJECT_REGISTERED.format(name=name, project_id=project_id)
+            ).to_dict()
+
+        return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
+
+    @barrier(level=OperationLevel.L2, files=["_project.json"], key="{project_id}")
+    async def project_update_info(
+        self,
+        project_id: str,
+        summary: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        path: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """更新项目信息（描述、标签、路径）.
+
+        仅 active 状态的项目可修改，只更新传入的非 None 字段。
+
+        Args:
+            project_id: 项目ID
+            summary: 新的项目摘要
+            tags: 新的项目标签列表
+            path: 新的项目路径
+
+        Returns:
+            Dict: 操作结果
+        """
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is None:
+            return ResponseBuilder.error(
+                ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+            ).to_dict()
+
+        if await self.storage.is_archived(project_id):
+            return ResponseBuilder.error("已归档的项目不能修改信息").to_dict()
+
+        updated_fields = {}
+        if summary is not None:
+            project_data.metadata.summary = summary
+            updated_fields["summary"] = summary
+        if tags is not None:
+            project_data.metadata.tags = tags
+            updated_fields["tags"] = tags
+        if path is not None:
+            project_data.metadata.path = path
+            updated_fields["path"] = path
+
+        if not updated_fields:
+            return ResponseBuilder.error("未指定需要更新的字段").to_dict()
+
+        project_data.touch()
+        project_data.increment_version("project")
+
+        if await self.storage.save_project_data(project_id, project_data):
+            return ResponseBuilder.success(
+                data={
+                    "project_id": project_id,
+                    "updated_fields": list(updated_fields.keys()),
+                    "info": project_data.metadata.model_dump()
+                },
+                message=f"项目信息已更新: {', '.join(updated_fields.keys())}"
             ).to_dict()
 
         return ResponseBuilder.error(ErrorMessages.SAVE_FAILED).to_dict()
@@ -152,7 +218,9 @@ class ProjectService:
                     "name": name,
                     "summary": project_data.metadata.summary,
                     "tags": project_data.metadata.tags,
-                    "status": "archived" if await self.storage.is_archived(project_id) else "active"
+                    "status": "archived" if await self.storage.is_archived(project_id) else "active",
+                    "created_at": project_data.metadata.created_at,
+                    "updated_at": project_data.metadata.updated_at,
                 })
 
         if include_archived:
@@ -163,7 +231,9 @@ class ProjectService:
                     "summary": archived.get("summary", ""),
                     "tags": archived.get("tags", []),
                     "status": "archived",
-                    "archived_at": archived.get("archived_at", "")
+                    "archived_at": archived.get("archived_at", ""),
+                    "created_at": archived.get("created_at", ""),
+                    "updated_at": archived.get("updated_at", ""),
                 })
 
         return ResponseBuilder.success(
@@ -385,8 +455,16 @@ class ProjectService:
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
+        # 验证 max_items 限制
+        if config and config.max_items > 0:
+            current_count = len(project_data.get_items(group))
+            if current_count >= config.max_items:
+                return ResponseBuilder.error(
+                    f"分组 '{group}' 已达最大条目数量限制 ({config.max_items})"
+                ).to_dict()
+
         prefix_map = {"features": "feat", "notes": "note", "fixes": "fix", "standards": "std"}
-        prefix = prefix_map.get(group, "feat")
+        prefix = prefix_map.get(group, group)
 
         item_id = self.storage.generate_item_id(prefix, project_id, project_data)
 
@@ -427,9 +505,6 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS:
-                await self.storage.save_item_content(project_id, group, item_id, content)
-
             return ResponseBuilder.success(
                 data={
                     "project_id": project_id,
@@ -538,10 +613,7 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS and content is not None:
-                await self.storage.save_item_content(project_id, group, item_id, content)
-
-            item_data = item.model_dump(exclude={"content"} if group in CONTENT_SEPARATE_GROUPS else set())
+            item_data = item.model_dump(exclude={"content"})
             result = ResponseBuilder.success(
                 data={
                     "project_id": project_id,
@@ -585,8 +657,7 @@ class ProjectService:
         project_data.touch()
 
         if await self.storage.save_project_data(project_id, project_data):
-            if group in CONTENT_SEPARATE_GROUPS:
-                self.storage.delete_item_content(project_id, group, item_id)
+            self.storage.delete_item_content(project_id, group, item_id)
 
             return ResponseBuilder.success(
                 data={"project_id": project_id, "group": group, "item_id": item_id},
@@ -598,24 +669,60 @@ class ProjectService:
     # ==================== 项目归档/删除 ====================
 
     @barrier(level=OperationLevel.L1, files=["_index.json"])
-    async def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
+    async def archive_project(self, project_id: str) -> Dict[str, Any]:
+        """归档项目（压缩并移至 .archived/）.
+
+        仅 active 状态的项目可归档；已归档项目重复调用视为成功（幂等）。
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            Dict: 操作结果
+        """
+        # 检查是否已归档（幂等处理）
+        if await self.storage.is_archived(project_id):
+            return ResponseBuilder.success(
+                message=f"项目 '{project_id}' 已归档，无需重复操作"
+            ).to_dict()
+
         project_data = await self.storage.get_project_data(project_id)
         if project_data is None:
             return ResponseBuilder.error(
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
-        from src.common.consts import OperationModes
-
-        if mode == OperationModes.DELETE:
-            project_dir = self.storage._get_project_dir(project_id)
-            if project_dir.exists():
-                import shutil
-                shutil.rmtree(project_dir)
-            await self.storage.refresh_projects_cache()
-            return ResponseBuilder.success(message=f"项目 '{project_id}' 已永久删除").to_dict()
-
         result = await self.storage.archive_project(project_id)
         if result.get("success"):
             await self.storage.refresh_projects_cache()
         return result
+
+    @barrier(level=OperationLevel.L1, files=["_index.json"])
+    async def delete_project(self, project_id: str) -> Dict[str, Any]:
+        """永久删除已归档项目.
+
+        仅 archived 状态的项目可删除；active 项目需先归档再删除。
+
+        Args:
+            project_id: 项目ID
+
+        Returns:
+            Dict: 操作结果
+        """
+        # 检查是否已归档
+        if await self.storage.is_archived(project_id):
+            if await self.storage.delete_archived_project(project_id):
+                await self.storage.refresh_projects_cache()
+                return ResponseBuilder.success(
+                    message=f"项目 '{project_id}' 已永久删除"
+                ).to_dict()
+            return ResponseBuilder.error(f"删除项目 '{project_id}' 的归档文件失败").to_dict()
+
+        # 未归档：检查项目是否存在
+        project_data = await self.storage.get_project_data(project_id)
+        if project_data is not None:
+            return ResponseBuilder.error("项目当前为激活状态，请先归档后再删除").to_dict()
+
+        return ResponseBuilder.error(
+            ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
+        ).to_dict()

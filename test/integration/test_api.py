@@ -67,7 +67,48 @@ class TestApiIntegration:
         assert "项目B" in names, "项目B 不在列表中"
         assert "项目C" in names, "项目C 不在列表中"
 
+        # 验证 created_at 和 updated_at 字段
+        for p in projects:
+            assert "created_at" in p, f"项目 {p['name']} 缺少 created_at 字段"
+            assert "updated_at" in p, f"项目 {p['name']} 缺少 updated_at 字段"
+            assert p["created_at"], f"项目 {p['name']} 的 created_at 为空"
+            assert p["updated_at"], f"项目 {p['name']} 的 updated_at 为空"
+
         print(f"✓ 项目列表接口测试通过 (共 {result['data']['total']} 个项目)")
+
+    async def test_project_list_with_archived_detail(self):
+        """测试归档项目列表(include_archived=True)返回创建/更新/归档时间."""
+        await self.async_setup_method()
+
+        # 注册并归档一个项目
+        register_result = await self.project_service.register_project(
+            "归档测试项目", "/path/archived", tags=["archive"]
+        )
+        archived_id = register_result["data"]["project_id"]
+        archive_result = await self.project_service.archive_project(archived_id)
+        assert archive_result["success"], f"归档失败: {archive_result}"
+
+        # 注册一个 active 项目用于对比
+        await self.project_service.register_project("活跃项目", "/path/active", tags=["active"])
+
+        # 包含归档项目的列表
+        result = await self.project_service.list_projects(include_archived=True)
+        assert result["success"], f"获取项目列表失败: {result}"
+
+        projects = result["data"]["projects"]
+        archived_projects = [p for p in projects if p.get("status") == "archived"]
+        assert len(archived_projects) == 1, "应包含1个归档项目"
+
+        archived = archived_projects[0]
+        assert archived["id"] == archived_id, "归档项目ID不匹配"
+        assert "created_at" in archived, "归档项目缺少 created_at 字段"
+        assert "updated_at" in archived, "归档项目缺少 updated_at 字段"
+        assert "archived_at" in archived, "归档项目缺少 archived_at 字段"
+        assert archived["created_at"], "归档项目 created_at 为空"
+        assert archived["updated_at"], "归档项目 updated_at 为空"
+        assert archived["archived_at"], "归档项目 archived_at 为空"
+
+        print(f"✓ 归档项目列表测试通过 (active+archived={result['data']['total']})")
 
     async def test_project_get_with_tags(self):
         """测试按标签查询接口."""

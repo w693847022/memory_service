@@ -151,9 +151,30 @@ class BusinessApiClient:
         """重命名项目."""
         return self._put(f"/api/projects/{project_id}/rename", params={"new_name": new_name})
 
-    def remove_project(self, project_id: str, mode: str = "archive") -> ApiResponse:
-        """删除或归档项目."""
-        return self._delete(f"/api/projects/{project_id}", params={"mode": mode})
+    def update_project_info(
+        self,
+        project_id: str,
+        summary: Optional[str] = None,
+        tags: Optional[str] = None,
+        path: Optional[str] = None
+    ) -> ApiResponse:
+        """更新项目信息（描述、标签、路径）."""
+        data = {}
+        if summary is not None:
+            data["summary"] = summary
+        if tags is not None:
+            data["tags"] = tags
+        if path is not None:
+            data["path"] = path
+        return self._put(f"/api/projects/{project_id}/info", json=data)
+
+    def archive_project(self, project_id: str) -> ApiResponse:
+        """归档项目."""
+        return self._post(f"/api/projects/{project_id}/archive")
+
+    def delete_project(self, project_id: str) -> ApiResponse:
+        """永久删除项目."""
+        return self._delete(f"/api/projects/{project_id}")
 
     def list_groups(self, project_id: str) -> ApiResponse:
         """列出项目的所有分组."""
@@ -386,7 +407,10 @@ class BusinessApiClient:
         allowed_related_to: str = "",
         enable_status: bool = True,
         enable_severity: bool = False,
-        description: str = ""
+        description: str = "",
+        mcp_access: str = "writable",
+        max_items: int = 0,
+        max_tags: int = 2
     ) -> ApiResponse:
         """创建自定义组."""
         params = {
@@ -398,7 +422,10 @@ class BusinessApiClient:
             "allowed_related_to": allowed_related_to,
             "enable_status": enable_status,
             "enable_severity": enable_severity,
-            "description": description
+            "description": description,
+            "mcp_access": mcp_access,
+            "max_items": max_items,
+            "max_tags": max_tags
         }
         return self._post("/api/groups/custom", params=params)
 
@@ -416,7 +443,9 @@ class BusinessApiClient:
         status_values: Optional[str] = None,
         severity_values: Optional[str] = None,
         required_fields: Optional[str] = None,
-        description: Optional[str] = None
+        description: Optional[str] = None,
+        mcp_access: Optional[str] = None,
+        max_items: Optional[int] = None
     ) -> ApiResponse:
         """更新组配置."""
         params = {"project_id": project_id, "group_name": group_name}
@@ -425,7 +454,8 @@ class BusinessApiClient:
                      ("enable_status", enable_status), ("enable_severity", enable_severity),
                      ("max_tags", max_tags), ("status_values", status_values),
                      ("severity_values", severity_values), ("required_fields", required_fields),
-                     ("description", description)]:
+                     ("description", description), ("mcp_access", mcp_access),
+                     ("max_items", max_items)]:
             if v is not None:
                 params[k] = v
         return self._put("/api/groups/custom", params=params)

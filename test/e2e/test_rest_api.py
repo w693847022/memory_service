@@ -26,7 +26,7 @@ class TestRestProjects:
     def test_list_projects(self, rest_client: RestClient):
         """测试获取项目列表."""
         # 先注册一个项目
-        rest_client.post("/api/projects", params={
+        rest_client.post("/api/projects", json={
             "name": "测试项目",
             "path": "/tmp/test"
         })
@@ -41,7 +41,7 @@ class TestRestProjects:
 
     def test_register_project(self, rest_client: RestClient):
         """测试注册项目."""
-        result = rest_client.post("/api/projects", params={
+        result = rest_client.post("/api/projects", json={
             "name": "新项目",
             "path": "/tmp/new_project",
             "summary": "项目摘要",
@@ -55,7 +55,7 @@ class TestRestProjects:
     def test_get_project(self, rest_client: RestClient):
         """测试获取项目详情."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "查询测试项目"
         })
         project_id = register_result["data"]["project_id"]
@@ -69,7 +69,7 @@ class TestRestProjects:
     def test_rename_project(self, rest_client: RestClient):
         """测试重命名项目."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "rest_rename_old"
         })
         project_id = register_result["data"]["project_id"]
@@ -77,7 +77,7 @@ class TestRestProjects:
         # 重命名
         result = rest_client.put(
             f"/api/projects/{project_id}/rename",
-            params={"new_name": "rest_rename_new"}
+            json={"new_name": "rest_rename_new"}
         )
 
         assert result["success"] is True        # 验证重命名成功
@@ -85,17 +85,37 @@ class TestRestProjects:
         assert get_result["data"]["info"]["name"] == "rest_rename_new"
 
     def test_delete_project(self, rest_client: RestClient):
-        """测试删除项目."""
+        """测试删除已归档项目."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "待删除项目"
         })
         project_id = register_result["data"]["project_id"]
 
-        # 删除项目
+        # 先归档项目（仅归档项目可删除）
+        archive_result = rest_client.post(
+            f"/api/projects/{project_id}/archive",
+        )
+        assert archive_result["success"] is True
+
+        # 删除已归档项目
         result = rest_client.delete(
             f"/api/projects/{project_id}",
-            params={"mode": "delete"}
+        )
+
+        assert result["success"] is True
+
+    def test_archive_project(self, rest_client: RestClient):
+        """测试归档项目."""
+        # 先注册项目
+        register_result = rest_client.post("/api/projects", json={
+            "name": "待归档项目"
+        })
+        project_id = register_result["data"]["project_id"]
+
+        # 归档项目
+        result = rest_client.post(
+            f"/api/projects/{project_id}/archive",
         )
 
         assert result["success"] is True
@@ -103,7 +123,7 @@ class TestRestProjects:
     def test_list_project_groups(self, rest_client: RestClient):
         """测试获取项目分组列表."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "分组测试项目"
         })
         project_id = register_result["data"]["project_id"]
@@ -118,7 +138,7 @@ class TestRestProjects:
     def test_list_project_tags(self, rest_client: RestClient):
         """测试获取项目标签信息."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "标签测试项目"
         })
         project_id = register_result["data"]["project_id"]
@@ -137,13 +157,13 @@ class TestRestGroups:
     def test_create_custom_group(self, rest_client: RestClient):
         """测试创建自定义分组."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "自定义分组测试项目"
         })
         project_id = register_result["data"]["project_id"]
 
         # 创建自定义分组
-        result = rest_client.post(f"/api/projects/{project_id}/groups", params={
+        result = rest_client.post(f"/api/projects/{project_id}/groups", json={
             "group_name": "custom_backlog",
             "content_max_bytes": 500,
             "summary_max_bytes": 100
@@ -154,7 +174,7 @@ class TestRestGroups:
     def test_get_group_settings(self, rest_client: RestClient):
         """测试获取分组设置."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "分组设置测试项目"
         })
         project_id = register_result["data"]["project_id"]
@@ -175,13 +195,13 @@ class TestRestTags:
     def test_register_tag(self, rest_client: RestClient):
         """测试注册标签."""
         # 先注册项目
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "标签注册测试项目"
         })
         project_id = register_result["data"]["project_id"]
 
         # 注册标签
-        result = rest_client.post("/api/tags/register", params={
+        result = rest_client.post("/api/tags/register", json={
             "project_id": project_id,
             "tag_name": "api",
             "summary": "API相关",
@@ -193,19 +213,19 @@ class TestRestTags:
     def test_update_tag(self, rest_client: RestClient):
         """测试更新标签."""
         # 先注册项目和标签
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "标签更新测试项目"
         })
         project_id = register_result["data"]["project_id"]
 
-        rest_client.post("/api/tags/register", params={
+        rest_client.post("/api/tags/register", json={
             "project_id": project_id,
             "tag_name": "test_update_tag",
             "summary": "原始摘要"
         })
 
         # 更新标签
-        result = rest_client.put("/api/tags/update", params={
+        result = rest_client.put("/api/tags/update", json={
             "project_id": project_id,
             "tag_name": "test_update_tag",
             "summary": "更新后的摘要"
@@ -216,19 +236,19 @@ class TestRestTags:
     def test_delete_tag(self, rest_client: RestClient):
         """测试删除标签."""
         # 先注册项目和标签
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "标签删除测试项目"
         })
         project_id = register_result["data"]["project_id"]
 
-        rest_client.post("/api/tags/register", params={
+        rest_client.post("/api/tags/register", json={
             "project_id": project_id,
             "tag_name": "unused",
             "summary": "未使用标签"
         })
 
         # 删除标签
-        result = rest_client.delete("/api/tags/delete", params={
+        result = rest_client.delete("/api/tags/delete", json={
             "project_id": project_id,
             "tag_name": "unused",
             "force": "true"
@@ -239,24 +259,24 @@ class TestRestTags:
     def test_merge_tags(self, rest_client: RestClient):
         """测试合并标签."""
         # 先注册项目和两个标签
-        register_result = rest_client.post("/api/projects", params={
+        register_result = rest_client.post("/api/projects", json={
             "name": "标签合并测试项目"
         })
         project_id = register_result["data"]["project_id"]
 
-        rest_client.post("/api/tags/register", params={
+        rest_client.post("/api/tags/register", json={
             "project_id": project_id,
             "tag_name": "old_tag",
             "summary": "旧的测试标签"
         })
-        rest_client.post("/api/tags/register", params={
+        rest_client.post("/api/tags/register", json={
             "project_id": project_id,
             "tag_name": "new_tag",
             "summary": "新的测试标签"
         })
 
         # 合并标签
-        result = rest_client.post("/api/tags/merge", params={
+        result = rest_client.post("/api/tags/merge", json={
             "project_id": project_id,
             "old_tag": "old_tag",
             "new_tag": "new_tag"

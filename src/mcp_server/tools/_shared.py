@@ -51,3 +51,45 @@ def _error_response(error):
     """构建错误响应."""
     from src.models import ApiResponse
     return ApiResponse(success=False, error=error).model_dump_json()
+
+
+# ===================
+# MCP Access Control
+# ===================
+
+# mcp_access 值常量
+MCP_ACCESS_WRITABLE = "writable"   # MCP可读可写
+MCP_ACCESS_READABLE = "readable"  # MCP只读
+MCP_ACCESS_DISABLED = "disabled"  # MCP不可访问
+
+
+def _check_mcp_access(project_id: str, group_name: str, operation: str) -> Optional[str]:
+    """检查MCP客户端对指定分组的访问权限.
+
+    Args:
+        project_id: 项目ID
+        group_name: 分组名称
+        operation: 操作类型 "read" 或 "write"
+
+    Returns:
+        None 表示允许访问，字符串表示拒绝访问的错误消息
+    """
+    client = _get_client()
+    result = client.list_groups(project_id)
+
+    # 解析 ApiResponse
+    if hasattr(result, 'success') and result.success:
+        data = result.data if hasattr(result, 'data') else {}
+        groups = data.get("groups", []) if isinstance(data, dict) else []
+        for group in groups:
+            if group.get("name") == group_name:
+                mcp_access = group.get("mcp_access", MCP_ACCESS_WRITABLE)
+                if mcp_access == MCP_ACCESS_DISABLED:
+                    return f"分组 '{group_name}' 已禁止MCP访问"
+                if mcp_access == MCP_ACCESS_READABLE and operation == "write":
+                    return f"分组 '{group_name}' 对MCP客户端为只读，无法执行写操作"
+                return None
+        return f"未找到分组 '{group_name}'"
+
+    error = getattr(result, 'error', '未知错误')
+    return f"获取分组信息失败: {error}"

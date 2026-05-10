@@ -72,12 +72,22 @@ class ProjectServiceInterface(Protocol):
         """
         ...
 
-    def remove_project(self, project_id: str, mode: str = "archive") -> Dict[str, Any]:
-        """归档或永久删除项目.
+    def archive_project(self, project_id: str) -> Dict[str, Any]:
+        """归档项目（压缩并移至 .archived/）.
 
         Args:
             project_id: 项目ID
-            mode: 操作模式 - "archive"(归档) 或 "delete"(永久删除)
+
+        Returns:
+            操作结果
+        """
+        ...
+
+    def delete_project(self, project_id: str) -> Dict[str, Any]:
+        """永久删除项目目录.
+
+        Args:
+            project_id: 项目ID
 
         Returns:
             操作结果

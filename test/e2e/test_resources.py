@@ -7,7 +7,16 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+import pytest
+
 from mcp_server.guidelines import _build_guidelines_content, _build_chinese_guidelines, _build_english_guidelines
+
+# 导入测试工具
+test_dir = Path(__file__).parent.parent
+if str(test_dir) not in sys.path:
+    sys.path.insert(0, str(test_dir))
+
+from e2e.utils import McpClient
 
 
 def test_guidelines_chinese():
@@ -98,6 +107,36 @@ def test_guidelines_structure():
     assert "cleanup" in mw, "memory_workflow 缺少 cleanup"
 
     print("  ✓ 指南结构完整性测试通过")
+
+
+pytestmark = pytest.mark.mcp
+
+
+@pytest.mark.e2e
+class TestMcpResourceRead:
+    """测试 MCP 资源读取（通过 JSON-RPC 协议）."""
+
+    def test_read_chinese_guidelines(self, mcp_client: McpClient):
+        """测试读取中文指南资源."""
+        result = mcp_client.read_resource("resource://guidelines/zh")
+
+        assert "version" in result, "缺少 version 字段"
+        assert result["language"] == "zh", "语言应该为 zh"
+        assert "guidelines" in result, "缺少 guidelines 内容"
+
+    def test_read_english_guidelines(self, mcp_client: McpClient):
+        """测试读取英文指南资源."""
+        result = mcp_client.read_resource("resource://guidelines/en")
+
+        assert "version" in result, "缺少 version 字段"
+        assert result["language"] == "en", "语言应该为 en"
+        assert "guidelines" in result, "缺少 guidelines 内容"
+
+    def test_read_guidelines_fallback(self, mcp_client: McpClient):
+        """测试未知语言回退到中文."""
+        result = mcp_client.read_resource("resource://guidelines/fr")
+
+        assert result["language"] == "zh", "未知语言应该回退到中文"
 
 
 def run_all_tests():

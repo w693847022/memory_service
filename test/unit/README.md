@@ -15,7 +15,7 @@ test/unit/
 │   ├── test_mcp_project_list.py           # project_list 接口测试
 │   ├── test_mcp_project_tags_info.py      # project_tags_info 接口测试
 │   ├── test_mcp_project_item_tag_manage.py # project_item_tag_manage 接口测试
-│   ├── test_mcp_project_operations.py     # project_remove, project_rename, project_groups_list, project_stats
+│   ├── test_mcp_project_operations.py     # project_archive, project_rename, project_groups_list, project_stats
 │   ├── test_mcp_tag_operations.py         # tag_register, tag_update, tag_delete, tag_merge
 │   └── test_mcp_stats.py                  # stats_summary, stats_cleanup
 │
@@ -46,7 +46,7 @@ test/unit/
 | project_update | test_mcp_project_update.py | 更新条目 |
 | project_delete | test_mcp_project_delete.py | 删除条目 |
 | project_item_tag_manage | test_mcp_project_item_tag_manage.py | 管理条目标签 |
-| project_remove | test_mcp_project_operations.py | 归档/删除项目 |
+| project_archive | test_mcp_project_operations.py | 归档项目 |
 | project_get | test_mcp_project_get.py | 获取项目/条目 |
 | project_stats | test_mcp_project_operations.py | 获取统计 |
 | tag_register | test_mcp_tag_operations.py | 注册标签 |
@@ -97,7 +97,7 @@ test/unit/
 1. `test_mcp_project_register.py` - project_register (28 测试用例)
 2. `test_mcp_project_list.py` - project_list (15 测试用例)
 3. `test_mcp_project_get.py` - project_get (20 测试用例)
-4. `test_mcp_project_operations.py` - project_remove, project_rename, project_groups_list, project_stats (16 测试用例)
+4. `test_mcp_project_operations.py` - project_archive, project_rename, project_groups_list, project_stats (16 测试用例)
 
 ### 条目管理接口 (5个)
 5. `test_mcp_project_add.py` - project_add (26 测试用例)

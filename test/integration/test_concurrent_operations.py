@@ -610,10 +610,11 @@ class TestConcurrentOperations:
 
         print("✓ 并发重命名操作：全部成功（B2锁不会死锁）")
 
-        # 清理所有项目
+        # 清理所有项目（先归档再删除）
         for pid in project_ids:
             try:
-                await self.project_service.remove_project(pid, mode="delete")
+                await self.project_service.archive_project(pid)
+                await self.project_service.delete_project(pid)
             except:
                 pass
 

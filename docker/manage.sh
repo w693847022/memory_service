@@ -14,7 +14,8 @@ show_usage() {
     echo "  stop      停止服务"
     echo "  restart   重启服务"
     echo "  status    查看服务状态"
-    echo "  logs      查看服务日志"
+    echo "  logs [n]  查看服务日志 (默认100行，可指定行数)"
+    echo "  logs -f   实时跟踪日志"
     echo "  init      初始化日志目录"
     echo "  build     重新构建镜像"
     echo "  shell     进入容器 shell"
@@ -84,7 +85,8 @@ stop_service() {
 restart_service() {
     cd "$SCRIPT_DIR"
     echo "🔄 重启 MCP Memory Server..."
-    docker-compose restart
+    docker-compose down
+    docker-compose up -d
     sleep 2
     docker-compose ps
 }
@@ -103,7 +105,15 @@ show_status() {
 # 查看日志
 show_logs() {
     cd "$SCRIPT_DIR"
-    docker-compose logs -f --tail=100
+    local tail_lines="${2:-100}"
+    local follow="${3:-}"
+
+    if [ "$follow" = "-f" ]; then
+        echo "📋 实时跟踪日志 (Ctrl+C 退出)..."
+        docker-compose logs -f --tail="$tail_lines"
+    else
+        docker-compose logs --tail="$tail_lines" 2>&1 | head -200
+    fi
 }
 
 # 重新构建

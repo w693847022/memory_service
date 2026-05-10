@@ -5,7 +5,7 @@
 
 from typing import Optional, Union, Dict, List
 
-from ._shared import _get_client, _tool_response
+from ._shared import _get_client, _tool_response, _check_mcp_access, _error_response
 
 
 # ==================== 参数说明 ====================
@@ -54,11 +54,7 @@ from ._shared import _get_client, _tool_response
 9. operation (标签操作类型)
    - 允许值: set (设置), add (添加), remove (移除)
 
-10. mode (删除/归档模式)
-    - 允许值: archive (归档), delete (永久删除)
-    - 默认值: archive
-
-11. 日期格式
+10. 日期格式
     - created_after, created_before, updated_after, updated_before
     - 格式: YYYY-MM-DD (如: "2026-04-01")
 
@@ -112,6 +108,45 @@ def project_rename(project_id: str, new_name: str) -> str:
     return _tool_response(result)
 
 
+def project_update_info(
+    project_id: str,
+    summary: Optional[str] = None,
+    tags: Optional[str] = None,
+    path: Optional[str] = None
+) -> str:
+    """更新项目信息（描述、标签、路径）.
+
+    仅 active 状态的项目可修改，传入 None 的字段不会被更新。
+
+    Args:
+        project_id: 项目ID (必填)
+            - 获取方式: project_list() 返回结果中的 "id" 字段
+            - 格式: UUID 字符串
+        summary: 项目摘要 (可选)
+            - 传入 None 表示不更新
+            - 建议: 简短描述项目用途，10-50字
+            - 最大长度: 500 字符
+        tags: 项目标签 (可选)
+            - 格式: 逗号分隔 (如: "web,api,service")
+            - 传入 None 表示不更新
+            - 传入空字符串 "" 表示清空标签
+        path: 项目路径 (可选)
+            - 格式: 绝对路径或相对路径 (如: "/home/user/myproject")
+            - 传入 None 表示不更新
+
+    Returns:
+        JSON 格式的操作结果，包含更新后的项目信息
+    """
+    client = _get_client()
+    result = client.update_project_info(
+        project_id=project_id,
+        summary=summary,
+        tags=tags,
+        path=path
+    )
+    return _tool_response(result)
+
+
 def project_list(
     view_mode: str = "summary",
     page: int = 1,
@@ -139,7 +174,9 @@ def project_list(
             - 默认: False
 
     Returns:
-        JSON 格式的项目列表，包含项目的 id、name、path 等信息
+        JSON 格式的项目列表，包含项目的 id、name、summary、tags、status 等信息
+        - summary 模式: 返回 id, name, summary, tags, status
+        - detail 模式: 额外包含 created_at, updated_at
     """
     client = _get_client()
     result = client.project_list(
@@ -162,18 +199,21 @@ def project_groups_list(project_id: str) -> str:
 
     Returns:
         JSON 格式的分组列表，每个分组包含：
-        - name: 分组名称
+        - name: 分组名称（用于标识和引用分组）
         - count: 该分组下的条目数量
-        - is_builtin: 是否为内置分组
-        - content_max_bytes: 内容最大字节数
-        - summary_max_bytes: 摘要最大字节数
-        - allow_related: 是否允许关联其他分组
-        - allowed_related_to: 允许关联的分组列表
-        - enable_status: 是否启用状态字段
-        - enable_severity: 是否启用严重程度字段
-        - status_values: 支持的状态值列表
-        - severity_values: 支持的严重程度值列表
-        - required_fields: 必填字段列表
+        - is_builtin: 是否为内置分组（内置组不可删除）
+        - content_max_bytes: 内容最大字节数（条目content字段的长度限制）
+        - summary_max_bytes: 摘要最大字节数（条目summary字段的长度限制）
+        - allow_related: 是否允许关联其他分组（控制related字段是否可用）
+        - allowed_related_to: 允许关联的分组列表（related字段可引用的目标分组）
+        - enable_status: 是否启用状态字段（控制status字段是否可用）
+        - enable_severity: 是否启用严重程度字段（控制severity字段是否可用）
+        - status_values: 支持的状态值列表（status字段的可选值）
+        - severity_values: 支持的严重程度值列表（severity字段的可选值）
+        - required_fields: 必填字段列表（添加条目时必须提供的字段）
+        - description: 分组描述（说明该分组的用途）
+        - max_tags: 单个条目最大标签数量
+        - mcp_access: MCP访问控制（writable=可读写, readable=只读, disabled=不可访问）
     """
     client = _get_client()
     # list_groups 现在返回完整配置 + settings
@@ -227,6 +267,10 @@ def project_tags_info(
     Returns:
         JSON 格式的标签信息
     """
+    if group_name:
+        access_error = _check_mcp_access(project_id, group_name, "read")
+        if access_error:
+            return _error_response(access_error)
     client = _get_client()
     result = client.project_tags_info(
         project_id=project_id,
@@ -263,6 +307,8 @@ def project_add(
             - 获取方式: project_groups_list(project_id) 返回的 groups 列表
         content: 补充描述 (必填)
             - 格式: Markdown 格式文本
+            - 自定义语法: 支持条目引用链接 [显示文本](条目ID)，条目ID格式为 前缀_YYYYMMDD_N
+              (前缀: feat->features, fix->fixes, note->notes, std->standards，其他匹配自定义组名)
             - 限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
             - 默认: 空
         summary: 摘要 (必填)
@@ -287,6 +333,9 @@ def project_add(
     Returns:
         JSON 格式的操作结果，包含新生成的 item_id
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.project_add(
         project_id=project_id,
@@ -325,6 +374,7 @@ def project_update(
             - 获取方式: project_get(project_id, group_name) 返回结果中的 "id" 字段
         content: 内容更新 (可选)
             - 传入 None 表示不更新，传入空字符串 "" 表示清空
+            - 格式: Markdown 格式文本，支持条目引用链接 [显示文本](条目ID)
             - 长度限制: 通过 project_groups_list(project_id) 获取对应分组的 content_max_bytes
         summary: 摘要更新 (可选)
             - 传入 None 表示不更新
@@ -353,6 +403,9 @@ def project_update(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     import json
     # 如果 related 是字典，转换为 JSON 字符串
     related_str = json.dumps(related) if isinstance(related, dict) else related
@@ -392,30 +445,29 @@ def project_delete(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.project_delete(project_id=project_id, group=group, item_id=item_id)
     return _tool_response(result)
 
 
-def project_remove(
-    project_id: str,
-    mode: str = "archive"
+def project_archive(
+    project_id: str
 ) -> str:
-    """归档或永久删除项目（统一接口）.
+    """归档项目.
 
     Args:
         project_id: 项目ID (必填)
             - 获取方式: project_list() 返回结果中的 "id" 字段
-        mode: 操作模式 (可选)
-            - 允许值: "archive"(归档), "delete"(永久删除)
-            - 默认: "archive"
-            - 注意: "delete" 操作不可逆
+            - 格式: UUID 字符串
 
     Returns:
         JSON 格式的操作结果
     """
     client = _get_client()
-    result = client.remove_project(project_id=project_id, mode=mode)
+    result = client.archive_project(project_id=project_id)
     return _tool_response(result)
 
 
@@ -453,6 +505,9 @@ def project_item_tag_manage(
     Returns:
         JSON 格式的操作结果
     """
+    access_error = _check_mcp_access(project_id, group_name, "write")
+    if access_error:
+        return _error_response(access_error)
     client = _get_client()
     result = client.manage_item_tags(
         project_id=project_id,
@@ -536,6 +591,10 @@ def project_get(
     Returns:
         JSON 格式的项目信息、条目列表或单个条目详情
     """
+    if group_name:
+        access_error = _check_mcp_access(project_id, group_name, "read")
+        if access_error:
+            return _error_response(access_error)
     client = _get_client()
     result = client.project_get(
         project_id=project_id,

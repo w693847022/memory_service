@@ -94,20 +94,19 @@ class TestMcpProjectTools:
         get_result = mcp_client.call_tool("project_get", project_id=project_id)
         assert get_result["data"]["info"]["name"] == "新名称_mcp"
 
-    def test_project_remove(self, mcp_client: McpClient):
-        """测试 project_remove 工具."""
+    def test_project_archive(self, mcp_client: McpClient):
+        """测试 project_archive 工具."""
         # 先注册项目
         register_result = mcp_client.call_tool(
             "project_register",
-            name="待删除项目"
+            name="待归档项目"
         )
         project_id = register_result["data"]["project_id"]
 
-        # 删除项目
+        # 归档项目
         result = mcp_client.call_tool(
-            "project_remove",
+            "project_archive",
             project_id=project_id,
-            mode="delete"
         )
 
         assert result["success"] is True

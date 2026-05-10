@@ -75,10 +75,13 @@ app.add_middleware(
 # Health Check
 # ===================
 
-@app.get("/health")
+from src.models.responses.api_responses import MessageResponse
+from src.models import ApiResponse
+
+@app.get("/health", response_model=MessageResponse)
 async def health_check():
     """健康检查."""
-    return {"status": "healthy", "service": "business-api"}
+    return ApiResponse(success=True, data={"status": "healthy", "service": "business-api"})
 
 
 # ===================

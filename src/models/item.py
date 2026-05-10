@@ -53,7 +53,7 @@ class Item(BaseModel):
     id: str = Field(
         ...,
         description="Unique identifier in format {group}_{timestamp}_{sequence}",
-        pattern=r"^[a-z]+_[0-9]{8}_[0-9]+$"
+        pattern=r"^[a-z][a-z0-9_-]*_[0-9]{8}_[0-9]+$"
     )
     summary: str = Field(
         ...,
@@ -114,7 +114,7 @@ class Item(BaseModel):
     def validate_id_format(cls, v: str) -> str:
         """Validate that ID matches the expected format."""
         import re
-        pattern = re.compile(r"^([a-z]+)_([0-9]{8})_([0-9]+)$")
+        pattern = re.compile(r"^([a-z][a-z0-9_-]*)_([0-9]{8})_([0-9]+)$")
         if not pattern.match(v):
             raise ValueError(
                 f"ID must be in format {{group}}_YYYYMMDD_sequence (e.g., 'feat_20260409_1')"

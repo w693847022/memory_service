@@ -2,7 +2,7 @@
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 import httpx
 import yaml
@@ -166,6 +166,7 @@ class UnifiedGroupConfigData(BaseModel):
     required_fields: List[str] = Field(default_factory=list)
     description: str = ""
     max_tags: int = 2
+    mcp_access: Literal["writable", "readable", "disabled"] = "writable"
 
 
 class GroupsConfigData(BaseModel):

@@ -1,11 +1,19 @@
 """项目管理 API 路由."""
 
 import logging
-from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Query, Path, HTTPException, Request
+from fastapi import APIRouter, Query, Path, Body, HTTPException, Request
 
 from clients.business_async_client import BusinessApiAsyncClient
+from src.models.requests.project import ProjectRegisterRequest, ProjectRenameRequest, ProjectUpdateInfoRequest
+from src.models.responses.api_responses import (
+    ProjectListResponse,
+    ProjectDetailResponse,
+    ProjectOperationResponse,
+    GroupListResponse,
+    TagInfoResponse,
+)
+from src.rest_api.utils.handlers import handle_result
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -20,7 +28,7 @@ def _get_async_client(request: Request) -> BusinessApiAsyncClient:
 # 项目管理 API
 # ===================
 
-@router.get("/projects")
+@router.get("/projects", response_model=ProjectListResponse)
 async def list_projects(
     request: Request,
     page: int = Query(1, ge=1, description="页码"),
@@ -38,33 +46,26 @@ async def list_projects(
         name_pattern=name_pattern,
         include_archived=include_archived,
     )
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result)
 
 
-@router.post("/projects")
+@router.post("/projects", response_model=ProjectOperationResponse)
 async def register_project(
     request: Request,
-    name: str = Query(..., description="项目名称"),
-    path: str = Query("", description="项目路径"),
-    summary: str = Query("", description="项目摘要"),
-    tags: str = Query("", description="项目标签（逗号分隔）"),
+    body: ProjectRegisterRequest = Body(...),
 ):
     """注册新项目."""
     client = _get_async_client(request)
     result = await client.register_project(
-        name=name,
-        path=path,
-        summary=summary,
-        tags=tags,
+        name=body.name,
+        path=body.path,
+        summary=body.summary,
+        tags=body.tags,
     )
-    if result.success:
-        return {"success": True, "data": result.data, "message": "项目注册成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="项目注册成功")
 
 
-@router.get("/projects/{project_id}")
+@router.get("/projects/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -72,58 +73,68 @@ async def get_project(
     """获取项目详情."""
     client = _get_async_client(request)
     result = await client.get_project(project_id=project_id)
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=404, detail=result.error)
+    return await handle_result(result, error_status=404)
 
 
-@router.put("/projects/{project_id}")
+@router.put("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def update_project(
+    request: Request,
     project_id: str = Path(..., description="项目 ID"),
-    summary: str = Query(None, description="项目摘要"),
-    tags: str = Query(None, description="项目标签（逗号分隔）"),
+    body: ProjectUpdateInfoRequest = Body(...),
 ):
-    """更新项目信息."""
-    # 项目更新暂不支持通过此接口，直接用重命名接口
-    raise HTTPException(status_code=400, detail="此接口暂不支持，请使用 /projects/{project_id}/rename 重命名项目")
+    """更新项目信息（描述、标签、路径）."""
+    client = _get_async_client(request)
+    result = await client.update_project_info(
+        project_id=project_id,
+        summary=body.summary,
+        tags=body.tags,
+        path=body.path,
+    )
+    return await handle_result(result, message="项目信息更新成功")
 
 
-@router.delete("/projects/{project_id}")
+@router.post("/projects/{project_id}/archive", response_model=ProjectOperationResponse)
+async def archive_project(
+    request: Request,
+    project_id: str = Path(..., description="项目 ID"),
+):
+    """归档项目."""
+    client = _get_async_client(request)
+    result = await client.archive_project(
+        project_id=project_id,
+    )
+    return await handle_result(result, message="项目归档成功")
+
+
+@router.delete("/projects/{project_id}", response_model=ProjectOperationResponse)
 async def delete_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
-    mode: str = Query("archive", pattern="^(archive|delete)$", description="操作模式"),
 ):
-    """删除或归档项目."""
+    """永久删除已归档项目。仅 archived 状态的项目可删除，active 项目需先调用归档接口后再删除."""
     client = _get_async_client(request)
-    result = await client.remove_project(
+    result = await client.delete_project(
         project_id=project_id,
-        mode=mode,
     )
-    if result.success:
-        action = "归档" if mode == "archive" else "删除"
-        return {"success": True, "message": f"项目{action}成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="项目删除成功")
 
 
-@router.put("/projects/{project_id}/rename")
+@router.put("/projects/{project_id}/rename", response_model=ProjectOperationResponse)
 async def rename_project(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
-    new_name: str = Query(..., description="新项目名称"),
+    body: ProjectRenameRequest = Body(...),
 ):
     """重命名项目."""
     client = _get_async_client(request)
     result = await client.rename_project(
         project_id=project_id,
-        new_name=new_name,
+        new_name=body.new_name,
     )
-    if result.success:
-        return {"success": True, "data": result.data, "message": "项目重命名成功"}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result, message="项目重命名成功")
 
 
-@router.get("/projects/{project_id}/groups")
+@router.get("/projects/{project_id}/groups", response_model=GroupListResponse)
 async def list_project_groups(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -131,12 +142,10 @@ async def list_project_groups(
     """获取项目的所有分组."""
     client = _get_async_client(request)
     result = await client.list_groups(project_id=project_id)
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=404, detail=result.error)
+    return await handle_result(result, error_status=404)
 
 
-@router.get("/projects/{project_id}/tags")
+@router.get("/projects/{project_id}/tags", response_model=TagInfoResponse)
 async def list_project_tags(
     request: Request,
     project_id: str = Path(..., description="项目 ID"),
@@ -154,6 +163,4 @@ async def list_project_tags(
         page=page,
         size=size,
     )
-    if result.success:
-        return {"success": True, "data": result.data}
-    raise HTTPException(status_code=400, detail=result.error)
+    return await handle_result(result)

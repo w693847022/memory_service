@@ -10,7 +10,6 @@ from typing import Optional, List, Dict, Any
 
 from src.models import TagInfo
 from src.models.storage import ProjectData
-from src.models.enums import GroupType
 from business.core.barrier_decorator import barrier
 from business.core.barrier_constants import OperationLevel
 from src.common.consts import (
@@ -28,6 +27,12 @@ class TagService:
 
     def __init__(self, storage):
         self.storage = storage
+
+    async def _get_all_group_names(self, project_id: str) -> set:
+        """获取项目所有分组名称（内置+自定义）."""
+        configs = await self.storage.get_group_configs(project_id)
+        groups = configs.get("groups", {})
+        return set(groups.keys())
 
     # ==================== 同步验证方法 ====================
 
@@ -189,7 +194,7 @@ class TagService:
 
         migrated_count = 0
         affected_groups = []
-        all_groups = GroupType.values()
+        all_groups = list(project_data.groups.keys())
 
         for group_name in all_groups:
             items = project_data.get_items(group_name)
@@ -227,7 +232,7 @@ class TagService:
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
 
-        groups = GroupType.values()
+        groups = list(project_data.groups.keys())
         tags_list = []
 
         for tag_name, tag_info in project_data.tag_registry.items():
@@ -268,7 +273,8 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in GroupType.values():
+        all_groups = await self._get_all_group_names(project_id)
+        if group_name not in all_groups:
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -312,7 +318,8 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in GroupType.values():
+        all_groups = await self._get_all_group_names(project_id)
+        if group_name not in all_groups:
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -352,7 +359,8 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in GroupType.values():
+        all_groups = await self._get_all_group_names(project_id)
+        if group_name not in all_groups:
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -390,7 +398,8 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in GroupType.values():
+        all_groups = await self._get_all_group_names(project_id)
+        if group_name not in all_groups:
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
@@ -436,7 +445,8 @@ class TagService:
         if project_data is None:
             return {"success": False, "error": f"项目 '{project_id}' 不存在"}
 
-        if group_name not in GroupType.values():
+        all_groups = await self._get_all_group_names(project_id)
+        if group_name not in all_groups:
             return ResponseBuilder.error(
                 ErrorMessages.GROUP_NOT_FOUND.format(group_name=group_name)
             ).to_dict()
