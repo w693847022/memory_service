@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **related**: 条目关联支持同组内条目，增加存在性与自引用校验
+
+### Fixed
+- **mcp, client**: project_add/project_update content dict 自动转换为 JSON string
+
 ## [1.0.0] - 2026-05-09
 
 ### Added
