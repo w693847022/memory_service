@@ -188,6 +188,82 @@ class TestBusinessApiClient:
         assert call_args.kwargs["params"]["description"] == "测试描述"
 
     @patch("clients.business_client.httpx.Client")
+    def test_project_add_with_dict_content(self, mock_client_class):
+        """测试 project_add 传入 dict 类型的 content 时自动转为 JSON 字符串."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "message": "添加成功"}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.request.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = BusinessApiClient()
+        result = client.project_add(
+            project_id="proj_001",
+            group="features",
+            content={"key": "value", "nested": {"a": 1}},
+            summary="测试摘要"
+        )
+
+        assert result.success is True
+        call_args = mock_client.request.call_args
+        json_body = call_args.kwargs["json"]
+        assert json_body["content"] == '{"key": "value", "nested": {"a": 1}}'
+
+    @patch("clients.business_client.httpx.Client")
+    def test_project_update_with_dict_content(self, mock_client_class):
+        """测试 project_update 传入 dict 类型的 content 时自动转为 JSON 字符串."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "message": "更新成功"}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.request.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = BusinessApiClient()
+        result = client.project_update(
+            project_id="proj_001",
+            group="features",
+            item_id="feat_20260512_1",
+            content={"key": "value"},
+            summary="更新摘要"
+        )
+
+        assert result.success is True
+        call_args = mock_client.request.call_args
+        json_body = call_args.kwargs["json"]
+        assert json_body["content"] == '{"key": "value"}'
+
+    @patch("clients.business_client.httpx.Client")
+    def test_project_add_with_str_content_unchanged(self, mock_client_class):
+        """测试 project_add 传入 str 类型的 content 时保持不变."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"success": True, "message": "添加成功"}
+        mock_response.raise_for_status = Mock()
+
+        mock_client = Mock()
+        mock_client.request.return_value = mock_response
+        mock_client_class.return_value = mock_client
+
+        client = BusinessApiClient()
+        result = client.project_add(
+            project_id="proj_001",
+            group="features",
+            content="原始字符串内容",
+            summary="测试摘要"
+        )
+
+        assert result.success is True
+        call_args = mock_client.request.call_args
+        json_body = call_args.kwargs["json"]
+        assert json_body["content"] == "原始字符串内容"
+
+    @patch("clients.business_client.httpx.Client")
     def test_update_group_with_description(self, mock_client_class):
         """测试更新组配置传递 description 参数."""
         mock_response = Mock()

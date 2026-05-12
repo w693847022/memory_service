@@ -336,11 +336,13 @@ def project_add(
     access_error = _check_mcp_access(project_id, group, "write")
     if access_error:
         return _error_response(access_error)
+    import json
+    content_str = json.dumps(content) if isinstance(content, dict) else content
     client = _get_client()
     result = client.project_add(
         project_id=project_id,
         group=group,
-        content=content,
+        content=content_str,
         summary=summary,
         status=status,
         severity=severity,
@@ -407,6 +409,8 @@ def project_update(
     if access_error:
         return _error_response(access_error)
     import json
+    # 如果 content 是字典，转换为 JSON 字符串
+    content_str = json.dumps(content) if isinstance(content, dict) else content
     # 如果 related 是字典，转换为 JSON 字符串
     related_str = json.dumps(related) if isinstance(related, dict) else related
 
@@ -415,7 +419,7 @@ def project_update(
         project_id=project_id,
         group=group,
         item_id=item_id,
-        content=content,
+        content=content_str,
         summary=summary,
         status=status,
         severity=severity,
