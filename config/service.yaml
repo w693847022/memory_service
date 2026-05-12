@@ -46,6 +46,7 @@ groups:
     allow_related: true
     allowed_related_to:
       - "notes"
+      - "features"
     enable_status: true
     enable_severity: false
     status_values:
@@ -67,6 +68,7 @@ groups:
     allowed_related_to:
       - "features"
       - "notes"
+      - "fixes"
     enable_status: true
     enable_severity: true
     status_values:
@@ -89,8 +91,9 @@ groups:
   notes:
     content_max_bytes: 500
     summary_max_bytes: 50
-    allow_related: false
-    allowed_related_to: []
+    allow_related: true
+    allowed_related_to:
+      - "notes"
     enable_status: false
     enable_severity: false
     status_values: []
@@ -107,6 +110,7 @@ groups:
     allow_related: true
     allowed_related_to:
       - "notes"
+      - "standards"
     enable_status: false
     enable_severity: false
     status_values: []
@@ -133,8 +137,13 @@ initial_tags:
 default_related_rules:
   features:
     - "notes"
+    - "features"
   fixes:
     - "features"
     - "notes"
+    - "fixes"
   standards:
+    - "notes"
+    - "standards"
+  notes:
     - "notes"

@@ -5,7 +5,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, Dict, List, Any, Union
+from typing import Optional, Dict, List, Any, Union, Tuple
 
 from src.models import Item, ItemCreate, ItemUpdate
 from src.models.storage import ProjectData
@@ -55,6 +55,28 @@ class ProjectService:
         if estimated_tokens > max_tokens:
             return False, f"标签 '{tag}' 过长：预估 {int(estimated_tokens)} tokens，最大允许 {max_tokens} tokens（约 {max_tokens * 3} 字符）"
         return True, ""
+
+    def _validate_related_targets(
+        self,
+        project_data: "ProjectData",
+        related_dict: Optional[Dict[str, List[str]]],
+        current_item_id: Optional[str] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """校验关联目标条目是否存在且不为自身."""
+        if not related_dict:
+            return True, None
+
+        for rel_group, item_ids in related_dict.items():
+            for rel_item_id in item_ids:
+                # 自引用校验
+                if current_item_id and rel_item_id == current_item_id:
+                    return False, f"不能关联自身条目 '{rel_item_id}'"
+                # 存在性校验
+                item = project_data.get_item(rel_group, rel_item_id)
+                if item is None:
+                    return False, f"关联目标不存在: 分组 '{rel_group}' 中未找到条目 '{rel_item_id}'"
+
+        return True, None
 
     # ==================== 项目注册 ====================
 
@@ -344,6 +366,15 @@ class ProjectService:
         if not is_valid:
             return {"success": False, "error": error_msg}
 
+        # 关联目标存在性校验
+        if related_dict:
+            project_data = await self.storage.get_project_data(project_id)
+            if project_data is None:
+                return {"success": False, "error": ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)}
+            is_valid, error_msg = self._validate_related_targets(project_data, related_dict)
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
         return {"success": True, "related_dict": related_dict}
 
     async def validate_update_item(
@@ -404,6 +435,17 @@ class ProjectService:
             if not is_valid:
                 return {"success": False, "error": error_msg}
 
+        # 关联目标存在性和自引用校验
+        if related_dict:
+            project_data = await self.storage.get_project_data(project_id)
+            if project_data is None:
+                return {"success": False, "error": ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)}
+            is_valid, error_msg = self._validate_related_targets(
+                project_data, related_dict, current_item_id=item_id
+            )
+            if not is_valid:
+                return {"success": False, "error": error_msg}
+
         if tags is not None:
             for tag in tags:
                 is_valid, error_msg = self._validate_tag_length(tag, max_tokens=10)
@@ -454,6 +496,12 @@ class ProjectService:
             return ResponseBuilder.error(
                 ErrorMessages.PROJECT_NOT_FOUND.format(project_id=project_id)
             ).to_dict()
+
+        # 关联目标存在性校验
+        if related:
+            is_valid, error_msg = self._validate_related_targets(project_data, related)
+            if not is_valid:
+                return ResponseBuilder.error(error_msg or "").to_dict()
 
         # 验证 max_items 限制
         if config and config.max_items > 0:
@@ -559,6 +607,14 @@ class ProjectService:
             return ResponseBuilder.error(
                 ErrorMessages.ITEM_NOT_FOUND.format(group=group, item_id=item_id)
             ).to_dict()
+
+        # 关联目标存在性和自引用校验
+        if related is not None:
+            is_valid, error_msg = self._validate_related_targets(
+                project_data, related, current_item_id=item_id
+            )
+            if not is_valid:
+                return ResponseBuilder.error(error_msg or "").to_dict()
 
         # 版本检测
         current_version = item.version
