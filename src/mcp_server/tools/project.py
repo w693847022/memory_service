@@ -289,7 +289,7 @@ def project_tags_info(
 def project_add(
     project_id: str,
     group: str,
-    content: str = "",
+    content: Union[str, dict, list] = "",
     summary: str = "",
     status: Optional[str] = None,
     severity: str = "medium",
@@ -337,7 +337,7 @@ def project_add(
     if access_error:
         return _error_response(access_error)
     import json
-    content_str = json.dumps(content) if isinstance(content, dict) else content
+    content_str = json.dumps(content, ensure_ascii=False) if isinstance(content, (dict, list)) else content
     client = _get_client()
     result = client.project_add(
         project_id=project_id,
@@ -356,7 +356,7 @@ def project_update(
     project_id: str,
     group: str,
     item_id: str,
-    content: Optional[str] = None,
+    content: Optional[Union[str, dict, list]] = None,
     summary: Optional[str] = None,
     status: Optional[str] = None,
     severity: Optional[str] = None,
@@ -409,8 +409,8 @@ def project_update(
     if access_error:
         return _error_response(access_error)
     import json
-    # 如果 content 是字典，转换为 JSON 字符串
-    content_str = json.dumps(content) if isinstance(content, dict) else content
+    # 如果 content 是字典或列表，转换为 JSON 字符串
+    content_str = json.dumps(content, ensure_ascii=False) if isinstance(content, (dict, list)) else content
     # 如果 related 是字典，转换为 JSON 字符串
     related_str = json.dumps(related) if isinstance(related, dict) else related
 
