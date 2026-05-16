@@ -100,6 +100,12 @@ class ProjectService:
 
         project_id = self.storage._generate_id(name)
 
+        # 检查项目名称是否已存在（大小写不敏感）
+        existing_projects = await self.storage.list_all_projects()
+        for _pid, pname in existing_projects.items():
+            if pname.lower() == name.lower():
+                return ResponseBuilder.error(f"项目名称 '{name}' 已存在").to_dict()
+
         initial_data = ProjectInitialData.create(
             project_id=project_id,
             name=name,
@@ -193,7 +199,7 @@ class ProjectService:
 
         existing_projects = await self.storage.list_all_projects()
         for pid, pname in existing_projects.items():
-            if pname == new_name and pid != project_id:
+            if pname.lower() == new_name.lower() and pid != project_id:
                 return ResponseBuilder.error(f"项目名称 '{new_name}' 已存在").to_dict()
 
         if await self.storage.is_archived(project_id):
@@ -512,7 +518,7 @@ class ProjectService:
                 ).to_dict()
 
         prefix_map = {"features": "feat", "notes": "note", "fixes": "fix", "standards": "std"}
-        prefix = prefix_map.get(group, group)
+        prefix = prefix_map.get(group, group.lower())
 
         item_id = self.storage.generate_item_id(prefix, project_id, project_data)
 
