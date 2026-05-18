@@ -917,7 +917,16 @@ class ProjectStorage:
                 "fix": "fixes",
                 "std": "standards"
             }
-            items_list = prefix_to_list.get(prefix, prefix)
+            if prefix in prefix_to_list:
+                items_list = prefix_to_list[prefix]
+            else:
+                # 自定义组：大小写不敏感查找实际 group key
+                items_list = prefix
+                if isinstance(project_data, ProjectData):
+                    for key in project_data.groups:
+                        if key.lower() == prefix:
+                            items_list = key
+                            break
             prefix_with_date = f"{prefix}_{date_str}_"
 
             # 支持 ProjectData 模型和 dict 两种输入

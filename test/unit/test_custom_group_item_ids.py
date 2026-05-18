@@ -154,6 +154,31 @@ class TestCustomGroupItemIdGeneration:
         new_id = storage._generate_item_id(group_name, "proj-1", project_data)
         assert new_id == f"{group_name}_{today}_6"
 
+    def test_generate_item_id_for_uppercase_group_name(self):
+        """大写自定义组名(如 Requirement)用 lower 前缀生成 ID 应正确递增."""
+        storage = ProjectStorage(storage_dir="/tmp/test_storage")
+        group_name = "Requirement"          # 大写开头的组名
+        today = datetime.now().strftime("%Y%m%d")
+
+        # 预置一个已有条目，使用 lower 前缀
+        existing_items = [
+            {
+                "id": f"requirement_{today}_1",
+                "summary": "existing item",
+                "content": "",
+                "tags": ["test"],
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "version": 1
+            }
+        ]
+        project_data = _make_project_data_with_custom_group(group_name, existing_items)
+
+        # 使用小写前缀调用 _generate_item_id，模拟 project_service.py 的行为
+        new_id = storage._generate_item_id("requirement", "proj-1", project_data)
+        assert new_id == f"requirement_{today}_2"
+        assert not new_id.endswith("_1")  # 不应重复使用 _1
+
     def test_generate_item_id_for_empty_custom_group(self):
         """空自定义组添加第一条目时 ID 序号为 1."""
         storage = ProjectStorage(storage_dir="/tmp/test_storage")
