@@ -59,7 +59,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Project Memory REST API",
     description="FastAPI REST API 层，为前端提供项目记忆管理 HTTP 接口",
-    version="1.0.0",
+    version="1.0.1",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -160,7 +160,7 @@ async def root(request: Request):
     """根路径."""
     return ApiResponse.success_response(data={
         "name": "Project Memory REST API",
-        "version": "1.0.0",
+        "version": "1.0.1",
         "docs": "/docs",
         "health": "/health"
     })

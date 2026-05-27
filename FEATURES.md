@@ -1,4 +1,4 @@
-# Features - ai_memory_server v1.0.0
+# Features - ai_memory_server v1.0.1
 
 ## API 接口
 
@@ -9,6 +9,7 @@
 - **条目查询**: 支持 summary 正则过滤、时间范围过滤、分页、view_mode 精简模式
 - **标签查询**: project_tags_info 增加分页/过滤/view_mode，支持标签名正则过滤
 - **关联系统**: API 层支持 related 字典格式和多条目关联参数
+- **同组关联**: 各分组允许关联自身组内其他条目，增加目标存在性与自引用校验
 
 ## 分组管理
 

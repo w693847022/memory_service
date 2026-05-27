@@ -66,7 +66,7 @@ class GroupsService:
         group_configs = await self.storage.get_group_configs(project_id)
         groups = group_configs.get("groups", {})
 
-        if group_name in groups:
+        if group_name in groups or any(k.lower() == group_name.lower() for k in groups):
             return ResponseBuilder.error(f"自定义组 '{group_name}' 已存在").to_dict()
 
         new_group = UnifiedGroupConfig(

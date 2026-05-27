@@ -69,7 +69,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
-        "allowed_related_to": ["notes"],
+        "allowed_related_to": ["notes", "features"],
         "enable_status": True,
         "enable_severity": False,
         "status_values": ["pending", "in_progress", "completed"],
@@ -85,7 +85,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
-        "allowed_related_to": ["features", "notes"],
+        "allowed_related_to": ["features", "notes", "fixes"],
         "enable_status": True,
         "enable_severity": True,
         "status_values": ["pending", "in_progress", "completed"],
@@ -100,8 +100,8 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
     "notes": {
         "content_max_bytes": 4000,
         "summary_max_bytes": 90,
-        "allow_related": False,
-        "allowed_related_to": [],
+        "allow_related": True,
+        "allowed_related_to": ["notes"],
         "enable_status": False,
         "enable_severity": False,
         "status_values": [],
@@ -117,7 +117,7 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
         "content_max_bytes": 4000,
         "summary_max_bytes": 90,
         "allow_related": True,
-        "allowed_related_to": ["notes"],
+        "allowed_related_to": ["notes", "standards"],
         "enable_status": False,
         "enable_severity": False,
         "status_values": [],
@@ -133,10 +133,10 @@ _DEFAULT_GROUP_CONFIGS_FALLBACK: Dict[str, Dict[str, Any]] = {
 
 # 默认关联规则
 DEFAULT_RELATED_RULES: Dict[str, List[str]] = {
-    "features": ["notes"],
-    "fixes": ["features", "notes"],
-    "standards": ["notes"],
-    "notes": [],
+    "features": ["notes", "features"],
+    "fixes": ["features", "notes", "fixes"],
+    "standards": ["notes", "standards"],
+    "notes": ["notes"],
 }
 
 # 默认标签列表

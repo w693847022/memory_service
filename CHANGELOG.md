@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [v1.0.1] - 2026-05-27
+
+### Added
+- **related**: 条目关联支持同组内条目，增加存在性与自引用校验
+
+### Fixed
+- **mcp**: project_add/project_update content 参数支持 dict/list 并确保 unicode 可读
+- **mcp, client**: project_add/project_update content dict 自动转换为 JSON string
+- **project**: 自定义组条目ID生成支持小写转换及重名检查大小写不敏感
+- **storage**: 自定义组条目ID生成支持大小写不敏感的group key查找
+
 ## [1.0.0] - 2026-05-09
 
 ### Added

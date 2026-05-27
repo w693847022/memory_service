@@ -258,8 +258,9 @@ class BusinessApiClient:
     ) -> ApiResponse:
         """添加项目条目."""
         # group 作为查询参数，其他作为 JSON 请求体
+        import json
         data = {
-            "content": content,
+            "content": json.dumps(content) if isinstance(content, dict) else content,
             "summary": summary,
             "status": status,
             "severity": severity,
@@ -287,7 +288,7 @@ class BusinessApiClient:
         import json
         # group 作为查询参数，其他作为 JSON 请求体
         data = {
-            "content": content,
+            "content": json.dumps(content) if isinstance(content, dict) else content,
             "summary": summary,
             "status": status,
             "severity": severity,
