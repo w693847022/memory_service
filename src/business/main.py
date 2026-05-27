@@ -58,7 +58,7 @@ _stats_service = StatsService(_storage)
 app = FastAPI(
     title="Business API",
     description="业务逻辑 HTTP 服务",
-    version="1.0.0"
+    version="1.0.1"
 )
 
 # 配置 CORS

@@ -49,7 +49,7 @@ services:
       start_period: 10s
     labels:
       - "com.mcp-memory.description=Business Logic Server"
-      - "com.mcp-memory.version=1.0.0"
+      - "com.mcp-memory.version=1.0.1"
 
   # ===================
   # MCP Server (AI 工具接口)
@@ -97,7 +97,7 @@ services:
       - business-server
     labels:
       - "com.mcp-memory.description=MCP Adapter Server"
-      - "com.mcp-memory.version=1.0.0"
+      - "com.mcp-memory.version=1.0.1"
 
   # ===================
   # FastAPI Server (Web 管理接口)
@@ -151,7 +151,7 @@ services:
       start_period: 10s
     labels:
       - "com.mcp-memory.description=FastAPI REST API Server"
-      - "com.mcp-memory.version=1.0.0"
+      - "com.mcp-memory.version=1.0.1"
 
 networks:
   mcp-network:
